@@ -19,7 +19,7 @@
 
 ## What is this?
 
-Welcome to **Exhale** (I used to call it OpenTune). Honestly, I just got tired of music apps that look clunky and run poorly, so I built this.
+Welcome to **Exhale**. Honestly, I just got tired of music apps that look clunky and run poorly, so I built this.
 
 The goal was simple: combine the slick, glassy look of Apple Music with the straightforward layout of Spotify. I added what I'm calling a "Liquid Glass" effect—basically, the background is this cool, moving gradient that blurs behind frosted glass panels. It looks awesome when music is playing.
 
