@@ -5,7 +5,7 @@
 <h1 align="center">Exhale</h1>
 
 <p align="center">
-  <em>A fresh, fast, and open-source audio player for Android.</em>
+  <em>A fast, open-source music player for Android that doesn't suck.</em>
 </p>
 
 <p align="center">
@@ -17,57 +17,45 @@
 
 ---
 
-## ✧ What is Exhale?
+## What is this?
 
-Welcome to **Exhale** (previously known as OpenTune). I built this because I wanted a music player that actually looks good and feels fast. 
+Welcome to **Exhale** (I used to call it OpenTune). Honestly, I just got tired of music apps that look clunky and run poorly, so I built this.
 
-The main thing you'll notice is what we call the **Liquid Glass** look. Basically, there are these cool, moving gradient backgrounds behind frosted glass UI elements. It just makes the whole app feel alive when you're playing music. 
+The goal was simple: combine the slick, glassy look of Apple Music with the straightforward layout of Spotify. I added what I'm calling a "Liquid Glass" effect—basically, the background is this cool, moving gradient that blurs behind frosted glass panels. It looks awesome when music is playing.
 
-We tried to combine the super smooth, glass-heavy look of Apple Music with the straightforward, easy-to-read layout of Spotify. 
+I also spent way too much time getting the animations right. Scrolling feels bouncy, and buttons actually react when you press them. It's the little things.
 
-It also has some really nice animations:
-- 🌀 **Bouncy scrolling:** Swiping and dragging feels natural.
-- ✨ **Squishy buttons:** Things scale down slightly when you tap them, so the app actually reacts to your touch.
+## Features
 
-## 🚀 Features
+- **Liquid Glass UI:** Live, dynamic backdrop blurs. (Shoutout to [Haze](https://github.com/chrisbanes/haze) for making this possible).
+- **No-Nonsense Library:** Just your music, organized so you can actually find it.
+- **Lyrics:** Real-time synced lyrics.
+- **Under the Hood:** 100% Kotlin and Jetpack Compose.
+- **Streaming & Offline:** Stream directly or download for when you have no signal.
+- **EQ:** Built-in equalizer so you can tweak the sound.
+- **Colors:** The app's theme adapts to whatever album art is on the screen.
 
-- 🧊 **Liquid Glass UI:** Live backdrop blurs (thanks to [Haze](https://github.com/chrisbanes/haze)!).
-- 📚 **Clean Library:** A straightforward way to actually find your music.
-- 🎤 **Lyrics:** Real-time synced lyrics that look great.
-- 💎 **Modern Android:** Built with 100% Kotlin and Jetpack Compose.
-- 🌐 **Streaming:** Instantly play huge catalogs of music.
-- 💾 **Offline Mode:** Download tracks so you can listen without data.
-- 🎛️ **Audio Tweaks:** Built-in EQ to get your sound exactly right.
-- 🎨 **Dynamic Colors:** The whole app changes colors to match whatever album art is currently playing.
-
-## 📸 Screenshots
+## Screenshots
 
 <p align="center">
   <img src="docs/screenshots/home.png" width="800" alt="Home Screen Screenshot">
 </p>
 
-## 📥 Get the App
+## Want to try it?
 
-Want to try it out? You can grab it here:
+- **GitHub Releases:** Grab the latest `.apk` from the [Releases](https://github.com/ozyern/Exhale/releases) page.
+- **F-Droid:** Coming soon!
 
-### GitHub Releases
-Download the `.apk` directly from our [Releases](https://github.com/ozyern/Exhale/releases) tab.
+## Credits
 
-### F-Droid
-*Still working on this! It'll be on F-Droid soon.*
+A massive thanks to the original developer of **OpenTune**. Exhale is built directly on top of their awesome code. Without their work, this project wouldn't exist. Check out the OG repo here: [OpenTune by Arturo254](https://github.com/Arturo254/OpenTune).
 
-## 🙏 Credits
+## Contributing
 
-Exhale is built on top of the awesome work from **OpenTune**. A massive thanks to the original dev for the OG code that made this project possible. You can check out the original repo here: [OpenTune by Arturo254](https://github.com/Arturo254/OpenTune).
-
-## 🤝 Contributing
-
-This is an open-source project, so pull requests are super welcome! Whether you want to fix a bug, tweak the UI, or just fix a typo in the docs, feel free to jump in. 
-
-Take a look at the [Contributing Guidelines](CONTRIBUTING.md) and [Code of Conduct](CODE_OF_CONDUCT.md) if you want to help out.
+Pull requests are always welcome. Whether it's a bug fix, a UI tweak, or fixing a typo, I'd love the help. Check out the [Contributing Guidelines](CONTRIBUTING.md) if you want to dive in.
 
 ---
 
 <p align="center">
-  Built with 🩵 for the Android community.
+  Built for the Android community.
 </p>
