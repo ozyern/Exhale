@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/icon.png" width="150" alt="Exhale Logo">
+  <img src="assets/icon.png" width="150" alt="Exhale  Logo">
 </p>
 
 <h1 align="center">Exhale</h1>
