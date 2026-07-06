@@ -210,7 +210,7 @@ fun GridItem(
     fillMaxWidth: Boolean = false,
 ) {
     Column(
-        modifier = if (fillMaxWidth) {
+        modifier = (if (fillMaxWidth) {
             modifier
                 .padding(12.dp)
                 .fillMaxWidth()
@@ -218,7 +218,7 @@ fun GridItem(
             modifier
                 .padding(12.dp)
                 .width(GridThumbnailHeight * thumbnailRatio)
-        }
+        }).pressScaleContainer()
     ) {
         BoxWithConstraints(
             contentAlignment = Alignment.Center,
@@ -827,7 +827,7 @@ fun SongListItem(
                 )
             },
             trailingContent = trailingContent,
-            modifier = modifier,
+            modifier = modifier.pressScaleContainer(),
             isActive = isActive
         )
     }

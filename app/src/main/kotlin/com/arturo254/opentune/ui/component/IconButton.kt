@@ -55,6 +55,7 @@ fun ResizableIconButton(
         contentDescription = null,
         colorFilter = ColorFilter.tint(color),
         modifier = modifier
+            .pressScale(actualInteractionSource)
             .clickable(
                 indication = indication ?: ripple(bounded = false),
                 interactionSource = actualInteractionSource,
@@ -80,6 +81,7 @@ fun IconButton(
         modifier = modifier
             .minimumInteractiveComponentSize()
             .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
+            .pressScale(interactionSource)
             .clip(CircleShape)
             .background(color = colors.containerColor)
             .combinedClickable(

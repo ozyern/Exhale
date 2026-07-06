@@ -85,7 +85,7 @@ android {
         minSdk = 26
         targetSdk = 36
         versionCode = 131
-        versionName = "3.0.4"
+        versionName = "1.0.101-beta"
 //        versionName = "3.0.2-$gitCommit"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -162,7 +162,6 @@ android {
         }
         debug {
             applicationIdSuffix = ".debug"
-            versionNameSuffix = ".$gitCommit-debug"
             isDebuggable = true
         }
     }

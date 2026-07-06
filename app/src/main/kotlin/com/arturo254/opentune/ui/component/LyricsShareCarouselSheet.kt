@@ -58,9 +58,9 @@ import com.arturo254.opentune.models.MediaMetadata
  *  4. Ajustar tamaño de texto, alineación, visibilidad y padding.
  *  5. Compartir o guardar la configuración resultante.
  *
- * @param onShare  Se llama con el [LyricsCardConfig] final cuando el usuario pulsa "Compartir".
+ * @param onShare  Se llama con el [LyricsCardConfig] final cuando el usuario pulsa "Share".
  *                 El caller es responsable de capturar el composable como bitmap y lanzar el Intent.
- * @param onSave   Opcional. Si se provee, aparece el botón "Guardar".
+ * @param onSave   Opcional. Si se provee, aparece el botón "Save".
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -91,7 +91,7 @@ fun LyricsShareCarouselSheet(
 
             // ── Título del sheet ──────────────────────────────────────────
             Text(
-                text       = "Compartir letra",
+                text       = "Share lyrics",
                 style      = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 modifier   = Modifier.padding(horizontal = 24.dp, vertical = 4.dp),
@@ -117,7 +117,7 @@ fun LyricsShareCarouselSheet(
             Spacer(Modifier.height(22.dp))
 
             // ── Carrusel de layouts ───────────────────────────────────────
-            SheetSectionLabel("Diseño")
+            SheetSectionLabel("Design")
 
             Row(
                 modifier = Modifier
@@ -141,7 +141,7 @@ fun LyricsShareCarouselSheet(
             Spacer(Modifier.height(18.dp))
 
             // ── Selector de estilo de vidrio ──────────────────────────────
-            SheetSectionLabel("Estilo")
+            SheetSectionLabel("Style")
 
             Row(
                 modifier = Modifier
@@ -185,7 +185,7 @@ fun LyricsShareCarouselSheet(
                         modifier = Modifier.weight(1f),
                         shape    = RoundedCornerShape(14.dp),
                     ) {
-                        Text("Guardar")
+                        Text("Save")
                     }
                 } else {
                     OutlinedButton(
@@ -193,7 +193,7 @@ fun LyricsShareCarouselSheet(
                         modifier = Modifier.weight(1f),
                         shape    = RoundedCornerShape(14.dp),
                     ) {
-                        Text("Cancelar")
+                        Text("Cancel")
                     }
                 }
                 Button(
@@ -207,7 +207,7 @@ fun LyricsShareCarouselSheet(
                         modifier           = Modifier.size(18.dp),
                     )
                     Spacer(Modifier.width(8.dp))
-                    Text("Compartir")
+                    Text("Share")
                 }
             }
         }
@@ -419,7 +419,7 @@ private fun CustomizationPanel(
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Text(
-                text       = "Personalización",
+                text       = "Customization",
                 style      = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,
             )
@@ -453,7 +453,7 @@ private fun CustomizationPanel(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(
-                            "Tamaño de texto",
+                            "Text size",
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.Medium,
                         )
@@ -475,7 +475,7 @@ private fun CustomizationPanel(
                 // ── Alineación del texto ──────────────────────────────────
                 Column {
                     Text(
-                        text       = "Alineación",
+                        text       = "Alignment",
                         style      = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Medium,
                         modifier   = Modifier.padding(bottom = 8.dp),
@@ -514,10 +514,10 @@ private fun CustomizationPanel(
                     fontWeight = FontWeight.Medium,
                 )
                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    ToggleRow("Mostrar título",    config.showTitle)   { onConfigChange(config.copy(showTitle   = it)) }
-                    ToggleRow("Mostrar artista",   config.showArtist)  { onConfigChange(config.copy(showArtist  = it)) }
-                    ToggleRow("Mostrar portada",   config.showCoverArt){ onConfigChange(config.copy(showCoverArt = it)) }
-                    ToggleRow("Mostrar OpenTune",  config.showBranding){ onConfigChange(config.copy(showBranding = it)) }
+                    ToggleRow("Show title",    config.showTitle)   { onConfigChange(config.copy(showTitle   = it)) }
+                    ToggleRow("Show artist",   config.showArtist)  { onConfigChange(config.copy(showArtist  = it)) }
+                    ToggleRow("Show cover",   config.showCoverArt){ onConfigChange(config.copy(showCoverArt = it)) }
+                    ToggleRow("Show Exhale",  config.showBranding){ onConfigChange(config.copy(showBranding = it)) }
                 }
 
                 HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.18f))

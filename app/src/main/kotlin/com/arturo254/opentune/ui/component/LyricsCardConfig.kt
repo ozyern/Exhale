@@ -21,7 +21,7 @@ enum class LyricsLayoutStyle(
 ) {
     GlassCard(
         displayName = "Glass Card",
-        description = "Panel de vidrio líquido",
+        description = "Liquid glass panel",
     ),
     Minimal(
         displayName = "Minimal",
@@ -29,7 +29,7 @@ enum class LyricsLayoutStyle(
     ),
     CoverFocused(
         displayName = "Cover Focus",
-        description = "Portada del álbum destacada",
+        description = "Featured album cover",
     ),
     Centered(
         displayName = "Centrado",
@@ -41,7 +41,7 @@ enum class LyricsLayoutStyle(
     ),
     StreamingModern(
         displayName = "Streaming",
-        description = "Estilo app de música moderna",
+        description = "Modern music app style",
     ),
 }
 

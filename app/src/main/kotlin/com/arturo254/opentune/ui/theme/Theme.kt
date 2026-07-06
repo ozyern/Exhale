@@ -22,6 +22,7 @@ import androidx.compose.material3.MotionScheme
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.SaverScope
@@ -104,8 +105,14 @@ fun OpenTuneTheme(
         colorScheme = animatedColorScheme,
         typography = typography,
         motionScheme = motionScheme,
-        content = content
-    )
+    ) {
+        // Glass design tokens derived from the active (animated) color scheme, so
+        // frosted surfaces tint themselves to the current theme automatically.
+        val glass = remember(animatedColorScheme, darkTheme) {
+            glassTokensOf(animatedColorScheme, darkTheme)
+        }
+        CompositionLocalProvider(LocalGlass provides glass, content = content)
+    }
 }
 
 @Composable

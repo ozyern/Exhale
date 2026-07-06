@@ -26,8 +26,10 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.arturo254.opentune.LocalPlayerConnection
+import com.arturo254.opentune.constants.LiquidGlassNavBarKey
 import com.arturo254.opentune.constants.SwipeSensitivityKey
 import com.arturo254.opentune.ui.component.BottomSheetState
+import com.arturo254.opentune.ui.component.GlassSurface
 import com.arturo254.opentune.utils.rememberPreference
 import kotlin.math.roundToInt
 
@@ -65,6 +67,7 @@ private fun NewMiniPlayer(
     val coroutineScope = rememberCoroutineScope()
     val swipeSensitivity by rememberPreference(SwipeSensitivityKey, 0.73f)
     val swipeThumbnail by rememberPreference(com.arturo254.opentune.constants.SwipeThumbnailKey, true)
+    val liquidGlass by rememberPreference(LiquidGlassNavBarKey, defaultValue = true)
 
     SwipeableMiniPlayerBox(
         modifier = modifier,
@@ -76,14 +79,13 @@ private fun NewMiniPlayer(
         pureBlack = pureBlack,
         useLegacyBackground = false
     ) { offsetX ->
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(64.dp)
-                .offset { IntOffset(offsetX.roundToInt(), 0) }
-                .clip(RoundedCornerShape(32.dp))
-                .background(color = MaterialTheme.colorScheme.surfaceContainer)
-        ) {
+        val shape = RoundedCornerShape(32.dp)
+        val barModifier = Modifier
+            .fillMaxWidth()
+            .height(64.dp)
+            .offset { IntOffset(offsetX.roundToInt(), 0) }
+
+        val content: @Composable () -> Unit = {
             NewMiniPlayerContent(
                 pureBlack = pureBlack,
                 position = position,
@@ -92,6 +94,25 @@ private fun NewMiniPlayer(
                 navController = navController,
                 state = state
             )
+        }
+
+        if (liquidGlass && !pureBlack) {
+            // Frosted glass mini player: live backdrop blur of the content above it
+            // (Android 12+), translucent scrim fallback on older devices.
+            GlassSurface(
+                modifier = barModifier,
+                shape = shape,
+            ) {
+                content()
+            }
+        } else {
+            Box(
+                modifier = barModifier
+                    .clip(shape)
+                    .background(color = MaterialTheme.colorScheme.surfaceContainer)
+            ) {
+                content()
+            }
         }
     }
 }

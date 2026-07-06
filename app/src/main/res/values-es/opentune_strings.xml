@@ -381,7 +381,7 @@
     <string name="open_youtube_music">Abrir YouTube Music</string>
     <string name="playback_login_refresh_required">Actualizar inicio de sesión de YouTube Music</string>
     <string name="playback_confirmation_required">Se requiere confirmación de reproducción</string>
-    <string name="playback_requires_youtube_music_login_refresh">Actualiza tu inicio de sesión en YouTube Music y luego regresa a OpenTune.</string>
+    <string name="playback_requires_youtube_music_login_refresh">Actualiza tu inicio de sesión en YouTube Music y luego regresa a Exhale.</string>
     <string name="error_malformed_stream">Error de fuente</string>
     <string name="aod_spotlight_intensity_label">Intensidad del reflector</string>
     <string name="aod_spotlight_intensity_low">Tenue</string>
@@ -414,7 +414,7 @@
     <string name="n_releases">%d lanzamientos</string>
     <string name="loading_new_releases">Cargando nuevos lanzamientos…</string>
     <string name="new_releases_error_title">Nuevos lanzamientos no disponibles</string>
-    <string name="new_releases_error_desc">OpenTune no pudo cargar esta sección de YouTube Music. Intenta de nuevo más tarde.</string>
+    <string name="new_releases_error_desc">Exhale no pudo cargar esta sección de YouTube Music. Intenta de nuevo más tarde.</string>
     <string name="no_releases_found">No se encontraron lanzamientos</string>
     <string name="new_releases_empty_desc">No se encontraron nuevos lanzamientos en este momento.</string>
 

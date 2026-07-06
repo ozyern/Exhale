@@ -330,7 +330,7 @@ fun UpdateScreen(
                         ) {
                             val (msg, color) = when (val s = updateCheckState) {
                                 UpdateCheckState.UpToDate  ->
-                                    "Ya tienes la versión más reciente." to MaterialTheme.colorScheme.tertiary
+                                    "You already have the latest version." to MaterialTheme.colorScheme.tertiary
                                 is UpdateCheckState.Error  ->
                                     "Error: ${s.message}" to MaterialTheme.colorScheme.error
                                 else -> "" to MaterialTheme.colorScheme.onSurface
@@ -513,12 +513,12 @@ private fun UpdateCheckButton(
                     UpdateCheckState.UpToDate -> {
                         Icon(painterResource(R.drawable.done), null, Modifier.size(16.dp))
                         Spacer(Modifier.width(8.dp))
-                        Text("Al día")
+                        Text("Up to date")
                     }
                     is UpdateCheckState.UpdateAvailable -> {
                         Icon(painterResource(R.drawable.update), null, Modifier.size(16.dp))
                         Spacer(Modifier.width(8.dp))
-                        Text("Ver actualización (${s.info.versionName})")
+                        Text("View update (${s.info.versionName})")
                     }
                     is UpdateCheckState.Error -> {
                         Text("Reintentar")
@@ -546,7 +546,7 @@ private fun UpdateAvailableDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         icon = { Icon(painterResource(R.drawable.update), null, tint = MaterialTheme.colorScheme.primary) },
-        title = { Text("Nueva versión disponible") },
+        title = { Text("New version available") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                 Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
@@ -555,7 +555,7 @@ private fun UpdateAvailableDialog(
                         Text(BuildConfig.VERSION_NAME, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
                     }
                     Column {
-                        Text("Disponible", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("Available", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Text(info.versionName, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                     }
                 }
@@ -576,7 +576,7 @@ private fun UpdateAvailableDialog(
             Button(onClick = onDownload) {
                 Icon(painterResource(R.drawable.download), null, Modifier.size(16.dp))
                 Spacer(Modifier.width(6.dp))
-                Text("Descargar APK")
+                Text("Download APK")
             }
         },
         dismissButton = {
@@ -601,7 +601,7 @@ private fun BuildChannelInfoDialog(
         title = { Text(title) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-                Text("OpenTune provides two download channels for builds:", style = MaterialTheme.typography.bodyMedium)
+                Text("Exhale provides two download channels for builds:", style = MaterialTheme.typography.bodyMedium)
                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text("• Stable builds", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
                     Text("Distributed via official GitHub Releases.", style = MaterialTheme.typography.bodySmall)

@@ -606,7 +606,7 @@ private fun FeaturedCarousel(
                 }
             }
             Text(
-                text = "Lo más destacado",
+                text = "Highlights",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface
@@ -765,7 +765,7 @@ private fun FeaturedCarouselCard(
                 }
             }
 
-            // Badge "Destacado"
+            // Badge "Featured"
             Surface(
                 shape = RoundedCornerShape(12.dp),
                 color = MaterialTheme.colorScheme.primary,

@@ -76,7 +76,7 @@ suspend fun fetchReleaseNotesMarkdown(): String {
     return withContext(Dispatchers.IO) {
         try {
             val document =
-                Jsoup.connect("https://github.com/Arturo254/OpenTune/releases/latest").get()
+                Jsoup.connect("https://github.com/ozyern/Exhale/releases/latest").get()
             // Obtener el contenido HTML del release
             val changelogElement = document.selectFirst(".markdown-body")
 

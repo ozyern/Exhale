@@ -785,7 +785,7 @@ private fun LibraryShortcutGrid(
 
             LibraryHeroFavoriteTile(
                 title = heroEntry.title,
-                iconRes = heroEntry.iconRes, badgeText = "Más reproducidos",
+                iconRes = heroEntry.iconRes, badgeText = "Most played",
 
                 accentColor = heroEntry.accentColor,
                 modifier = Modifier

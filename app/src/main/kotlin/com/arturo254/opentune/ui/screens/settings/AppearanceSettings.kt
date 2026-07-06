@@ -130,7 +130,7 @@ fun AppearanceSettings(
     )
     val (playerDesignStyle, onPlayerDesignStyleChange) = rememberEnumPreference(
         PlayerDesignStyleKey,
-        defaultValue = PlayerDesignStyle.V4
+        defaultValue = PlayerDesignStyle.V8
     )
     val (useNewMiniPlayerDesign, onUseNewMiniPlayerDesignChange) = rememberPreference(
         UseNewMiniPlayerDesignKey,
@@ -138,7 +138,7 @@ fun AppearanceSettings(
     )
     val (useNewLibraryDesign, onUseNewLibraryDesignChange) = rememberPreference(
         key = com.arturo254.opentune.constants.UseNewLibraryDesignKey,
-        defaultValue = false
+        defaultValue = true
     )
     val (hidePlayerThumbnail, onHidePlayerThumbnailChange) = rememberPreference(
         HidePlayerThumbnailKey,
@@ -162,7 +162,8 @@ fun AppearanceSettings(
             defaultValue = PlayerBackgroundStyle.DEFAULT,
         )
     val (pureBlack, onPureBlackChange) = rememberPreference(PureBlackKey, defaultValue = false)
-    val (disableBlur, onDisableBlurChange) = rememberPreference(DisableBlurKey, defaultValue = true)
+    val (disableBlur, onDisableBlurChange) = rememberPreference(DisableBlurKey, defaultValue = false)
+    val (liquidGlass, onLiquidGlassChange) = rememberPreference(LiquidGlassNavBarKey, defaultValue = true)
     val (useSystemFont, onUseSystemFontChange) = rememberPreference(UseSystemFontKey, defaultValue = false)
     val (defaultOpenTab, onDefaultOpenTabChange) = rememberEnumPreference(
         DefaultOpenTabKey,
@@ -184,7 +185,7 @@ fun AppearanceSettings(
     val (lyricsScroll, onLyricsScrollChange) = rememberPreference(LyricsScrollKey, defaultValue = true)
     val (lyricsTextSize, onLyricsTextSizeChange) = rememberPreference(LyricsTextSizeKey, defaultValue = 26f)
     val (lyricsLineSpacing, onLyricsLineSpacingChange) = rememberPreference(LyricsLineSpacingKey, defaultValue = 1.3f)
-    val (useLyricsV2, onUseLyricsV2Change) = rememberPreference(UseLyricsV2Key, defaultValue = false)
+    val (useLyricsV2, onUseLyricsV2Change) = rememberPreference(UseLyricsV2Key, defaultValue = true)
 
     val (sliderStyle, onSliderStyleChange) = rememberEnumPreference(
         SliderStyleKey,
@@ -399,6 +400,14 @@ fun AppearanceSettings(
         )
 
         SwitchPreference(
+            title = { Text("Liquid glass") },
+            description = "Frosted glass surfaces over an animated liquid background (beta). Live blur requires Android 12+.",
+            icon = { Icon(painterResource(R.drawable.palette), null) },
+            checked = liquidGlass,
+            onCheckedChange = onLiquidGlassChange,
+        )
+
+        SwitchPreference(
             title = { Text(stringResource(R.string.use_system_font)) },
             description = stringResource(R.string.use_system_font_desc),
             icon = { Icon(painterResource(R.drawable.text_fields), null) },
@@ -487,7 +496,7 @@ fun AppearanceSettings(
             values = CanvasSource.entries,
             valueText = { source ->
                 when (source) {
-                    CanvasSource.AUTO -> "Automático"
+                    CanvasSource.AUTO -> "Automatic"
                     CanvasSource.APPLE_MUSIC -> "Apple Music"
                     CanvasSource.TIDAL -> "Tidal"
                 }
@@ -860,14 +869,14 @@ fun AppearanceSettings(
 
         PreferenceEntry(
             title = { Text("Always On Display") },
-            description = "Estilos, formas y opciones de personalización",
+            description = "Styles, shapes and customization options",
             icon = { Icon(painterResource(R.drawable.dark_mode), null) },
             onClick = { navController.navigate("settings/appearance/always_on_display") }
         )
 
         PreferenceEntry(
             title = { Text("Widget Settings") },
-            description = "Personaliza la apariencia del widget",
+            description = "Customize the widget appearance",
             icon = { Icon(painterResource(R.drawable.buttons), null) },
             onClick = { navController.navigate("settings/widget") }
         )

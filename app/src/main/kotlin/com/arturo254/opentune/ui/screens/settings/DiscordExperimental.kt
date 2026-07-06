@@ -163,7 +163,7 @@ fun DiscordExperimental(
                     val (button2Label, onButton2LabelChange) =
                         rememberPreference(
                             key = DiscordActivityButton2LabelKey,
-                            defaultValue = "Go to OpenTune"
+                            defaultValue = "Go to Exhale"
                         )
                     val (button2Enabled, onButton2EnabledChange) =
                         rememberPreference(
@@ -331,7 +331,7 @@ fun DiscordExperimental(
                             title = stringResource(R.string.discord_activity_button2_label),
                             iconRes = R.drawable.buttons,
                             value = button2Label,
-                            defaultValue = "Go to OpenTune",
+                            defaultValue = "Go to Exhale",
                             onValueChange = onButton2LabelChange
                         )
                         if (button2UrlSource == "custom") {

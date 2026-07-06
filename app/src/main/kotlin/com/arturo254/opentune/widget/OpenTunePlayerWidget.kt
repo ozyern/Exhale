@@ -120,7 +120,7 @@ private val OpenTuneWidgetColors =
 private fun PlayerWidgetContent(state: PlayerWidgetState, uiPrefs: WidgetUiPrefs) {
     val context = LocalContext.current
     val title = state.title.ifBlank { context.getString(R.string.app_name) }
-    val artist = state.artist.ifBlank { "OpenTune" }
+    val artist = state.artist.ifBlank { "Exhale" }
 
     Box(
         modifier = GlanceModifier

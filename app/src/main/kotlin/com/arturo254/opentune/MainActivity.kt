@@ -224,6 +224,8 @@ import com.arturo254.opentune.ui.component.COLLAPSED_ANCHOR
 import com.arturo254.opentune.ui.component.DISMISSED_ANCHOR
 import com.arturo254.opentune.ui.component.EXPANDED_ANCHOR
 import com.arturo254.opentune.ui.component.FloatingNavigationToolbar
+import com.arturo254.opentune.ui.component.LiquidBackground
+import com.arturo254.opentune.ui.component.LocalHazeState
 import com.arturo254.opentune.ui.component.IconButton
 import com.arturo254.opentune.ui.component.LocalBottomSheetPageState
 import com.arturo254.opentune.ui.component.LocalMenuState
@@ -248,6 +250,8 @@ import com.arturo254.opentune.ui.screens.settings.DiscordPresenceManager
 import com.arturo254.opentune.ui.screens.settings.NavigationTab
 import com.arturo254.opentune.ui.screens.settings.ThemePalettes
 import com.arturo254.opentune.ui.theme.OpenTuneTheme
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeSource
 import com.arturo254.opentune.ui.theme.ColorSaver
 import com.arturo254.opentune.ui.theme.DefaultThemeColor
 import com.arturo254.opentune.ui.theme.ThemeSeedPalette
@@ -499,7 +503,7 @@ class MainActivity : ComponentActivity() {
             // instances in different composition scopes which caused the update
             // bottom sheet to not appear and overlay interactions to be blocked).
             val bottomSheetPageState = remember { BottomSheetPageState() }
-            val (liquidGlassNavBar) = rememberPreference(LiquidGlassNavBarKey, defaultValue = false)
+            val (liquidGlassNavBar) = rememberPreference(LiquidGlassNavBarKey, defaultValue = true)
             val menuState = remember { MenuState() }
             val uriHandler = LocalUriHandler.current
             val releaseNotesState = remember { mutableStateOf<String?>(null) }
@@ -678,6 +682,24 @@ class MainActivity : ComponentActivity() {
                                 if (pureBlack) Color.Black else MaterialTheme.colorScheme.surface
                             )
                 ) {
+                    // Shared backdrop-blur source for all frosted "liquid glass" surfaces.
+                    val hazeState = remember { HazeState() }
+
+                    // Ambient liquid background (opt-in via the Liquid Glass setting). Drawn
+                    // first so it sits behind every other layer; theme colors keep it
+                    // album-art reactive.
+                    if (liquidGlassNavBar) {
+                        LiquidBackground(
+                            colors = listOf(
+                                MaterialTheme.colorScheme.primary,
+                                MaterialTheme.colorScheme.tertiary,
+                                MaterialTheme.colorScheme.secondary,
+                            ),
+                            baseColor = if (pureBlack) Color.Black else MaterialTheme.colorScheme.surface,
+                            modifier = Modifier.matchParentSize(),
+                        )
+                    }
+
                     val focusManager = LocalFocusManager.current
                     val density = LocalDensity.current
                     val windowsInsets = WindowInsets.systemBars
@@ -1158,6 +1180,7 @@ class MainActivity : ComponentActivity() {
                         LocalSyncUtils provides syncUtils,
                         LocalBottomSheetPageState provides bottomSheetPageState,
                         LocalMenuState provides menuState,
+                        LocalHazeState provides hazeState,
                     ) {
                         Row {
                             AnimatedVisibility(useRail && shouldShowNavigationBar) {
@@ -1293,60 +1316,18 @@ class MainActivity : ComponentActivity() {
                                                             6.dp
                                                         )
                                                     ) {
-
-                                                        Box(
+                                                        // Brand logo replaces the app-name title.
+                                                        Icon(
+                                                            painter = painterResource(R.drawable.logo),
+                                                            contentDescription = stringResource(R.string.app_name),
+                                                            tint = Color.Unspecified,
                                                             modifier = Modifier
-                                                                .size(40.dp)
-                                                                .clip(RoundedCornerShape(14.dp))
-                                                                .background(
-                                                                    MaterialTheme.colorScheme.secondaryContainer.copy(
-                                                                        alpha = 0.5f
-                                                                    )
-                                                                ),
-                                                            contentAlignment = Alignment.Center
-                                                        ) {
-                                                            Icon(
-                                                                painter = painterResource(R.drawable.opentune),
-                                                                contentDescription = null,
-                                                                tint = Color.Unspecified,
-                                                                modifier = Modifier.size(28.dp)
-                                                            )
-                                                        }
-
-                                                        Text(
-                                                            text = stringResource(R.string.app_name),
-                                                            style = MaterialTheme.typography.headlineSmallEmphasized.copy(
-                                                                fontFamily = googleSans,
-                                                                fontWeight = FontWeight.ExtraBold
-                                                            ),
-                                                            maxLines = 1,
-                                                            overflow = TextOverflow.Ellipsis
+                                                                .height(32.dp)
+                                                                .clip(RoundedCornerShape(8.dp))
                                                         )
                                                     }
                                                 },
                                                 actions = {
-
-                                                    IconButton(
-                                                        modifier = Modifier.size(40.dp),
-                                                        onClick = { navController.navigate("history") }
-                                                    ) {
-                                                        Icon(
-                                                            painter = painterResource(R.drawable.history),
-                                                            contentDescription = stringResource(R.string.history),
-                                                            modifier = Modifier.size(22.dp)
-                                                        )
-                                                    }
-
-                                                    IconButton(
-                                                        modifier = Modifier.size(40.dp),
-                                                        onClick = { navController.navigate("stats") }
-                                                    ) {
-                                                        Icon(
-                                                            painter = painterResource(R.drawable.stats),
-                                                            contentDescription = stringResource(R.string.stats),
-                                                            modifier = Modifier.size(22.dp)
-                                                        )
-                                                    }
 
                                                     IconButton(
                                                         modifier = Modifier.size(40.dp),
@@ -1846,18 +1827,22 @@ class MainActivity : ComponentActivity() {
                                             )
                                         }
                                     },
-                                    modifier = Modifier.nestedScroll(
-                                        if (
-                                            navigationItems.fastAny {
-                                                it.route == navBackStackEntry?.destination?.route
-                                            } ||
-                                            navBackStackEntry?.destination?.route?.startsWith("search/") == true
-                                        ) {
-                                            searchBarScrollBehavior.nestedScrollConnection
-                                        } else {
-                                            topAppBarScrollBehavior.nestedScrollConnection
-                                        }
-                                    )
+                                    modifier = Modifier
+                                        // Mark the scrollable app content as the blur source so
+                                        // frosted surfaces (mini player, nav bar) can blur it.
+                                        .hazeSource(hazeState)
+                                        .nestedScroll(
+                                            if (
+                                                navigationItems.fastAny {
+                                                    it.route == navBackStackEntry?.destination?.route
+                                                } ||
+                                                navBackStackEntry?.destination?.route?.startsWith("search/") == true
+                                            ) {
+                                                searchBarScrollBehavior.nestedScrollConnection
+                                            } else {
+                                                topAppBarScrollBehavior.nestedScrollConnection
+                                            }
+                                        )
                                 ) {
                                     navigationBuilder(
                                         navController,

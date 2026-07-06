@@ -3070,7 +3070,7 @@ fun V8PlayerControlsContent(
                 )
                 Text(
                     text = buildString {
-                        append("A continuación: ")
+                        append("Up next: ")
                         append(nextUpMetadata.title)
                     },
                     style = MaterialTheme.typography.labelSmall,

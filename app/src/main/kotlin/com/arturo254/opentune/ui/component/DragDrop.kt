@@ -290,7 +290,7 @@ fun DragDropLyricsProviderDialog(
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(20.dp),
                     ) {
-                        Text("Cancelar")
+                        Text("Cancel")
                     }
                     Button(
                         onClick = {
@@ -306,7 +306,7 @@ fun DragDropLyricsProviderDialog(
                             modifier = Modifier.size(18.dp),
                         )
                         Spacer(Modifier.width(8.dp))
-                        Text("Guardar")
+                        Text("Save")
                     }
                 }
             }

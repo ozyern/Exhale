@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Upstream InnerTune strings --><!-- Do not add new features here --><!-- Try to re-use strings here, but be careful on its usage e.g. verb vs noun --><!-- "InnerTune" is replaced with "OpenTune" --><!-- Translators: Do not modify this file for translations, use InnerTune's Weblate instead. --><resources>
+<!-- Upstream InnerTune strings --><!-- Do not add new features here --><!-- Try to re-use strings here, but be careful on its usage e.g. verb vs noun --><!-- "InnerTune" is replaced with "Exhale" --><!-- Translators: Do not modify this file for translations, use InnerTune's Weblate instead. --><resources>
     <!-- Bottom navigation -->
     <string name="home">Trang chủ</string>
     <string name="songs">Bài hát</string>
@@ -358,7 +358,7 @@
     <string name="discord_activity_type">Loại hoạt động</string>
     <string name="dark_theme_follow_system">Theo hệ thống</string>
     <string name="pure_black">Đen thuần</string>
-    <string name="OpenTune_canvas">OpenTune Canvas</string>
+    <string name="OpenTune_canvas">Exhale Canvas</string>
     <string name="OpenTune_canvas_desc">Tạo hiệu ứng động cho artwork album khi phát (Được hỗ trợ bởi BetterLyrics)</string>
     <string name="disable_blur">Tắt hiệu ứng làm mờ</string>
     <string name="disable_blur_desc">Tắt hiệu ứng làm mờ trong toàn bộ ứng dụng</string>
@@ -492,8 +492,8 @@
     <string name="backup_create_failed">Không thể tạo sao lưu</string>
     <string name="restore_failed">Khôi phục sao lưu thất bại</string>
     <string name="discord_integration">Tích hợp Discord</string>
-    <string name="discord_information">OpenTune sử dụng thư viện KizzyRPC để thiết lập trạng thái tài khoản Discord của bạn. Điều này liên quan đến việc sử dụng kết nối Discord Gateway, có thể bị coi là vi phạm TOS của Discord. Tuy nhiên, không có trường hợp nào được biết tài khoản người dùng bị đình chỉ vì lý do này. Sử dụng theo rủi ro của riêng bạn.
-OpenTune sẽ chỉ trích xuất token của bạn, và mọi thứ khác được lưu trữ cục bộ.</string>
+    <string name="discord_information">Exhale sử dụng thư viện KizzyRPC để thiết lập trạng thái tài khoản Discord của bạn. Điều này liên quan đến việc sử dụng kết nối Discord Gateway, có thể bị coi là vi phạm TOS của Discord. Tuy nhiên, không có trường hợp nào được biết tài khoản người dùng bị đình chỉ vì lý do này. Sử dụng theo rủi ro của riêng bạn.
+Exhale sẽ chỉ trích xuất token của bạn, và mọi thứ khác được lưu trữ cục bộ.</string>
     <string name="dismiss">Bỏ qua</string>
     <string name="options">Tùy chọn</string>
     <string name="preview">Xem trước</string>
@@ -544,7 +544,7 @@ OpenTune sẽ chỉ trích xuất token của bạn, và mọi thứ khác đư�
     <string name="select_language">Chọn ngôn ngữ</string>
     <string name="close_dialog">Đóng</string>
     <string name="select_dialog">Chọn</string>
-    <string name="support_github">Star OpenTune!</string>
+    <string name="support_github">Star Exhale!</string>
     <!-- Update dialog -->
     <string name="new_update_available">Cập nhật mới có sẵn</string>
     <string name="release_notes_unavailable">Ghi chú phát hành không khả dụng</string>
@@ -626,9 +626,9 @@ OpenTune sẽ chỉ trích xuất token của bạn, và mọi thứ khác đư�
     <string name="update_notification_channel_name">Cập nhật Ứng dụng</string>
     <string name="update_notification_channel_desc">Thông báo cho các cập nhật ứng dụng mới</string>
     <string name="update_notification_title">Cập nhật Có sẵn</string>
-    <string name="update_notification_text">OpenTune %s hiện đã có sẵn</string>
+    <string name="update_notification_text">Exhale %s hiện đã có sẵn</string>
     <string name="download">Tải xuống</string>
-    <string name="permissions_title">Cho phép OpenTune hoạt động tốt nhất</string>
+    <string name="permissions_title">Cho phép Exhale hoạt động tốt nhất</string>
     <string name="permissions_subtitle">Chúng tôi sử dụng một số quyền để phát và quản lý nhạc của bạn một cách đáng tin cậy. Bạn có thể thay đổi những quyền này bất cứ lúc nào trong cài đặt hệ thống.</string>
     <string name="permission_storage_title">Truy cập lưu trữ</string>
     <string name="permission_storage_desc">Cần thiết để đọc các file âm thanh đã tải xuống và cục bộ của bạn để phát nhạc.</string>
@@ -673,7 +673,7 @@ OpenTune sẽ chỉ trích xuất token của bạn, và mọi thứ khác đư�
     <!-- Playlist Suggestions -->
     <string name="you_might_like">Có thể bạn sẽ thích</string>
     <string name="refresh_suggestions">Làm mới gợi ý</string>
-    <string name="music_together">OpenTune Music Together</string>
+    <string name="music_together">Exhale Music Together</string>
     <string name="together_display_name">Tên hiển thị</string>
     <string name="together_display_name_placeholder">Tên của bạn</string>
     <string name="together_port">Cổng phiên</string>
@@ -727,10 +727,10 @@ OpenTune sẽ chỉ trích xuất token của bạn, và mọi thứ khác đư�
     <string name="together_error_state">Lỗi</string>
     <string name="got_it">Hiểu rồi</string>
     <string name="together_dont_show_again">Không hiển thị lại nữa</string>
-    <string name="together_welcome_title">Chào mừng đến với OpenTune Music Together</string>
+    <string name="together_welcome_title">Chào mừng đến với Exhale Music Together</string>
     <string name="together_welcome_body">Music Together cho phép nhiều thiết bị chia sẻ một phiên trực tiếp với hàng đợi đồng bộ và phát nhạc.</string>
     <string name="together_welcome_host_title">Tổ chức một phiên</string>
-    <string name="together_welcome_host_body">Nhấn Bắt đầu phiên, sau đó chia sẻ liên kết phiên. Giữ OpenTune mở trong nền trong khi tổ chức.</string>
+    <string name="together_welcome_host_body">Nhấn Bắt đầu phiên, sau đó chia sẻ liên kết phiên. Giữ Exhale mở trong nền trong khi tổ chức.</string>
     <string name="together_welcome_join_title">Tham gia từ thiết bị khác</string>
     <string name="together_welcome_join_body">Mở liên kết được chia sẻ, hoặc nhập mã và nhấn Tham gia. Hàng đợi và phát nhạc của bạn sẽ theo người tổ chức.</string>
     <string name="together_welcome_permissions_title">Quyền và an toàn</string>
