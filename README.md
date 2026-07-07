@@ -21,7 +21,7 @@
 
 Welcome to **Exhale**. Honestly, I just got tired of music apps that look clunky and run poorly, so I built this.
 
-The goal was simple: combine the slick, glassy look of Apple Music with the straightforward layout of Spotify. I added what I'm calling a "Liquid Glass" effect—basically, the background is this cool, moving gradient that blurs behind frosted glass panels. It looks awesome when music is playing.
+The goal was simple: combine the slick, glassy look of Apple Music with the straightforward layout of Spotify. I added what I'm calling a "Brina Glass" effect—basically, the background is this cool, moving gradient that blurs behind frosted glass panels. It looks awesome when music is playing.
 
 I also spent way too much time getting the animations right. Scrolling feels bouncy, and buttons actually react when you press them. It's the little things.
 
