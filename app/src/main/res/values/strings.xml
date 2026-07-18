@@ -373,8 +373,8 @@
     <string name="custom_value">Custom value</string>
     <string name="new_library_design">New library design</string>
     <string name="new_library_design_description">Enable the new library design (may be unstable)</string>
-    <string name="OpenTune_canvas">Exhale Canvas</string>
-    <string name="OpenTune_canvas_desc">Animate album artwork while playing (Powered by BetterLyrics)</string>
+    <string name="Exhale_canvas">Exhale Canvas</string>
+    <string name="Exhale_canvas_desc">Animate album artwork while playing (Powered by BetterLyrics)</string>
     <string name="show_button1_description">Toggle visibility of button 1 in Discord Rich Presence</string>
     <string name="show_button2_description">Toggle visibility of button 2 in Discord Rich Presence</string>
     <string name="discord_activity_type">Activity type</string>
@@ -447,6 +447,8 @@
     <string name="auto_load_more_desc">Automatically add more songs when the end of the queue is reached. Disabled when repeat mode is active</string>
     <string name="skip_silence">Skip silence</string>
     <string name="audio_normalization">Audio normalization</string>
+    <string name="spatial_audio">Spatial Audio</string>
+    <string name="spatial_audio_desc">Upscale stereo playback to a Dolby Atmos-style spatial mix (Cavern virtualizer)</string>
     <string name="audio_offload">Audio offload</string>
     <string name="audio_offload_desc">Let supported devices play audio using low-power hardware decoding. Some audio processing features are disabled.</string>
     <string name="pause_on_device_mute">Pause when device volume is 0</string>
@@ -587,6 +589,16 @@ Exhale will only extract your token, and everything else is stored locally.</str
     <string name="select_language">Select Language</string>
     <string name="close_dialog">Close</string>
     <string name="select_dialog">Select</string>
+    <!-- Audio output (cast) device selector -->
+    <string name="select_device">Select device</string>
+    <string name="device_active">Active</string>
+    <string name="device_speaker">Speaker</string>
+    <string name="device_wired_headphones">Wired headphones</string>
+    <string name="device_wired_headset">Wired headset</string>
+    <string name="device_bluetooth">Bluetooth</string>
+    <string name="device_bluetooth_sco">Bluetooth SCO</string>
+    <string name="device_ble_headset">BLE headset</string>
+    <string name="device_generic">Device</string>
     <string name="support_github">Star Exhale!</string>
     <!-- Update dialog -->
     <string name="new_update_available">New update available</string>

@@ -31,10 +31,11 @@
         android:enableOnBackInvokedCallback="false"
         android:fullBackupContent="@xml/backup_rules"
         android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:label="@string/app_name"
         android:usesCleartextTraffic="true"
         android:supportsRtl="false"
-        android:theme="@style/Theme.OpenTune"
+        android:theme="@style/Theme.Exhale"
         tools:targetApi="tiramisu">
         <uses-library
             android:name="org.apache.http.legacy"
@@ -44,7 +45,7 @@
             android:name=".MainActivity"
             android:exported="true"
             android:launchMode="singleTask"
-            android:theme="@style/Theme.OpenTune"
+            android:theme="@style/Theme.Exhale"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -64,7 +65,7 @@
 
                 <data
                     android:host="together"
-                    android:scheme="opentune" />
+                    android:scheme="exhale" />
             </intent-filter>
 
             <!-- Youtube filter -->
@@ -179,7 +180,7 @@
         </receiver>
 
         <receiver
-            android:name=".widget.OpenTunePlayerWidgetReceiver"
+            android:name=".widget.ExhalePlayerWidgetReceiver"
             android:exported="true"
             android:label="@string/app_name">
             <intent-filter>
@@ -188,7 +189,7 @@
 
             <meta-data
                 android:name="android.appwidget.provider"
-                android:resource="@xml/opentune_player_widget" />
+                android:resource="@xml/exhale_player_widget" />
         </receiver>
 
         <meta-data
@@ -202,13 +203,13 @@
             android:name=".DebugActivity"
             android:exported="true"
             android:process=":crash"
-            android:theme="@style/Theme.OpenTune">
+            android:theme="@style/Theme.Exhale">
         </activity>
 
         <activity
             android:name=".ui.screens.settings.PoTokenExtractionActivity"
             android:exported="false"
-            android:theme="@style/Theme.OpenTune" />
+            android:theme="@style/Theme.Exhale" />
     </application>
 
 </manifest>
