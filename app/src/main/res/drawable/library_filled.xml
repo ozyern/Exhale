@@ -1,9 +1,13 @@
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
-    android:viewportWidth="960"
-    android:viewportHeight="960">
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+  <!-- Apple-style Library: stacked album cards with a music note (Library tab, active). -->
   <path
       android:fillColor="@android:color/white"
-      android:pathData="M144,504L144,215.73Q144,186 165.5,165Q187,144 216,144L444,144L444,504L144,504ZM516,144L744,144Q773.7,144 794.85,165.15Q816,186.3 816,216L816,384L516,384L516,144ZM516,816L516,456L816,456L816,744Q816,773 794.85,794.5Q773.7,816 744,816L516,816ZM144,576L444,576L444,816L216,816Q187,816 165.5,794.5Q144,773 144,744L144,576Z"/>
+      android:pathData="M4,6H2v14c0,1.1 0.9,2 2,2h14v-2H4V6z"/>
+  <path
+      android:fillColor="@android:color/white"
+      android:pathData="M20,2H8C6.9,2 6,2.9 6,4v12c0,1.1 0.9,2 2,2h12c1.1,0 2,-0.9 2,-2V4C22,2.9 21.1,2 20,2zM13,15c-1.1,0 -2,-0.9 -2,-2s0.9,-2 2,-2c0.37,0 0.71,0.11 1,0.28V6h4v2h-3v5C15,14.1 14.1,15 13,15z"/>
 </vector>

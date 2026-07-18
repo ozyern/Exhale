@@ -3,8 +3,19 @@
     android:height="24.0dip"
     android:viewportWidth="24.0"
     android:viewportHeight="24.0">
+    <!-- Minimalist iOS SF Symbols "person" outline: stroked head + shoulders, no fill. -->
     <path
-        android:fillColor="#ffffffff"
-        android:fillType="evenOdd"
-        android:pathData="M12,4C9.79,4 8,5.79 8,8C8,10.21 9.79,12 12,12C14.21,12 16,10.21 16,8C16,5.79 14.21,4 12,4ZM14,8C14,6.9 13.1,6 12,6C10.9,6 10,6.9 10,8C10,9.1 10.9,10 12,10C13.1,10 14,9.1 14,8ZM18,18C17.8,17.29 14.7,16 12,16C9.31,16 6.23,17.28 6,18H18ZM4,18C4,15.34 9.33,14 12,14C14.67,14 20,15.34 20,18V20H4V18Z" />
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="1.7"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M12,4.75 C10.07,4.75 8.5,6.32 8.5,8.25 C8.5,10.18 10.07,11.75 12,11.75 C13.93,11.75 15.5,10.18 15.5,8.25 C15.5,6.32 13.93,4.75 12,4.75 Z" />
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="1.7"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M5.5,19.25 C5.5,15.8 8.41,14 12,14 C15.59,14 18.5,15.8 18.5,19.25" />
 </vector>

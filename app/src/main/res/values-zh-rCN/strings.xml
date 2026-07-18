@@ -451,8 +451,8 @@
     <string name="brightness">亮度</string>
     <string name="new_library_design">新媒体库设计</string>
     <string name="new_library_design_description">启用新的媒体库设计（可能不稳定）</string>
-    <string name="OpenTune_canvas">Exhale画布</string>
-    <string name="OpenTune_canvas_desc">播放时动画化专辑封面（由BetterLyrics提供）</string>
+    <string name="Exhale_canvas">Exhale画布</string>
+    <string name="Exhale_canvas_desc">播放时动画化专辑封面（由BetterLyrics提供）</string>
     <string name="show_button1_description">在Discord Rich Presence中切换按钮1的可见性</string>
     <string name="show_button2_description">在Discord Rich Presence中切换按钮2的可见性</string>
     <string name="discord_activity_type">活动类型</string>

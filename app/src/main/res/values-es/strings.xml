@@ -333,8 +333,8 @@
     <string name="custom_value">Valor personalizado</string>
     <string name="new_library_design">Nuevo diseño de biblioteca</string>
     <string name="new_library_design_description">Habilita el nuevo diseño de la biblioteca (puede ser inestable)</string>
-    <string name="OpenTune_canvas">Exhale Canvas</string>
-    <string name="OpenTune_canvas_desc">Animar la portada del álbum mientras se reproduce (Impulsado por BetterLyrics)</string>
+    <string name="Exhale_canvas">Exhale Canvas</string>
+    <string name="Exhale_canvas_desc">Animar la portada del álbum mientras se reproduce (Impulsado por BetterLyrics)</string>
     <string name="show_button1_description">Alternar la visibilidad del botón 1 en Discord Rich Presence</string>
     <string name="show_button2_description">Alternar la visibilidad del botón 2 en Discord Rich Presence</string>
     <string name="discord_activity_type">Tipo de actividad</string>

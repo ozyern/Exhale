@@ -24,7 +24,7 @@ dependencyResolutionManagement {
 //     id("org.gradle.toolchains.foojay-resolver-convention") version("1.0.0")
 // }
 
-rootProject.name = "OpenTune"
+rootProject.name = "Exhale"
 include(":app")
 include(":innertube")
 include(":spotify")
@@ -38,7 +38,7 @@ include(":canvas")
 include(":shazamkit")
 
 // Use a local copy of NewPipe Extractor by uncommenting the lines below.
-// We assume, that OpenTune and NewPipe Extractor have the same parent directory.
+// We assume, that Exhale and NewPipe Extractor have the same parent directory.
 // If this is not the case, please change the path in includeBuild().
 //
 // For this to work you also need to change the implementation in innertube/build.gradle.kts

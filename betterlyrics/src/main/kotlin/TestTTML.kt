@@ -1,11 +1,11 @@
 /*
- * OpenTune Project Original (2026)
- * Arturo254 (github.com/Arturo254)
+ * Exhale Project Original (2026)
+ * ozyern (github.com/ozyern)
  * Licensed Under GPL-3.0 | see git history for contributors
  */
 
 
-import com.arturo254.opentune.betterlyrics.TTMLParser
+import com.ozyern.exhale.betterlyrics.TTMLParser
 
 fun main(args: Array<String>) {
     val ttml =

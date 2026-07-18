@@ -653,9 +653,9 @@
     <string name="pitch">Pas</string>
     <string name="pitch_mode_semitones_short">dt</string>
     <string name="pitch_mode_multiplier_short">x</string>
-    <string name="OpenTune_canvas_desc">Animer les pochettes d\'album pendant la lecture (technologie BetterLyrics)</string>
+    <string name="Exhale_canvas_desc">Animer les pochettes d\'album pendant la lecture (technologie BetterLyrics)</string>
     <string name="restore_success">Sauvegarde restaurée avec succès</string>
-    <string name="OpenTune_canvas">Exhale Canvas</string>
+    <string name="Exhale_canvas">Exhale Canvas</string>
     <string name="change_playlist_cover">Changer la couverture de la playlist</string>
     <string name="remove_playlist_cover">Retirer la couverture</string>
     <string name="together_participants">Participants</string>

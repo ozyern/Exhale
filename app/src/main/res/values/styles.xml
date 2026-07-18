@@ -1,14 +1,24 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
 
-    <style name="Theme.OpenTune" parent="android:Theme.Material.Light.NoActionBar">
+    <style name="Theme.Exhale" parent="android:Theme.Material.Light.NoActionBar">
         <item name="android:windowContentOverlay">@null</item>
         <item name="android:windowDrawsSystemBarBackgrounds">true</item>
         <item name="android:windowMinWidthMinor">100%</item>
         <item name="android:windowMinWidthMajor">100%</item>
         <item name="android:windowNoTitle">true</item>
-        <item name="android:windowBackground">#ffffff</item>
+        <!-- Pure black under the first frame so cold start never flashes white before the
+             Compose BootSplash layer composes — the system splash, the window and the
+             Compose splash are all the same color, reading as ONE seamless boot screen. -->
+        <item name="android:windowBackground">@color/splash_background</item>
         <item name="android:enforceNavigationBarContrast" tools:ignore="NewApi">false</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
+        <!-- Android 12+ SplashScreen API (minSdk 33): clean black canvas + the glass orb
+             logo, zero exit duration so our Compose scale-in takes over instantly.
+             The <inset> wrapper shrinks the orb inside the system's circular icon mask
+             so its edges are never cropped on-device. -->
+        <item name="android:windowSplashScreenBackground">@color/splash_background</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_logo_inset</item>
+        <item name="android:windowSplashScreenAnimationDuration">0</item>
     </style>
 </resources>

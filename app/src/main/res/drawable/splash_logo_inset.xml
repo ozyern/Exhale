@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Android 12+ splash icon: the system masks windowSplashScreenAnimatedIcon to a circle
+    covering only ~2/3 of the icon canvas, so a full-bleed bitmap gets its edges cropped.
+    22% inset per side shrinks the glass orb to sit comfortably inside the mask with
+    clean breathing room — fully visible, perfectly centered, no clipping.
+-->
+<inset xmlns:android="http://schemas.android.com/apk/res/android"
+    android:drawable="@drawable/splash_logo"
+    android:insetLeft="22%"
+    android:insetTop="22%"
+    android:insetRight="22%"
+    android:insetBottom="22%" />

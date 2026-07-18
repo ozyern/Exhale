@@ -34,7 +34,7 @@ fun fetchGitCommitHash(): String {
     // Fallback: Obtener del repositorio remoto de GitHub sin dependencias externas
     return try {
         println("Fetching latest commit from GitHub API...")
-        val url = URL("https://api.github.com/repos/Arturo254/OpenTune/commits/master")
+        val url = URL("https://api.github.com/repos/ozyern/Exhale/commits/master")
         val connection = url.openConnection() as HttpURLConnection
         connection.requestMethod = "GET"
         connection.setRequestProperty("Accept", "application/vnd.github.v3+json")
@@ -77,15 +77,15 @@ if (localPropertiesFile.exists()) {
 val gitCommit = fetchGitCommitHash()
 
 android {
-    namespace = "com.arturo254.opentune"
-    compileSdk = 36
+    namespace = "com.ozyern.exhale"
+    compileSdk = 37
 
     defaultConfig {
-        applicationId = "com.Arturo254.opentune"
-        minSdk = 26
+        applicationId = "com.ozyern.exhale"
+        minSdk = 33
         targetSdk = 36
         versionCode = 131
-        versionName = "1.0.101-beta"
+        versionName = "1.0.102"
 //        versionName = "3.0.2-$gitCommit"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -332,6 +332,7 @@ configurations.configureEach {
         "androidx.compose.runtime:runtime:${libs.versions.compose.get()}",
         "androidx.compose.foundation:foundation:${libs.versions.compose.get()}",
         "androidx.compose.ui:ui:${libs.versions.compose.get()}",
+        "androidx.compose.ui:ui-graphics:${libs.versions.compose.get()}",
         "androidx.compose.ui:ui-util:${libs.versions.compose.get()}",
         "androidx.compose.ui:ui-tooling:${libs.versions.compose.get()}",
         "androidx.compose.animation:animation-graphics:${libs.versions.compose.get()}",

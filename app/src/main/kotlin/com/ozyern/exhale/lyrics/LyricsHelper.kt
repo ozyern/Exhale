@@ -1,0 +1,236 @@
+/*
+ * Exhale Project Original (2026)
+ * ozyern (github.com/ozyern)
+ * Licensed Under GPL-3.0 | see git history for contributors
+ */
+
+
+
+package com.ozyern.exhale.lyrics
+
+import android.content.Context
+import android.util.Log
+import android.util.LruCache
+import com.ozyern.exhale.utils.GlobalLog
+import com.ozyern.exhale.constants.PreferredLyricsProvider
+import com.ozyern.exhale.constants.PreferredLyricsProviderKey
+import com.ozyern.exhale.constants.ProviderOrderKey
+import com.ozyern.exhale.db.entities.LyricsEntity.Companion.LYRICS_NOT_FOUND
+import com.ozyern.exhale.extensions.toEnum
+import com.ozyern.exhale.models.MediaMetadata
+import com.ozyern.exhale.utils.dataStore
+import com.ozyern.exhale.utils.reportException
+import com.ozyern.exhale.utils.NetworkConnectivityObserver
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.async
+import kotlinx.coroutines.Dispatchers
+import javax.inject.Inject
+
+class LyricsHelper
+@Inject
+constructor(
+    @ApplicationContext private val context: Context,
+    private val networkConnectivity: NetworkConnectivityObserver,
+) {
+    private val baseProviders =
+        listOf(
+            SimpMusicLyricsProvider,
+            BetterLyricsProvider,
+            LrcLibLyricsProvider,
+            KuGouLyricsProvider,
+            YouTubeSubtitleLyricsProvider,
+            YouTubeLyricsProvider,
+        )
+
+    private val cache = LruCache<String, List<LyricsResult>>(MAX_CACHE_SIZE)
+    private var currentLyricsJob: Job? = null
+
+    suspend fun getLyrics(mediaMetadata: MediaMetadata, preferredProviderOnly: Boolean = false): String {
+        currentLyricsJob?.cancel()
+
+        val cached = cache.get(mediaMetadata.id)?.firstOrNull()
+        if (cached != null) {
+            GlobalLog.append(Log.DEBUG, "LyricsHelper", "Found lyrics in cache for ${mediaMetadata.title}")
+            return cached.lyrics
+        }
+
+        GlobalLog.append(Log.DEBUG, "LyricsHelper", "Fetching lyrics for ${mediaMetadata.title} (Artist: ${mediaMetadata.artists.joinToString { it.name }}, Album: ${mediaMetadata.album?.title})")
+
+        val isNetworkAvailable = try {
+            networkConnectivity.isCurrentlyConnected()
+        } catch (e: Exception) {
+            true
+        }
+
+        if (!isNetworkAvailable) {
+            GlobalLog.append(Log.WARN, "LyricsHelper", "Network unavailable, aborting lyrics fetch")
+            return LYRICS_NOT_FOUND
+        }
+
+        val ordered = orderedProviders()
+        val providers = if (preferredProviderOnly) listOf(ordered.first()) else ordered
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        val deferred = scope.async {
+            for (provider in providers) {
+                val enabled = provider.isEnabled(context)
+
+                if (enabled) {
+                    try {
+                        val result = provider.getLyrics(
+                            mediaMetadata.id,
+                            mediaMetadata.title,
+                            mediaMetadata.artists.joinToString { it.name },
+                            mediaMetadata.album?.title,
+                            mediaMetadata.duration,
+                        )
+                        result.onSuccess { lyrics ->
+                            if (isMeaningfulLyrics(lyrics)) {
+                                return@async lyrics
+                            }
+                        }.onFailure {
+                            reportException(it)
+                        }
+                    } catch (e: Exception) {
+                        reportException(e)
+                    }
+                }
+            }
+            return@async LYRICS_NOT_FOUND
+        }
+
+        val lyrics = deferred.await()
+        scope.cancel()
+        // Populate the in-memory cache on the MAIN fetch path too (previously only
+        // getAllLyrics wrote it — under a different key — so the id-keyed lookup above
+        // never hit). A prefetch on song start now makes the lyrics-tab open instant.
+        if (lyrics != LYRICS_NOT_FOUND) {
+            cache.put(mediaMetadata.id, listOf(LyricsResult(PREFETCH_PROVIDER_NAME, lyrics)))
+        }
+        return lyrics
+    }
+
+    suspend fun getAllLyrics(
+        mediaId: String,
+        songTitle: String,
+        songArtists: String,
+        songAlbum: String?,
+        duration: Int,
+        callback: (LyricsResult) -> Unit,
+    ) {
+        currentLyricsJob?.cancel()
+
+        val cacheKey = "$songArtists-$songTitle".replace(" ", "")
+        cache.get(cacheKey)?.let { results ->
+            results.forEach {
+                callback(it)
+            }
+            return
+        }
+
+        val isNetworkAvailable = try {
+            networkConnectivity.isCurrentlyConnected()
+        } catch (e: Exception) {
+            true
+        }
+        
+        if (!isNetworkAvailable) {
+            return
+        }
+
+        val allResult = mutableListOf<LyricsResult>()
+        val providers = orderedProviders()
+        currentLyricsJob = CoroutineScope(SupervisorJob() + Dispatchers.IO).async {
+            providers.forEach { provider ->
+                if (provider.isEnabled(context)) {
+                    try {
+                        provider.getAllLyrics(mediaId, songTitle, songArtists, songAlbum, duration) lyricsCallback@{ lyrics ->
+                            if (!isMeaningfulLyrics(lyrics)) return@lyricsCallback
+                            val result = LyricsResult(provider.name, lyrics)
+                            allResult += result
+                            callback(result)
+                        }
+                    } catch (e: Exception) {
+                        reportException(e)
+                    }
+                }
+            }
+            cache.put(cacheKey, allResult)
+        }
+
+        currentLyricsJob?.join()
+    }
+
+    private fun PreferredLyricsProvider.toLyricsProvider(): LyricsProvider = when (this) {
+        PreferredLyricsProvider.LRCLIB -> LrcLibLyricsProvider
+        PreferredLyricsProvider.KUGOU -> KuGouLyricsProvider
+        PreferredLyricsProvider.BETTER_LYRICS -> BetterLyricsProvider
+        PreferredLyricsProvider.SIMPMUSIC -> SimpMusicLyricsProvider
+    }
+
+    private suspend fun orderedProviders(): List<LyricsProvider> {
+        val savedOrder = context.dataStore.data
+            .first()[ProviderOrderKey]
+            ?.split(",")
+            ?.mapNotNull { name -> runCatching { PreferredLyricsProvider.valueOf(name) }.getOrNull() }
+            ?.map { it.toLyricsProvider() }
+
+        if (!savedOrder.isNullOrEmpty()) {
+            val allProviders = savedOrder.toMutableList()
+            PreferredLyricsProvider.entries.forEach { enumProvider ->
+                val provider = enumProvider.toLyricsProvider()
+                if (provider !in allProviders) allProviders.add(provider)
+            }
+            return allProviders
+        }
+
+        val preferred = context.dataStore.data
+            .first()[PreferredLyricsProviderKey]
+            .toEnum(PreferredLyricsProvider.LRCLIB)
+
+        val first = preferred.toLyricsProvider()
+        return listOf(first) + baseProviders.filterNot { it == first }
+    }
+
+    private fun isMeaningfulLyrics(lyrics: String): Boolean {
+        val normalized =
+            lyrics
+                .replace("\uFEFF", "")
+                .replace(INVISIBLE_CHARS_REGEX, "")
+                .trim { it.isWhitespace() || it == '\u00A0' }
+
+        if (normalized.isEmpty()) return false
+        if (normalized == LYRICS_NOT_FOUND) return false
+
+        val remaining =
+            TIMESTAMP_REGEX
+                .replace(normalized, "")
+                .replace(INVISIBLE_CHARS_REGEX, "")
+                .trim { it.isWhitespace() || it == '\u00A0' }
+
+        return remaining.any { !it.isWhitespace() && it != '\u00A0' }
+    }
+
+    fun cancelCurrentLyricsJob() {
+        currentLyricsJob?.cancel()
+        currentLyricsJob = null
+    }
+
+    companion object {
+        // Aggressive in-memory cache: lyrics strings are tiny (a few KB) — keep the whole
+        // recent listening session hot so re-opening the lyrics tab never re-fetches.
+        private const val MAX_CACHE_SIZE = 50
+        private const val PREFETCH_PROVIDER_NAME = "Prefetch"
+        private val TIMESTAMP_REGEX = Regex("""\[[0-9]{1,2}:[0-9]{2}(?:\.[0-9]{1,3})?]""")
+        private val INVISIBLE_CHARS_REGEX = Regex("""[\u200B\u200C\u200D\u2060\u00AD]""")
+    }
+}
+
+data class LyricsResult(
+    val providerName: String,
+    val lyrics: String,
+)
