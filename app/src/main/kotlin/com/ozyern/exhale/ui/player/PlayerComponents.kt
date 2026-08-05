@@ -2287,39 +2287,29 @@ fun PlayerBackground(
 ) {
     val effectiveBlurRadius = blurRadius.coerceIn(0f, 48f)
     val shouldApplyBlur = !disableBlur && effectiveBlurRadius > 0f
+    // The Blur-Radius preference tops out at 48dp, which reads as "soft focus", not as liquid.
+    // Map its range onto the Liquid Glass range (48..120dp) so the slider still steers the look
+    // but even its lowest setting lands in genuinely-blurred territory.
+    val liquidBlurRadius = (effectiveBlurRadius * 2.4f).coerceIn(48f, 120f).dp
     Box(modifier = Modifier.fillMaxSize()) {
         when (playerBackground) {
             PlayerBackgroundStyle.BLUR -> {
-                AnimatedContent(
-                    targetState = mediaMetadata?.thumbnailUrl,
-                    transitionSpec = {
-                        fadeIn(tween(1000)) togetherWith fadeOut(tween(1000))
-                    },
-                    label = ""
-                ) { thumbnailUrl ->
-                    if (thumbnailUrl != null) {
-                        Box(modifier = Modifier.fillMaxSize()) {
-                            AsyncImage(
-                                model = thumbnailUrl.highRes(),
-                                contentDescription = "Blurred background",
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize().let {
-                                    if (shouldApplyBlur) it.blur(radius = effectiveBlurRadius.dp) else it
-                                }
-                            )
-                            val overlayStops = PlayerBackgroundColorUtils.buildBlurOverlayStops(gradientColors)
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .background(Brush.verticalGradient(colorStops = overlayStops))
-                            )
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .background(Color.Black.copy(alpha = 0.08f))
-                            )
-                        }
-                    }
+                Box(modifier = Modifier.fillMaxSize()) {
+                    LiquidGlassArtworkBackdrop(
+                        thumbnailUrl = mediaMetadata?.thumbnailUrl,
+                        meshColors = gradientColors,
+                        disableBlur = !shouldApplyBlur,
+                        label = "playerBackgroundBlur",
+                        blurRadius = liquidBlurRadius,
+                        // Lighter than V8's — this style keeps its own overlay stops below.
+                        bottomScrimAlpha = 0.55f,
+                    )
+                    val overlayStops = PlayerBackgroundColorUtils.buildBlurOverlayStops(gradientColors)
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Brush.verticalGradient(colorStops = overlayStops))
+                    )
                 }
             }
 
@@ -2392,37 +2382,22 @@ fun PlayerBackground(
             }
 
             PlayerBackgroundStyle.BLUR_GRADIENT -> {
-                AnimatedContent(
-                    targetState = mediaMetadata?.thumbnailUrl,
-                    transitionSpec = {
-                        fadeIn(tween(1000)) togetherWith fadeOut(tween(1000))
-                    },
-                    label = ""
-                ) { thumbnailUrl ->
-                    if (thumbnailUrl != null) {
-                        Box(modifier = Modifier.fillMaxSize()) {
-                            AsyncImage(
-                                model = thumbnailUrl.highRes(),
-                                contentDescription = "Blurred background",
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize().let {
-                                    if (shouldApplyBlur) it.blur(radius = effectiveBlurRadius.dp) else it
-                                }
-                            )
-                            val gradientColorStops =
-                                PlayerBackgroundColorUtils.buildBlurGradientStops(gradientColors)
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .background(Brush.verticalGradient(colorStops = gradientColorStops))
-                            )
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .background(Color.Black.copy(alpha = 0.05f))
-                            )
-                        }
-                    }
+                Box(modifier = Modifier.fillMaxSize()) {
+                    LiquidGlassArtworkBackdrop(
+                        thumbnailUrl = mediaMetadata?.thumbnailUrl,
+                        meshColors = gradientColors,
+                        disableBlur = !shouldApplyBlur,
+                        label = "playerBackgroundBlurGradient",
+                        blurRadius = liquidBlurRadius,
+                        bottomScrimAlpha = 0.45f,
+                    )
+                    val gradientColorStops =
+                        PlayerBackgroundColorUtils.buildBlurGradientStops(gradientColors)
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Brush.verticalGradient(colorStops = gradientColorStops))
+                    )
                 }
             }
 
@@ -2725,102 +2700,40 @@ fun PlayerBackground(
 // V8 - Apple Music Style Components
 // ============================================================
 
+/**
+ * V8's full-screen artwork.
+ *
+ * V8 has no separate thumbnail — the cover *is* the hero image, edge to edge, with the controls
+ * floating over its lower third. So this is foreground, not backdrop: the art is drawn crisp and
+ * unmodified ([LiquidGlassArtworkBackdrop] with `sharpArtwork = true`), and the only thing layered
+ * on top is the legibility scrim that keeps the title/slider/transport readable.
+ *
+ * Do NOT reintroduce a blur here. A previous revision ran the cover through a 100dp
+ * [androidx.compose.ui.draw.blur] plus a drifting colour mesh — the intended "liquid glass"
+ * treatment for designs that *do* have a separate sharp thumbnail — which reduced V8 to a
+ * full-screen smudge with no recognisable album art. The blurred-plate path still exists for
+ * [PlayerBackgroundStyle.BLUR] / [PlayerBackgroundStyle.BLUR_GRADIENT], where it correctly sits
+ * *behind* a separate crisp `Thumbnail`.
+ */
 @Composable
 fun V8PlayerBackdrop(
     thumbnailUrl: String?,
     disableBlur: Boolean,
     label: String,
     modifier: Modifier = Modifier,
+    meshColors: List<Color> = emptyList(),
 ) {
-    val cloudyRadius = 100
-    val blurMaskStart = 0.42f
-    val blurMaskMid = 0.55f
-    val blurMaskSolid = 0.72f
-    val baseArtworkScale = if (disableBlur) 1.02f else 1.05f
-    val baseArtworkAlpha = if (disableBlur) 0.65f else 0.75f
-
-    Box(
-        modifier = modifier.fillMaxSize()
-    ) {
-        AnimatedContent(
-            targetState = thumbnailUrl,
-            transitionSpec = {
-                fadeIn(tween(800)) togetherWith fadeOut(tween(800))
-            },
-            label = label,
-        ) { artworkUrl ->
-            if (artworkUrl != null) {
-                Box(modifier = Modifier.fillMaxSize()) {
-                    AsyncImage(
-                        model = artworkUrl.highRes(),
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .graphicsLayer {
-                                scaleX = baseArtworkScale
-                                scaleY = baseArtworkScale
-                                alpha = baseArtworkAlpha
-                            }
-                    )
-
-                    if (!disableBlur) {
-                        AsyncImage(
-                            model = artworkUrl.highRes(),
-                            contentDescription = null,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .cloudy(radius = cloudyRadius)
-                                .drawWithCache {
-                                    val blurMask = Brush.verticalGradient(
-                                        colorStops = arrayOf(
-                                            0f to Color.Transparent,
-                                            blurMaskStart to Color.Transparent,
-                                            blurMaskMid to Color.Black.copy(alpha = 0.5f),
-                                            blurMaskSolid to Color.Black,
-                                            1f to Color.Black,
-                                        )
-                                    )
-
-                                    onDrawWithContent {
-                                        drawContent()
-
-                                        drawRect(
-                                            brush = blurMask,
-                                            blendMode = BlendMode.DstIn
-                                        )
-                                    }
-                                }
-                        )
-                    }
-                }
-            } else {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(Color.Black)
-                )
-            }
-        }
-
-        // Gradiente más pronunciado como Apple Music
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(
-                        colorStops = arrayOf(
-                            0f to Color.Transparent,
-                            0.15f to Color.Black.copy(alpha = 0.05f),
-                            0.45f to Color.Black.copy(alpha = 0.25f),
-                            0.70f to Color.Black.copy(alpha = 0.50f),
-                            1f to Color.Black.copy(alpha = 0.85f),
-                        )
-                    )
-                )
-        )
-    }
+    LiquidGlassArtworkBackdrop(
+        thumbnailUrl = thumbnailUrl,
+        meshColors = meshColors,
+        disableBlur = disableBlur,
+        label = label,
+        modifier = modifier,
+        // Softer than the blurred plate's 0.88: over sharp art the scrim only has to buy
+        // contrast for the controls, not hide detail — the cover must stay visible to the edge.
+        bottomScrimAlpha = 0.62f,
+        sharpArtwork = true,
+    )
 }
 
 @Composable

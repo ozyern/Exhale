@@ -86,6 +86,7 @@ import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Surface
 import androidx.compose.material3.ToggleButton
 import androidx.compose.material3.ToggleButtonDefaults
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -303,15 +304,10 @@ fun BottomSheetPlayer(
                 if (darkTheme == DarkMode.AUTO) isSystemInDarkTheme else darkTheme == DarkMode.ON
             useDarkTheme && pureBlack
         }
-    val backgroundColor = if (useBlackBackground && state.value > state.collapsedBound) {
-        val progress = ((state.value - state.collapsedBound) / (state.expandedBound - state.collapsedBound))
-            .coerceIn(0f, 1f)
-        Color.Black.copy(alpha = progress)
-    } else {
-        val progress = ((state.value - state.collapsedBound) / (state.expandedBound - state.collapsedBound))
-            .coerceIn(0f, 1f)
-        MaterialTheme.colorScheme.surfaceContainer.copy(alpha = progress)
-    }
+    // NOTE: there was a `backgroundColor` derived from `state.value` here. It was dead — nothing
+    // read it — but reading the sheet's animated position during *composition* meant every frame
+    // of every open/close/drag recomposed this entire composable, the largest in the app. The
+    // sheet's scrim is now painted from `state.progress` inside BottomSheet's own draw phase.
 
     val playbackState by playerConnection.playbackState.collectAsState()
     val isPlaying by playerConnection.isPlaying.collectAsState()
@@ -372,8 +368,19 @@ fun BottomSheetPlayer(
         }
     }
 
-    LaunchedEffect(mediaMetadata?.id, playerBackground) {
-        if (playerBackground == PlayerBackgroundStyle.GRADIENT || playerBackground == PlayerBackgroundStyle.COLORING || playerBackground == PlayerBackgroundStyle.BLUR_GRADIENT || playerBackground == PlayerBackgroundStyle.GLOW || playerBackground == PlayerBackgroundStyle.GLOW_ANIMATED) {
+    // V8 used to be in this list to seed its drifting colour mesh. It now shows the cover sharp and
+    // full-bleed (no blurred plate, no mesh), so the palette would feed nothing — and extracting it
+    // meant a bitmap decode per song for a layer that is never drawn.
+    val needsPaletteExtraction =
+        playerBackground == PlayerBackgroundStyle.GRADIENT ||
+            playerBackground == PlayerBackgroundStyle.COLORING ||
+            playerBackground == PlayerBackgroundStyle.BLUR ||
+            playerBackground == PlayerBackgroundStyle.BLUR_GRADIENT ||
+            playerBackground == PlayerBackgroundStyle.GLOW ||
+            playerBackground == PlayerBackgroundStyle.GLOW_ANIMATED
+
+    LaunchedEffect(mediaMetadata?.id, playerBackground, needsPaletteExtraction) {
+        if (needsPaletteExtraction) {
             val currentMetadata = mediaMetadata
             if (currentMetadata != null && currentMetadata.thumbnailUrl != null) {
                 // Check cache first
@@ -807,41 +814,18 @@ fun BottomSheetPlayer(
                     else -> false
                 }
             },
-        backgroundColor = if (playerDesignStyle == PlayerDesignStyle.V7) {
-            val progress = ((state.value - state.collapsedBound) / (state.expandedBound - state.collapsedBound))
-                .coerceIn(0f, 1f)
-            val fadeProgress = if (progress < 0.2f) {
-                ((0.2f - progress) / 0.2f).coerceIn(0f, 1f)
-            } else {
-                0f
-            }
-            Color.Black.copy(alpha = 1f - fadeProgress)
-        } else when (playerBackground) {
-            PlayerBackgroundStyle.BLUR, PlayerBackgroundStyle.GRADIENT -> {
-                val progress = ((state.value - state.collapsedBound) / (state.expandedBound - state.collapsedBound))
-                    .coerceIn(0f, 1f)
-                val fadeProgress = if (progress < 0.2f) {
-                    ((0.2f - progress) / 0.2f).coerceIn(0f, 1f)
-                } else {
-                    0f
-                }
-                MaterialTheme.colorScheme.surface.copy(alpha = 1f - fadeProgress)
-            }
-            else -> {
-                val progress = ((state.value - state.collapsedBound) / (state.expandedBound - state.collapsedBound))
-                    .coerceIn(0f, 1f)
-                val fadeProgress = if (progress < 0.2f) {
-                    ((0.2f - progress) / 0.2f).coerceIn(0f, 1f)
-                } else {
-                    0f
-                }
-                if (useBlackBackground) {
-                    Color.Black.copy(alpha = 1f - fadeProgress)
-                } else {
-                    MaterialTheme.colorScheme.surface.copy(alpha = 1f - fadeProgress)
-                }
-            }
+        // Pass the *base* scrim colour only. The progress-driven fade that used to be computed
+        // here (and re-run on every animation frame, recomposing the whole player) now happens
+        // once per frame in BottomSheet's draw phase, with the identical ramp curve.
+        backgroundColor = when {
+            playerDesignStyle == PlayerDesignStyle.V7 -> Color.Black
+            playerBackground == PlayerBackgroundStyle.BLUR ||
+                playerBackground == PlayerBackgroundStyle.GRADIENT -> MaterialTheme.colorScheme.surface
+            useBlackBackground -> Color.Black
+            else -> MaterialTheme.colorScheme.surface
         },
+        // Opt this sheet — and only this sheet — into the rectangle→pill morph.
+        dynamicIslandMorph = true,
         onDismiss = {
             playerConnection.service.stopAndClearPlayback()
         },
@@ -1064,7 +1048,8 @@ fun BottomSheetPlayer(
                         V8PlayerBackdrop(
                             thumbnailUrl = mediaMetadata?.thumbnailUrl,
                             disableBlur = disableBlur,
-                            label = "v8BackdropLandscape"
+                            label = "v8BackdropLandscape",
+                            meshColors = gradientColors,
                         )
 
                         Column(
@@ -1272,7 +1257,8 @@ fun BottomSheetPlayer(
                         V8PlayerBackdrop(
                             thumbnailUrl = mediaMetadata?.thumbnailUrl,
                             disableBlur = disableBlur,
-                            label = "v8BackdropPortrait"
+                            label = "v8BackdropPortrait",
+                            meshColors = gradientColors,
                         )
 
                         Column(
@@ -1396,14 +1382,20 @@ fun BottomSheetPlayer(
                     // Empty collapsed content - fully hidden when collapsed
                 }
             ) {
+                val lyricsScrim = MaterialTheme.colorScheme.surface
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(
-                            MaterialTheme.colorScheme.surface.copy(
-                                alpha = lyricsSheetState.progress.coerceIn(0f, 1f)
+                        // drawBehind, not background(): the alpha tracks the lyrics sheet's
+                        // animated progress, and reading that in composition re-ran the whole
+                        // LyricsScreen subtree on every frame of the open/close animation.
+                        .drawBehind {
+                            drawRect(
+                                lyricsScrim.copy(
+                                    alpha = lyricsSheetState.progress.coerceIn(0f, 1f)
+                                )
                             )
-                        )
+                        }
                 ) {
                     LyricsScreen(
                         mediaMetadata = metadata,

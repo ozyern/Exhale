@@ -10,7 +10,7 @@ package com.ozyern.exhale.ui.component
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -92,8 +92,8 @@ fun BottomSheetPage(
 
     AnimatedVisibility(
         visible = state.isVisible,
-        enter = fadeIn(animationSpec = tween(300)),
-        exit = fadeOut(animationSpec = tween(300)),
+        enter = fadeIn(animationSpec = spring(dampingRatio = 0.8f, stiffness = 300f)),
+        exit = fadeOut(animationSpec = spring(dampingRatio = 0.8f, stiffness = 300f)),
     ) {
         BackHandler {
             state.dismiss()
@@ -115,11 +115,11 @@ fun BottomSheetPage(
         visible = state.isVisible,
         enter = slideInVertically(
             initialOffsetY = { it },
-            animationSpec = tween(300)
+            animationSpec = spring(dampingRatio = 0.8f, stiffness = 300f)
         ),
         exit = slideOutVertically(
             targetOffsetY = { it },
-            animationSpec = tween(300)
+            animationSpec = spring(dampingRatio = 0.8f, stiffness = 300f)
         ),
         modifier = modifier,
     ) {

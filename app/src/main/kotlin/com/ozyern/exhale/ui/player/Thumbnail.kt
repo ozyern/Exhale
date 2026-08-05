@@ -16,6 +16,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -53,8 +54,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.BlurredEdgeTreatment
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.BlurEffect
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
@@ -91,6 +94,7 @@ import com.ozyern.exhale.constants.CropThumbnailToSquareKey
 import com.ozyern.exhale.constants.HidePlayerThumbnailKey
 import com.ozyern.exhale.extensions.metadata
 import com.ozyern.exhale.extensions.toMediaItem
+import com.ozyern.exhale.ui.component.supportsLiveBlur
 import com.ozyern.exhale.ui.utils.highRes
 import com.ozyern.exhale.utils.rememberEnumPreference
 import com.ozyern.exhale.utils.rememberPreference
@@ -303,6 +307,32 @@ fun Thumbnail(
         PlayerBackgroundStyle.GLOW -> Color.White
         PlayerBackgroundStyle.GLOW_ANIMATED -> Color.White
         PlayerBackgroundStyle.CUSTOM -> Color.White
+    }
+
+    // ---- Liquid Glass plate ----
+    // The frosted capsule the cover floats on. Deliberately a plain translucent film + hairline
+    // border rather than a blurred copy of the artwork: a translucent film over the already-blurred
+    // Liquid Glass backdrop reads as frosted glass, and — unlike an artwork blur — carries zero
+    // album detail that could bleed onto the cover.
+    val glassIsDark = androidx.compose.foundation.isSystemInDarkTheme()
+    val glassPlateBrush = remember(glassIsDark) {
+        if (glassIsDark) {
+            androidx.compose.ui.graphics.Brush.linearGradient(
+                listOf(Color.White.copy(alpha = 0.10f), Color.White.copy(alpha = 0.03f)),
+            )
+        } else {
+            androidx.compose.ui.graphics.Brush.linearGradient(
+                listOf(Color.White.copy(alpha = 0.34f), Color.White.copy(alpha = 0.12f)),
+            )
+        }
+    }
+    val glassPlateBorder = remember(glassIsDark) {
+        androidx.compose.ui.graphics.Brush.linearGradient(
+            listOf(
+                Color.White.copy(alpha = if (glassIsDark) 0.22f else 0.55f),
+                Color.White.copy(alpha = 0.04f),
+            ),
+        )
     }
 
     LaunchedEffect(maxCanvasCacheSize) {
@@ -674,9 +704,80 @@ fun Thumbnail(
                                     },
                                 contentAlignment = Alignment.Center
                             ) {
+                                val coverSize = containerMaxWidth - (PlayerHorizontalPadding * 2)
+
+                                // Diffuse colour-bleed drop shadow. Rather than a flat black
+                                // elevation shadow, this is a second, heavily blurred copy of the
+                                // artwork itself pushed down behind the cover: it picks up the
+                                // album's own colours, so the cover reads as floating and glowing
+                                // over the liquid backdrop instead of pasted on it.
+                                //
+                                // Static per song, so the RenderEffect result is retained by the
+                                // render node — the blur is paid for once, not per frame. Gated on
+                                // API 31 because Modifier.blur is a silent no-op below it, and an
+                                // un-blurred duplicate would just look like a misaligned cover.
+                                if (!hidePlayerThumbnail && supportsLiveBlur) {
+                                    val shadowUrl = item.metadata?.thumbnailUrl?.highRes()
+                                        ?: item.mediaMetadata.artworkUri?.toString()
+                                    if (shadowUrl != null) {
+                                        AsyncImage(
+                                            model = shadowUrl,
+                                            contentDescription = null,
+                                            contentScale = ContentScale.Crop,
+                                            modifier = Modifier
+                                                .size(coverSize)
+                                                .graphicsLayer {
+                                                    // Slightly smaller and pushed down: the blur
+                                                    // spreads it back out past the cover's edges,
+                                                    // heaviest along the bottom where a real cast
+                                                    // shadow would fall.
+                                                    scaleX = 0.94f
+                                                    scaleY = 0.94f
+                                                    translationY = 26.dp.toPx()
+                                                    alpha = 0.55f
+                                                    clip = false
+                                                }
+                                                .blur(
+                                                    radius = 44.dp,
+                                                    edgeTreatment = BlurredEdgeTreatment.Unbounded,
+                                                ),
+                                        )
+                                    }
+                                }
+
+                                // The frosted-glass CAPSULE the cover sits on.
+                                //
+                                // This — not the artwork — is the surface that carries the Liquid
+                                // Glass treatment: a translucent film with a hairline light-catching
+                                // border, letting the blurred mesh backdrop glow through from behind.
+                                // The cover is then drawn on top of it, fully sharp.
+                                //
+                                // It is a sibling *behind* the clipped cover box rather than that
+                                // box's own background, so nothing it draws can ever be composited
+                                // over the artwork.
                                 Box(
                                     modifier = Modifier
-                                        .size(containerMaxWidth - (PlayerHorizontalPadding * 2))
+                                        .size(coverSize)
+                                        // Subtle cast shadow so the cover reads as floating ON the
+                                        // glass rather than pasted into it. Drawn by the plate, not
+                                        // the cover, so it can never darken the artwork itself.
+                                        .shadow(
+                                            elevation = 18.dp,
+                                            shape = RoundedCornerShape(thumbnailCornerRadius.dp),
+                                            clip = false,
+                                        )
+                                        .clip(RoundedCornerShape(thumbnailCornerRadius.dp))
+                                        .background(glassPlateBrush)
+                                        .border(
+                                            width = 1.dp,
+                                            brush = glassPlateBorder,
+                                            shape = RoundedCornerShape(thumbnailCornerRadius.dp),
+                                        )
+                                )
+
+                                Box(
+                                    modifier = Modifier
+                                        .size(coverSize)
                                         .clip(RoundedCornerShape(thumbnailCornerRadius.dp))
                                 ) {
                                     if (hidePlayerThumbnail) {
@@ -702,23 +803,14 @@ fun Thumbnail(
                                             cropThumbnailToSquare &&
                                                     playerDesignStyle != PlayerDesignStyle.V7
 
-                                        AsyncImage(
-                                            model = item.metadata?.thumbnailUrl?.highRes()
-                                                ?: item.mediaMetadata.artworkUri?.toString(),
-                                            contentDescription = null,
-                                            contentScale = ContentScale.FillBounds,
-                                            modifier = Modifier
-                                                .fillMaxSize()
-                                                .let { if (shouldCropArtwork) it.aspectRatio(1f) else it }
-                                                .graphicsLayer(
-                                                    renderEffect = BlurEffect(
-                                                        radiusX = 60f,
-                                                        radiusY = 60f
-                                                    ),
-                                                    alpha = 0.6f
-                                                )
-                                        )
-
+                                        // NOTE: a blurred, stretched copy of the cover used to be
+                                        // drawn here to fill the letterbox left by ContentScale.Fit.
+                                        // It bled album detail across — and, wherever the sharp
+                                        // layer didn't cover, straight over — the artwork, which is
+                                        // exactly the bug this fix removes. The frosted glass plate
+                                        // behind the cover now fills that space instead, so the
+                                        // artwork is the ONLY thing drawn inside this box and stays
+                                        // 100% crisp.
                                         AsyncImage(
                                             model = item.metadata?.thumbnailUrl?.highRes()
                                                 ?: item.mediaMetadata.artworkUri?.toString(),

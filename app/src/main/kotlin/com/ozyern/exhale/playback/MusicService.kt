@@ -49,6 +49,7 @@ import androidx.media3.common.Player.REPEAT_MODE_ALL
 import androidx.media3.common.Player.REPEAT_MODE_OFF
 import androidx.media3.common.Player.REPEAT_MODE_ONE
 import androidx.media3.common.Player.STATE_IDLE
+import androidx.media3.common.MimeTypes
 import androidx.media3.common.Timeline
 import androidx.media3.common.audio.SonicAudioProcessor
 import androidx.media3.datasource.DataSource
@@ -69,6 +70,7 @@ import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.exoplayer.audio.SilenceSkippingAudioProcessor
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.source.ShuffleOrder.DefaultShuffleOrder
+import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.extractor.ExtractorsFactory
 import androidx.media3.extractor.mkv.MatroskaExtractor
 import androidx.media3.extractor.mp4.FragmentedMp4Extractor
@@ -636,6 +638,7 @@ class MusicService :
                 .Builder(this)
                 .setMediaSourceFactory(createMediaSourceFactory())
                 .setRenderersFactory(createRenderersFactory())
+                .setTrackSelector(createTrackSelector())
                 .setHandleAudioBecomingNoisy(true)
                 .setWakeMode(C.WAKE_MODE_NETWORK)
                 .setAudioAttributes(
@@ -857,6 +860,7 @@ class MusicService :
                         .Builder(this)
                         .setMediaSourceFactory(createMediaSourceFactory())
                         .setRenderersFactory(createRenderersFactory())
+                        .setTrackSelector(createTrackSelector())
                         .setHandleAudioBecomingNoisy(false)
                         .setWakeMode(C.WAKE_MODE_NETWORK)
                         .setAudioAttributes(
@@ -4532,6 +4536,34 @@ class MusicService :
         }
     }
 
+    /**
+     * Track selector tuned for "always the best audio we can get".
+     *
+     * - [setMaxVideoSize] `(0, 0)` hard-disables every video renderer. This service never renders
+     *   video, so any muxed video track was pure wasted bandwidth — and on a metered connection
+     *   that bandwidth is exactly what we want to spend on the audio track instead.
+     * - [setForceHighestSupportedBitrate] flips the adaptive selection logic from "pick the
+     *   highest track the *current* estimated bandwidth supports" to "pick the highest track the
+     *   *device* supports", so a momentary bandwidth dip can never pin us to a lossy rendition.
+     * - [setExceedAudioConstraintsIfNecessary] guarantees a track is still chosen if every
+     *   candidate exceeds the (now effectively absent) constraints, rather than failing selection.
+     * - Preferred MIME order is lossless-first, then the two codecs YouTube actually serves,
+     *   highest-fidelity-per-bit first.
+     */
+    private fun createTrackSelector() =
+        DefaultTrackSelector(this).apply {
+            parameters =
+                buildUponParameters()
+                    .setMaxVideoSize(0, 0)
+                    .setForceHighestSupportedBitrate(true)
+                    .setExceedAudioConstraintsIfNecessary(true)
+                    .setPreferredAudioMimeTypes(
+                        MimeTypes.AUDIO_FLAC,
+                        MimeTypes.AUDIO_OPUS,
+                        MimeTypes.AUDIO_AAC,
+                    ).build()
+        }
+
     private fun createRenderersFactory() =
         object : DefaultRenderersFactory(this) {
             override fun buildAudioSink(
@@ -4540,7 +4572,11 @@ class MusicService :
                 enableAudioTrackPlaybackParams: Boolean,
             ) = DefaultAudioSink
                 .Builder(this@MusicService)
-                .setEnableFloatOutput(enableFloatOutput)
+                // Forced on rather than passed through: when a source *is* high-resolution
+                // (32-bit float PCM), this keeps it in float all the way to the AudioTrack
+                // instead of having the sink quantise it down to 16-bit first. Ignored by the
+                // sink for ordinary 16-bit input, so there is no cost for the common case.
+                .setEnableFloatOutput(true)
                 .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
                 .setAudioProcessorChain(
                     DefaultAudioSink.DefaultAudioProcessorChain(
@@ -4552,9 +4588,11 @@ class MusicService :
                             150.toShort(),
                         ),
                         // Cavern-derived spatial upscaler: every decoded stereo
-                        // buffer passes through it on the audio thread; it is a
-                        // memcpy pass-through until the Spatial Audio toggle turns
-                        // CavernSpatialAudioProcessor.globalEnabled on.
+                        // buffer passes through it on the audio thread. It lifts
+                        // the stream to 48 kHz / 32-bit float internally, runs the
+                        // virtualization there, and re-quantizes once on the way
+                        // out. Must sit *before* SonicAudioProcessor, which is the
+                        // reason its output is 16-bit rather than float.
                         CavernSpatialAudioProcessor(),
                         SonicAudioProcessor(),
                     ),

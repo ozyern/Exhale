@@ -322,7 +322,7 @@ fun ArtistScreen(
                 )
         )
 
-        if (!disableBlur && gradientColors.isNotEmpty() && gradientAlpha > 0f) {
+        if (!disableBlur && gradientColors.isNotEmpty()) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -332,6 +332,11 @@ fun ArtistScreen(
                     .drawBehind {
                         val width = size.width
                         val height = size.height
+
+                        // Draw-phase read: `gradientAlpha` tracks the scroll offset, so testing it
+                        // up in composition invalidated this whole screen on every scrolled pixel.
+                        // Bailing here instead keeps the check but pays for it in the draw pass.
+                        if (gradientAlpha <= 0f) return@drawBehind
 
                         if (gradientColors.size >= 3) {
                             val c0 = gradientColors[0]

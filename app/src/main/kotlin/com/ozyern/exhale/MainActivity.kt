@@ -10,6 +10,7 @@ package com.ozyern.exhale
 
 import android.annotation.SuppressLint
 import android.Manifest
+import android.graphics.Color as AndroidColor
 import android.content.ComponentName
 import android.content.Intent
 import android.content.ServiceConnection
@@ -20,8 +21,10 @@ import android.os.IBinder
 import android.view.View
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.RequiresApi
 import androidx.compose.animation.AnimatedContentTransitionScope
@@ -63,6 +66,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -435,6 +439,14 @@ class MainActivity : ComponentActivity() {
     )
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Modern edge-to-edge: draw fully behind the status & navigation bars with transparent,
+        // scrim-free system bars for a truly immersive, bezel-less look. Android 15+ enforces
+        // edge-to-edge regardless; declaring it explicitly keeps it correct and back-compatible.
+        // System-bar ICON colors remain driven by setSystemBarAppearance() below.
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.auto(AndroidColor.TRANSPARENT, AndroidColor.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.auto(AndroidColor.TRANSPARENT, AndroidColor.TRANSPARENT),
+        )
         window.decorView.layoutDirection = View.LAYOUT_DIRECTION_LTR
         WindowCompat.setDecorFitsSystemWindows(window, false)
 
@@ -1362,16 +1374,28 @@ class MainActivity : ComponentActivity() {
                                                         )
                                                     ) {
                                                         // Brand logo replaces the app-name title.
-                                                        // Aggressively clipped to a PERFECT circle with
-                                                        // ContentScale.Crop so it never renders as a rounded
-                                                        // square — a flawless round Exhale mark.
+                                                        //
+                                                        // Source: assets/icon.png (mirrored into
+                                                        // res/drawable-nodpi/logo.png). It is a
+                                                        // full-bleed square artwork, so Crop + a
+                                                        // CircleShape clip masks it to a PERFECT
+                                                        // circle at any density — never a rounded
+                                                        // square, never letterboxed. The hairline
+                                                        // ring keeps the mark's dark backdrop from
+                                                        // dissolving into a dark app bar.
                                                         Image(
                                                             painter = painterResource(R.drawable.logo),
                                                             contentDescription = stringResource(R.string.app_name),
                                                             contentScale = ContentScale.Crop,
+                                                            alignment = Alignment.Center,
                                                             modifier = Modifier
                                                                 .size(32.dp)
                                                                 .clip(CircleShape)
+                                                                .border(
+                                                                    width = 0.5.dp,
+                                                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
+                                                                    shape = CircleShape,
+                                                                )
                                                         )
                                                     }
                                                 },

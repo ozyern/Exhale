@@ -27,6 +27,8 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.ozyern.exhale.LocalPlayerConnection
 import com.ozyern.exhale.constants.LiquidGlassNavBarKey
+import com.ozyern.exhale.constants.MiniPlayerHeight
+import com.ozyern.exhale.constants.MiniPlayerPillCornerRadius
 import com.ozyern.exhale.constants.SwipeSensitivityKey
 import com.ozyern.exhale.ui.component.BottomSheetState
 import com.ozyern.exhale.ui.component.GlassSurface
@@ -79,10 +81,12 @@ private fun NewMiniPlayer(
         pureBlack = pureBlack,
         useLegacyBackground = false
     ) { offsetX ->
-        val shape = RoundedCornerShape(32.dp)
+        // Shared with BottomSheet's Dynamic-Island morph target — the full player shrinks into
+        // exactly this pill, so the two must read the same constants.
+        val shape = RoundedCornerShape(MiniPlayerPillCornerRadius)
         val barModifier = Modifier
             .fillMaxWidth()
-            .height(64.dp)
+            .height(MiniPlayerHeight)
             .offset { IntOffset(offsetX.roundToInt(), 0) }
 
         val content: @Composable () -> Unit = {

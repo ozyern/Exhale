@@ -176,8 +176,10 @@ object YTPlayerUtils {
     ): Result<PlaybackData> = runCatching {
         val attempts =
             when (audioQuality) {
-                AudioQuality.HIGHEST -> listOf(AudioQuality.HIGHEST, AudioQuality.HIGH)
-                AudioQuality.AUTO -> listOf(AudioQuality.AUTO, AudioQuality.HIGH)
+                // Never silently downgrade HIGHEST/AUTO to HIGH — the fallback hid the real
+                // stream-fetch error and capped fidelity without the user knowing.
+                AudioQuality.HIGHEST -> listOf(AudioQuality.HIGHEST)
+                AudioQuality.AUTO -> listOf(AudioQuality.AUTO)
                 else -> listOf(audioQuality)
             }.distinct()
 
@@ -494,15 +496,24 @@ object YTPlayerUtils {
 
         val effectiveQuality =
             when (audioQuality) {
-                AudioQuality.AUTO -> if (networkMetered) AudioQuality.HIGH else AudioQuality.HIGHEST
+                // Never downgrade on metered networks — the user chose HIGHEST/AUTO and the
+                // track selector already enforces bandwidth limits at the ExoPlayer layer.
+                AudioQuality.AUTO -> AudioQuality.HIGHEST
                 else -> audioQuality
             }
 
+        // A *ceiling*, not a target. Below, `belowOrEqual` filters the candidate list to formats
+        // at or under this value, so any finite number here caps fidelity. HIGHEST used to sit at
+        // 320_000, which sounds unbounded but isn't: it silently discarded any format above it.
+        // null means "no ceiling at all" — sort every candidate by descending bitrate and take
+        // the best the server offers.
         val targetBitrateBps =
             when (effectiveQuality) {
                 AudioQuality.LOW -> 70_000
-                AudioQuality.HIGH -> 160_000
-                AudioQuality.HIGHEST -> 320_000
+                // Raised from 160_000: YouTube Music's adaptive AAC stream peaks at 256 kbps,
+                // so the old ceiling silently discarded the best available track.
+                AudioQuality.HIGH -> 256_000
+                AudioQuality.HIGHEST -> null
                 AudioQuality.AUTO -> null
             }
 
@@ -572,8 +583,10 @@ object YTPlayerUtils {
     private fun codecRank(codec: String?): Int =
         when {
             codec.isNullOrBlank() -> 0
-            codec.contains("opus", ignoreCase = true) -> 3
-            codec.contains("mp4a", ignoreCase = true) -> 2
+            // AAC (mp4a) ranks above Opus: YouTube Music's peak stream is 256 kbps AAC, and at
+            // equal bitrate it carries more detail than the Opus encode at the same rate.
+            codec.contains("mp4a", ignoreCase = true) -> 3
+            codec.contains("opus", ignoreCase = true) -> 2
             else -> 1
         }
     private fun isLikelyPreview(

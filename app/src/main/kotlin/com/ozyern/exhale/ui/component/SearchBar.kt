@@ -52,6 +52,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.Icon
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LocalTextStyle
@@ -86,6 +87,7 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -335,20 +337,19 @@ fun TopSearch(
                                 expandFrom = Alignment.Start,
                             ),
                             exit = fadeOut(tween(150)) + shrinkHorizontally(
-                                animationSpec = tween(200),
+                                animationSpec = spring(dampingRatio = 0.8f, stiffness = 300f),
                                 shrinkTowards = Alignment.Start,
                             ),
                         ) {
-                            Text(
-                                text = stringResource(R.string.action_cancel),
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.primary,
-                                maxLines = 1,
+                            Icon(
+                                painter = painterResource(R.drawable.close),
+                                contentDescription = stringResource(R.string.action_cancel),
+                                tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(percent = 50))
                                     .clickable { onActiveChange(false) }
-                                    .padding(start = 14.dp, end = 6.dp, top = 12.dp, bottom = 12.dp),
+                                    .padding(start = 14.dp, end = 6.dp, top = 12.dp, bottom = 12.dp)
+                                    .size(20.dp),
                             )
                         }
                     }

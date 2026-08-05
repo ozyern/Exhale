@@ -66,12 +66,14 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -121,15 +123,32 @@ fun LiquidGlassBottomBar(
     val activeTab = tabs.find { isSelected(it) } ?: tabs.firstOrNull()
     val homeTab = tabs.find { it.route == Screens.Home.route } ?: tabs.firstOrNull()
 
+    // Subtle premium haptic tick on every nav interaction. LocalHapticFeedback is the app-wide
+    // custom provider that already respects the user's "haptic feedback" preference, so calling
+    // it here is a no-op when the user has haptics off.
+    val haptic = LocalHapticFeedback.current
+    val onItemClickHaptic: (Screens, Boolean) -> Unit = { screen, selected ->
+        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        onItemClick(screen, selected)
+    }
+    val onMiniPlayerClickHaptic: () -> Unit = {
+        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        onMiniPlayerClick()
+    }
+
     Row(
-        modifier = modifier.fillMaxWidth().height(IntrinsicSize.Min),
+        // Fixed height (all children are 64dp) instead of IntrinsicSize.Min — this drops the
+        // intrinsic-measurement pass the morph used to trigger on every animation frame.
+        modifier = modifier.fillMaxWidth().height(64.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         AnimatedContent(
             targetState = collapsed,
             transitionSpec = {
-                // Smooth spring-based morph: fade + slide + scale for fluid transition
+                // Smooth spring-based morph: fade + slide + scale for fluid transition — all of
+                // which run on the GPU via graphicsLayer (alpha/scale) and placement (slide),
+                // NOT by remeasuring layout.
                 val spring = spring<Float>(
                     dampingRatio = 0.7f,
                     stiffness = 400f
@@ -139,12 +158,18 @@ fun LiquidGlassBottomBar(
                     stiffness = 400f
                 )
 
+                // PERF: `using SizeTransform { snap() }` makes the container jump to the target
+                // size instantly instead of animating its width every frame. Animating the size
+                // forced a full layout pass (and re-measured the expensive frosted-glass
+                // backdrops) ~60×/s during the A/B morph — the heavy frame drops. With clip=false
+                // the cross-fading/scaling children mask the instant size change, so the morph
+                // still reads as fluid but is now purely GPU-composited.
                 (fadeIn(spring) +
-                 slideInHorizontally(intSpring) { if (targetState) it / 4 else -it / 4 } +
-                 scaleIn(spring, initialScale = 0.92f)) togetherWith
-                (fadeOut(spring) +
-                 slideOutHorizontally(intSpring) { if (targetState) -it / 4 else it / 4 } +
-                 scaleOut(spring, targetScale = 0.92f))
+                    slideInHorizontally(intSpring) { if (targetState) it / 4 else -it / 4 } +
+                    scaleIn(spring, initialScale = 0.92f)) togetherWith
+                    (fadeOut(spring) +
+                        slideOutHorizontally(intSpring) { if (targetState) -it / 4 else it / 4 } +
+                        scaleOut(spring, targetScale = 0.92f))
             },
             label = "bottomBarState",
             modifier = Modifier.weight(1f),
@@ -161,13 +186,13 @@ fun LiquidGlassBottomBar(
                             tabs = tabs,
                             pureBlack = pureBlack,
                             isSelected = isSelected,
-                            onItemClick = onItemClick,
+                            onItemClick = onItemClickHaptic,
                         )
                     }
                     if (searchScreen != null) {
                         val searchActive = isSelected(searchScreen)
                         FrostedCircle(
-                            onClick = { onItemClick(searchScreen, searchActive) },
+                            onClick = { onItemClickHaptic(searchScreen, searchActive) },
                         ) {
                             NavGlyph(
                                 iconRes = if (searchActive) searchScreen.iconIdActive else searchScreen.iconIdInactive,
@@ -187,7 +212,7 @@ fun LiquidGlassBottomBar(
                 ) {
                     if (homeTab != null) {
                         FrostedCircle(
-                            onClick = { onItemClick(homeTab, isSelected(homeTab)) },
+                            onClick = { onItemClickHaptic(homeTab, isSelected(homeTab)) },
                         ) {
                             NavGlyph(
                                 iconRes = if (isSelected(homeTab)) homeTab.iconIdActive else homeTab.iconIdInactive,
@@ -200,7 +225,7 @@ fun LiquidGlassBottomBar(
 
                     FrostedPill(modifier = Modifier.weight(1f)) {
                         if (hasNowPlaying) {
-                            MiniPlayerPill(pureBlack = pureBlack, onExpand = onMiniPlayerClick)
+                            MiniPlayerPill(pureBlack = pureBlack, onExpand = onMiniPlayerClickHaptic)
                         } else if (activeTab != null) {
                             // Nothing playing: center shows the active-tab compact pill.
                             Row(
@@ -211,7 +236,7 @@ fun LiquidGlassBottomBar(
                                     screen = activeTab,
                                     selected = true,
                                     pureBlack = pureBlack,
-                                    onClick = { onItemClick(activeTab, true) },
+                                    onClick = { onItemClickHaptic(activeTab, true) },
                                 )
                             }
                         }
@@ -220,7 +245,7 @@ fun LiquidGlassBottomBar(
                     if (searchScreen != null) {
                         val searchActive = isSelected(searchScreen)
                         FrostedCircle(
-                            onClick = { onItemClick(searchScreen, searchActive) },
+                            onClick = { onItemClickHaptic(searchScreen, searchActive) },
                         ) {
                             NavGlyph(
                                 iconRes = if (searchActive) searchScreen.iconIdActive else searchScreen.iconIdInactive,
@@ -447,6 +472,7 @@ private fun MiniPlayerPill(
     val playerConnection = LocalPlayerConnection.current ?: return
     val mediaMetadata by playerConnection.mediaMetadata.collectAsState()
     val isPlaying by playerConnection.isPlaying.collectAsState()
+    val haptic = LocalHapticFeedback.current
 
     Row(
         modifier = Modifier
@@ -532,7 +558,10 @@ private fun MiniPlayerPill(
                     interactionSource = interactionSource,
                     indication = null,
                     role = Role.Button,
-                    onClick = { playerConnection.player.togglePlayPause() },
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        playerConnection.player.togglePlayPause()
+                    },
                 ),
             contentAlignment = Alignment.Center,
         ) {

@@ -49,6 +49,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.isSpecified
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -178,6 +180,7 @@ fun SettingsUpdateBanner(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val haptic = LocalHapticFeedback.current
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
@@ -195,7 +198,10 @@ fun SettingsUpdateBanner(
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
-                onClick = onClick,
+                onClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    onClick()
+                },
             )
             .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -382,6 +388,9 @@ fun SettingsRow(
         MaterialTheme.colorScheme.primary
     }
 
+    // Subtle premium haptic tick on row taps — routed through the app-wide custom
+    // LocalHapticFeedback provider, which already respects the user's haptics preference.
+    val haptic = LocalHapticFeedback.current
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
@@ -404,7 +413,10 @@ fun SettingsRow(
                 .clickable(
                     interactionSource = interactionSource,
                     indication = null,
-                    onClick = item.onClick,
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        item.onClick()
+                    },
                 )
                 .padding(
                     horizontal = SettingsDimensions.RowHorizontalPadding,

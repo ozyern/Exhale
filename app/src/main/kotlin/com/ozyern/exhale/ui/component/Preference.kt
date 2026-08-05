@@ -54,6 +54,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -83,6 +85,9 @@ fun PreferenceEntry(
     isEnabled: Boolean = true,
 ) {
     val inGroup = LocalPreferenceInGroup.current
+    // Subtle premium haptic tick on every preference tap (respects the user's haptics setting
+    // via the app-wide LocalHapticFeedback provider).
+    val haptic = LocalHapticFeedback.current
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
@@ -103,7 +108,10 @@ fun PreferenceEntry(
                     interactionSource = interactionSource,
                     indication = if (inGroup) LocalIndication.current else null,
                     enabled = isEnabled && onClick != null,
-                    onClick = onClick ?: {},
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        onClick?.invoke()
+                    },
                 )
                 .alpha(if (isEnabled) 1f else 0.5f)
                 .padding(horizontal = 16.dp, vertical = 14.dp),
@@ -279,6 +287,8 @@ fun SwitchPreference(
     onCheckedChange: (Boolean) -> Unit,
     isEnabled: Boolean = true,
 ) {
+    // Direct toggle drags fire their own haptic tick; row taps get theirs from PreferenceEntry.
+    val haptic = LocalHapticFeedback.current
     PreferenceEntry(
         modifier = modifier,
         title = title,
@@ -287,7 +297,10 @@ fun SwitchPreference(
         trailingContent = {
             LiquidToggle(
                 checked = checked,
-                onCheckedChange = onCheckedChange,
+                onCheckedChange = {
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    onCheckedChange(it)
+                },
                 modifier = if (!isEnabled) Modifier.alpha(0.38f) else Modifier
             )
         },

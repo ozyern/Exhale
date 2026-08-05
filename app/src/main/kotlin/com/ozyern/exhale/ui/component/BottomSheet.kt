@@ -39,6 +39,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
@@ -55,10 +56,23 @@ import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import com.ozyern.exhale.constants.BottomSheetAnimationSpec
 import com.ozyern.exhale.constants.BottomSheetSoftAnimationSpec
+import com.ozyern.exhale.constants.MiniPlayerHeight
+import com.ozyern.exhale.constants.MiniPlayerPillCornerRadius
+import com.ozyern.exhale.constants.MiniPlayerPillHorizontalInset
 import com.ozyern.exhale.utils.rememberPreference
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.launch
+
+// At p=0 (fully collapsed) the content layer is squashed to this fraction of its natural height.
+// 0.18 is aggressive enough that the controls visibly compress into the pill band; anything above
+// ~0.30 reads as a shrink rather than a morph.
+private const val PILL_VERTICAL_SQUASH = 0.18f
+
+// The content fades from transparent to opaque over this fraction of the progress range (0→1).
+// Keeping it tiny (0.12) means geometry carries the whole gesture and the fade is just the
+// hand-off at the very start of the drag, not a crossfade that hides the transformation.
+private const val MORPH_HANDOFF_FRACTION = 0.12f
 
 /**
  * Bottom Sheet
@@ -70,6 +84,16 @@ fun BottomSheet(
     modifier: Modifier = Modifier,
     backgroundColor: Color,
     onDismiss: (() -> Unit)? = null,
+    /**
+     * Opt in to the "Dynamic Island" rectangle→pill morph (see [dynamicIslandMorph]). Only the
+     * player sheet has a pill to morph into; the queue and lyrics sheets leave this off and keep
+     * the plain slide.
+     */
+    dynamicIslandMorph: Boolean = false,
+    /** Morph target geometry — the collapsed mini-player pill's bounds inside this sheet. */
+    pillHeight: Dp = MiniPlayerHeight,
+    pillHorizontalInset: Dp = MiniPlayerPillHorizontalInset,
+    pillCornerRadius: Dp = MiniPlayerPillCornerRadius,
     collapsedContent: @Composable BoxScope.() -> Unit,
     content: @Composable BoxScope.() -> Unit,
 ) {
@@ -85,43 +109,114 @@ fun BottomSheet(
                 IntOffset(x = 0, y = y)
             }
             .bottomSheetDraggable(state, onDismiss)
-            .clip(
-                RoundedCornerShape(
-                    topStart = if (!state.isExpanded) 16.dp else 0.dp,
-                    topEnd = if (!state.isExpanded) 16.dp else 0.dp,
-                ),
-            ).background(
-                backgroundColor.copy(
-                    alpha = backgroundColor.alpha * state.progress.coerceIn(0f, 1f)
-                )
-            ),
+            // Corner rounding and scrim alpha both track state.progress, which ticks every
+            // frame of a drag or spring. Reading it here in a graphicsLayer/drawBehind lambda
+            // instead of in composition keeps those frames in the draw phase only — reading it
+            // in composition used to recompose this whole subtree (the entire player) ~60x/s,
+            // which was the single biggest source of micro-stutter during the transition.
+            .graphicsLayer {
+                clip = true
+                val corner = 16.dp * (1f - state.progress.coerceIn(0f, 1f))
+                shape = RoundedCornerShape(topStart = corner, topEnd = corner)
+            }
+            .drawBehind {
+                val p = state.progress.coerceIn(0f, 1f)
+                // Ramp the scrim in over the first 20% of travel, then hold — the sheet must be
+                // fully opaque well before it reaches the top or the content behind shows through.
+                val fade = p * (p / 0.2f).coerceAtMost(1f)
+                val alpha = backgroundColor.alpha * fade
+                if (alpha > 0f) drawRect(backgroundColor.copy(alpha = alpha))
+            },
     ) {
         if (!state.isCollapsed && !state.isDismissed) {
             BackHandler(onBack = state::collapseSoft)
         }
 
         if (!state.isCollapsed) {
-            BoxWithConstraints(
-                modifier =
-                Modifier
-                    .fillMaxSize()
-                    .graphicsLayer {
-                        val p = state.progress.coerceIn(0f, 1f)
-                        // Shared-element-style morph: as the sheet collapses (p -> 0) the full
-                        // player scales down and sinks toward the bottom-centre — exactly where
-                        // the mini-player pill lives — instead of hard-cutting out of existence.
-                        // The pivot at (0.5, 1.0) makes the album art appear to shrink INTO the
-                        // pill, and springs back up when expanded. Driven by state.progress, which
-                        // is animated by the bouncy BottomSheetSoftAnimationSpec on open/close.
-                        val morph = 0.90f + 0.10f * p
-                        scaleX = morph
-                        scaleY = morph
-                        translationY = (1f - p) * size.height * 0.06f
-                        transformOrigin = TransformOrigin(0.5f, 1f)
-                        alpha = ((p - 0.25f) * 4).coerceIn(0f, 1f)
-                    },
-                content = content,
-            )
+            // Two stacked layers, deliberately separate:
+            //
+            //  * the OUTER layer is the morph *window* — an animated hardware outline clip that
+            //    contracts from the full screen down to the mini-player pill (rectangle → pill
+            //    corner sweep). It carries no transform, so the window stays in the sheet's own
+            //    coordinate space and lands exactly on the pill's bounds.
+            //  * the INNER layer is the morph *content* — a uniform scale about the top edge, so
+            //    the artwork and controls appear to be drawn down into that shrinking window
+            //    rather than merely cropped by it, plus the fade that hands off to the real pill.
+            //
+            // Fusing them into one layer would scale the clip window too, and the player would
+            // shrink into a rectangle smaller than the pill it is supposed to become.
+            Box(
+                modifier = if (!dynamicIslandMorph) {
+                    Modifier.fillMaxSize()
+                } else {
+                    Modifier
+                        .fillMaxSize()
+                        .graphicsLayer {
+                            clip = true
+                            shape = DynamicIslandMorphShape(
+                                progress = state.progress.coerceIn(0f, 1f),
+                                pillHeightPx = pillHeight.toPx(),
+                                pillInsetPx = pillHorizontalInset.toPx(),
+                                pillRadiusPx = pillCornerRadius.toPx(),
+                            )
+                        }
+                },
+            ) {
+                BoxWithConstraints(
+                    modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .graphicsLayer {
+                            val p = state.progress.coerceIn(0f, 1f)
+                            if (!dynamicIslandMorph) {
+                                // Legacy behaviour for the queue/lyrics sheets: fade only.
+                                alpha = ((p - 0.25f) * 4).coerceIn(0f, 1f)
+                                return@graphicsLayer
+                            }
+
+                            // ---- The geometry half of the morph ----
+                            //
+                            // The collapse scale is DERIVED from the pill, not hand-tuned: at p=0
+                            // the clip window is exactly `width - 2*inset` wide, so scaling the
+                            // content by that same ratio makes its edges land on the window's
+                            // edges. The content therefore converges *onto* the pill's real bounds
+                            // instead of onto an arbitrary rectangle, which is the whole difference
+                            // between a morph and a shrink-then-swap.
+                            //
+                            // Shrink about the TOP-CENTRE: the pill occupies the top strip of the
+                            // sheet's collapsed region, so that is the fixed point both layers
+                            // rotate around. Anything else and the content slides as it scales.
+                            val insetPx = pillHorizontalInset.toPx()
+                            val pillWidthRatio =
+                                if (size.width > 0f) {
+                                    ((size.width - 2f * insetPx) / size.width).coerceIn(0.5f, 1f)
+                                } else {
+                                    1f
+                                }
+                            // Vertical squash goes further than the horizontal one — the pill is a
+                            // 64dp strip out of a full-height sheet, so a uniform scale alone can
+                            // never read as "collapsing into it". Squashing Y harder makes the
+                            // controls visibly compress into the pill's band the way the Dynamic
+                            // Island's content does.
+                            val eased = morphEase(p)
+                            scaleX = pillWidthRatio + (1f - pillWidthRatio) * eased
+                            scaleY = PILL_VERTICAL_SQUASH + (1f - PILL_VERTICAL_SQUASH) * eased
+                            transformOrigin = TransformOrigin(0.5f, 0f)
+
+                            // ---- The opacity half ----
+                            //
+                            // Held near-solid across almost the entire travel and released only in
+                            // the last sliver before the pill takes over. The old ramp
+                            // (`(p - 0.08) / 0.30`) had the content fully transparent below p=0.08
+                            // and fully opaque by p=0.38 — so two thirds of the drag showed no
+                            // transformation at all, which is exactly why it read as a snap. Now
+                            // the geometry above is visible for the whole gesture and the fade is
+                            // just the hand-off, meeting the pill's own fade-out at the crossover.
+                            alpha = (p / MORPH_HANDOFF_FRACTION).coerceIn(0f, 1f)
+                        },
+                    content = content,
+                )
+            }
         }
 
         if (!state.isExpanded && (onDismiss == null || !state.isDismissed)) {
@@ -129,7 +224,17 @@ fun BottomSheet(
                 modifier =
                 Modifier
                     .graphicsLayer {
-                        alpha = 1f - (state.progress * 4).coerceAtMost(1f)
+                        val p = state.progress.coerceIn(0f, 1f)
+                        if (dynamicIslandMorph) {
+                            // Counter-morph: pill grows toward the player's width as it fades,
+                            // so it reads as "expanding into" the full player rather than
+                            // disappearing while the player appears from nowhere.
+                            val grow = 1f + 0.12f * morphEase(p)
+                            scaleX = grow
+                            scaleY = grow
+                            transformOrigin = TransformOrigin(0.5f, 0f)
+                        }
+                        alpha = 1f - (p * 4).coerceAtMost(1f)
                     }.clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,

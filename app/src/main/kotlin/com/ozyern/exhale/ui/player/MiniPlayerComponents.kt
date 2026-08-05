@@ -87,6 +87,7 @@ import kotlinx.coroutines.launch
 import com.ozyern.exhale.R
 import com.ozyern.exhale.constants.EnableHapticFeedbackKey
 import com.ozyern.exhale.constants.MiniPlayerHeight
+import com.ozyern.exhale.constants.MiniPlayerPillHorizontalInset
 import com.ozyern.exhale.extensions.togglePlayPause
 import com.ozyern.exhale.ui.component.pressScaleContainer
 import com.ozyern.exhale.models.MediaMetadata
@@ -137,7 +138,9 @@ fun SwipeableMiniPlayerBox(
                         else MaterialTheme.colorScheme.surfaceContainer
                     )
                 } else {
-                    baseModifier.padding(horizontal = 12.dp)
+                    // Must match BottomSheet's Dynamic-Island morph inset, or the full player
+                    // shrinks into a rectangle that doesn't line up with this pill.
+                    baseModifier.padding(horizontal = MiniPlayerPillHorizontalInset)
                 }
             }
             .let { baseModifier ->

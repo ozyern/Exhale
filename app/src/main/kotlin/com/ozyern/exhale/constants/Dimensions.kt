@@ -28,6 +28,15 @@ val NavigationBarHeight = FloatingToolbarHeight
 val SlimNavBarHeight = SlimFloatingToolbarHeight
 val MiniPlayerHeight = 64.dp
 val MiniPlayerBottomSpacing = 8.dp // Space between MiniPlayer and NavigationBar
+
+/**
+ * Geometry of the collapsed mini-player *pill*. These three values are the morph target for the
+ * Dynamic-Island transition in `BottomSheet`, so they must stay in lockstep with how
+ * `SwipeableMiniPlayerBox` / `NewMiniPlayer` actually lay the pill out — if they drift, the full
+ * player shrinks into the wrong rectangle and the hand-off to the pill visibly jumps.
+ */
+val MiniPlayerPillHorizontalInset = 12.dp
+val MiniPlayerPillCornerRadius = 32.dp
 val QueuePeekHeight = 64.dp
 val AppBarHeight = 64.dp
 
