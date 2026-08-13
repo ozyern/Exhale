@@ -15,10 +15,12 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -58,6 +60,36 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.ozyern.exhale.BuildConfig
 import com.ozyern.exhale.R
+
+/**
+ * Wraps a settings destination in the Apple-Music grouped-table look.
+ *
+ * Two things happen here, both once for every settings screen instead of once per screen file:
+ *
+ *  1. The page is painted with the solid, distinct grouped background — pure black on dark, a
+ *     near-white grey on light — so the inset group cards read as plates floating on a ground
+ *     rather than as tinted patches of the same sheet.
+ *  2. `colorScheme.surface` is re-pointed at that same colour for the subtree. Every settings
+ *     sub-screen draws a plain M3 `TopAppBar`, whose container defaults to `surface`; without
+ *     this the bar would sit a visible step off the page it heads. Re-pointing the token also
+ *     kills the tonal-elevation tint M3 paints on scrolled bars — the flat, single-colour chrome
+ *     is the whole point. Only `surface` moves; `onSurface`, the accent and every container
+ *     token are untouched, so contrast and the brand tint are unaffected.
+ */
+@Composable
+fun SettingsPage(content: @Composable BoxScope.() -> Unit) {
+    val pageBackground = SettingsDimensions.screenBackgroundColor()
+    MaterialTheme(
+        colorScheme = MaterialTheme.colorScheme.copy(surface = pageBackground),
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(pageBackground),
+            content = content,
+        )
+    }
+}
 
 @Composable
 fun SettingsProfileHeader(modifier: Modifier = Modifier) {
@@ -368,7 +400,7 @@ fun InsetGroup(
                     HorizontalDivider(
                         modifier = Modifier.padding(start = SettingsDimensions.DividerStartIndent),
                         thickness = SettingsDimensions.DividerThickness,
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
+                        color = SettingsDimensions.dividerColor(),
                     )
                 }
             }
@@ -511,7 +543,7 @@ fun SettingsRow(
             HorizontalDivider(
                 modifier = Modifier.padding(start = SettingsDimensions.DividerStartIndent),
                 thickness = SettingsDimensions.DividerThickness,
-                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
+                color = SettingsDimensions.dividerColor(),
             )
         }
     }

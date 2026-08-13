@@ -191,6 +191,11 @@ import com.ozyern.exhale.constants.LyricsSyncOffsetKey
 import com.ozyern.exhale.constants.MiniPlayerBottomSpacing
 import com.ozyern.exhale.constants.MiniPlayerHeight
 import com.ozyern.exhale.constants.MiniPlayerLastAnchorKey
+import com.ozyern.exhale.constants.MiniPlayerPillCornerRadius
+import com.ozyern.exhale.constants.MiniPlayerPillHorizontalInset
+import com.ozyern.exhale.constants.NavBarPillCornerRadius
+import com.ozyern.exhale.constants.NavBarPillHeight
+import com.ozyern.exhale.constants.NavBarPillSideSlot
 import com.ozyern.exhale.constants.NavigationBarAnimationSpec
 import com.ozyern.exhale.constants.PauseSearchHistoryKey
 import com.ozyern.exhale.constants.PureBlackKey
@@ -1698,6 +1703,36 @@ class MainActivity : ComponentActivity() {
                                         // moment the keyboard was dismissed. The sheet state is hoisted
                                         // above this call, so playback and sheet position survive and the
                                         // player re-appears untouched when the search closes.
+                                        // ---- Dynamic-Island morph target ----
+                                        //
+                                        // The player collapses into one of two *different* pieces
+                                        // of chrome, and the morph has to land on whichever is
+                                        // actually on screen:
+                                        //
+                                        //  * State A — bar expanded: the standalone mini-player
+                                        //    pill floating above the nav bar, i.e. the top strip
+                                        //    of the sheet's collapsed region (offset 0).
+                                        //  * State B — bar collapsed: the mini-player pill is
+                                        //    hidden and the nav bar shows the playback capsule
+                                        //    instead, so the player must shrink straight into the
+                                        //    frosted nav container: narrower (clearing the home
+                                        //    and search circles), fully rounded, and pushed down
+                                        //    past the gap the mini player used to occupy.
+                                        //
+                                        // Cheap to derive and it only changes on the A/B flip —
+                                        // which can only happen while the sheet is collapsed, when
+                                        // the morph layer is not even composed.
+                                        val mergeIntoNavBar =
+                                            bottomBarCollapsed && nowPlayingMetadata != null && !useRail
+                                        val morphPillTopOffset =
+                                            if (mergeIntoNavBar) {
+                                                (playerBottomSheetState.collapsedBound -
+                                                    bottomInset - floatingBarsBottomPadding -
+                                                    NavBarPillHeight).coerceAtLeast(0.dp)
+                                            } else {
+                                                0.dp
+                                            }
+
                                         if (!active) {
                                             BottomSheetPlayer(
                                                 state = playerBottomSheetState,
@@ -1705,6 +1740,15 @@ class MainActivity : ComponentActivity() {
                                                 pureBlack = pureBlack,
                                                 lyricsSyncOffset = lyricsSyncOffset,
                                                 hideMiniPlayer = bottomBarCollapsed && nowPlayingMetadata != null,
+                                                morphPillHeight =
+                                                    if (mergeIntoNavBar) NavBarPillHeight else MiniPlayerHeight,
+                                                morphPillHorizontalInset =
+                                                    if (mergeIntoNavBar) NavBarPillSideSlot
+                                                    else MiniPlayerPillHorizontalInset,
+                                                morphPillCornerRadius =
+                                                    if (mergeIntoNavBar) NavBarPillCornerRadius
+                                                    else MiniPlayerPillCornerRadius,
+                                                morphPillTopOffset = morphPillTopOffset,
                                             )
                                         }
 

@@ -181,9 +181,9 @@ fun PreferenceEntry(
     if (inGroup) {
         rowContent()
     } else {
-        // Apple Music-style inset row: NO Material Card (no elevation, no border).
-        // A rounded 16dp clip over a frosted translucent surface gives the clean iOS
-        // "inset grouped" look. Standalone rows sit as individual rounded inset capsules.
+        // Apple Music-style inset row: NO Material Card (no elevation, no border, no tonal
+        // tint). A 16dp clip over the SOLID group surface — the same colour the grouped cards
+        // use — so a standalone row and a row inside a group are visibly the same material.
         Box(
             modifier = modifier
                 .fillMaxWidth()
@@ -192,8 +192,8 @@ fun PreferenceEntry(
                     scaleX = scale
                     scaleY = scale
                 }
-                .clip(RoundedCornerShape(16.dp))
-                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f)),
+                .clip(RoundedCornerShape(SettingsGroupCornerRadius))
+                .background(settingsGroupSurfaceColor()),
         ) {
             rowContent()
         }

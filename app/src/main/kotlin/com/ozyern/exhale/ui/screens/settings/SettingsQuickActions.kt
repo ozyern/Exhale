@@ -141,7 +141,7 @@ private fun QuickActionRow(
             HorizontalDivider(
                 modifier = Modifier.padding(start = SettingsDimensions.DividerStartIndent),
                 thickness = SettingsDimensions.DividerThickness,
-                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
+                color = SettingsDimensions.dividerColor(),
             )
         }
     }

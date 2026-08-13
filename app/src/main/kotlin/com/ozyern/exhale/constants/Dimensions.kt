@@ -37,6 +37,23 @@ val MiniPlayerBottomSpacing = 8.dp // Space between MiniPlayer and NavigationBar
  */
 val MiniPlayerPillHorizontalInset = 12.dp
 val MiniPlayerPillCornerRadius = 32.dp
+
+/**
+ * Geometry of the floating nav bar's own centre pill — the **State B** morph target.
+ *
+ * When the user minimises the player while scrolled down, the full player must not land on the
+ * standalone mini-player pill (which is hidden in that state); it has to shrink straight into the
+ * frosted nav container. These values describe that container as laid out by
+ * `LiquidGlassBottomBar`: a [NavBarPillHeight]-tall capsule flanked by a home circle and a search
+ * circle, so the centre pill starts [NavBarPillSideSlot] in from the row's own horizontal padding.
+ *
+ * They must stay in lockstep with `LiquidGlassBottomBar` — if they drift, the player shrinks into
+ * a rectangle that is not the bar and the hand-off visibly jumps.
+ */
+val NavBarPillHeight = 64.dp
+private val NavBarPillGap = 10.dp
+val NavBarPillSideSlot = FloatingToolbarHorizontalPadding + NavBarPillHeight + NavBarPillGap
+val NavBarPillCornerRadius = NavBarPillHeight / 2
 val QueuePeekHeight = 64.dp
 val AppBarHeight = 64.dp
 
@@ -58,12 +75,31 @@ val NavigationBarAnimationSpec = spring<Dp>(
 	stiffness = Spring.StiffnessLow
 )
 
+/**
+ * The one spring every bottom sheet settles on, and therefore the curve the Dynamic-Island morph
+ * is driven by — the morph reads `state.progress`, so this spec *is* the animation.
+ *
+ * Deliberately under-damped. A critically damped spring glides to a stop, which makes the player
+ * look like it is being lowered; 0.7 damping lets it land on the pill with a small physical
+ * overshoot, which is what sells the morph as a single object settling into place. 400 stiffness
+ * keeps it quick enough not to feel loose. Identical to the spec the floating nav bar uses for its
+ * own A/B morph and sliding tab indicator, so the whole bottom of the screen moves as one system.
+ *
+ * Expansion cannot visibly overshoot: `Animatable` is bounded by `expandedBound`, so the bounce
+ * only ever appears on the way *down*, which is the direction the transition is about.
+ */
 val BottomSheetAnimationSpec = spring<Dp>(
-	dampingRatio = Spring.DampingRatioNoBouncy,
-	stiffness = Spring.StiffnessMediumLow
+	dampingRatio = 0.7f,
+	stiffness = 400f
 )
 
+/**
+ * Used for programmatic (tapped, not flung) transitions — `expandSoft` / `collapseSoft`. Now the
+ * same curve as [BottomSheetAnimationSpec] on purpose: minimising by tapping the chevron and
+ * minimising by flinging the sheet are the same gesture as far as the user is concerned, and they
+ * used to settle on visibly different springs.
+ */
 val BottomSheetSoftAnimationSpec = spring<Dp>(
-	dampingRatio = 0.8f,
-	stiffness = 300f
+	dampingRatio = 0.7f,
+	stiffness = 400f
 )

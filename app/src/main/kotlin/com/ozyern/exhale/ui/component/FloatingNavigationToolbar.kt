@@ -85,7 +85,6 @@ import androidx.compose.ui.unit.dp
 import android.os.Build
 import com.ozyern.exhale.R
 import com.ozyern.exhale.ui.screens.Screens
-import com.ozyern.exhale.ui.theme.LocalGlass
 import dev.chrisbanes.haze.HazeTint
 import dev.chrisbanes.haze.hazeEffect
 import kotlin.text.get
@@ -98,24 +97,30 @@ import kotlin.text.get
 @Composable
 private fun rememberFrostedNavModifier(): Modifier {
     val hazeState = LocalHazeState.current
-    val glass = LocalGlass.current
     val shape = RoundedCornerShape(percent = 50)
-    return Modifier
-        .clip(shape)
-        .then(
-            if (hazeState != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                // True iOS UIBlurEffect: massive blur + transparent base so content
-                // shines through, with only a thin dark tint. No borders.
-                Modifier.hazeEffect(state = hazeState) {
-                    blurRadius = 56.dp
-                    backgroundColor = Color.Transparent
-                    noiseFactor = 0.06f
-                    tints = listOf(HazeTint(Color.Black.copy(alpha = 0.20f)))
+    // PERF: actually memoised, as the name promises. Rebuilding the chain per recomposition
+    // replaces the haze node, which re-registers the blur area and re-reads the source layer;
+    // doing that while the bar is animating is what turns a cheap GPU blur into dropped frames.
+    // The only inputs are the haze state and the shape, neither of which moves during a
+    // transition, so one node is created and then only redrawn.
+    return remember(hazeState, shape) {
+        Modifier
+            .clip(shape)
+            .then(
+                if (hazeState != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    // True iOS UIBlurEffect: massive blur + transparent base so content
+                    // shines through, with only a thin dark tint. No borders.
+                    Modifier.hazeEffect(state = hazeState) {
+                        blurRadius = 56.dp
+                        backgroundColor = Color.Transparent
+                        noiseFactor = 0.06f
+                        tints = listOf(HazeTint(Color.Black.copy(alpha = 0.20f)))
+                    }
+                } else {
+                    Modifier.background(Color.Black.copy(alpha = 0.55f))
                 }
-            } else {
-                Modifier.background(Color.Black.copy(alpha = 0.55f))
-            }
-        )
+            )
+    }
 }
 
 @Composable

@@ -8,13 +8,18 @@ package com.ozyern.exhale.ui.screens.settings
 
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.ozyern.exhale.ui.component.SettingsDividerStartIndent
+import com.ozyern.exhale.ui.component.SettingsDividerThickness
+import com.ozyern.exhale.ui.component.SettingsGroupCornerRadius
+import com.ozyern.exhale.ui.component.settingsDividerColor
+import com.ozyern.exhale.ui.component.settingsGroupSurfaceColor
+import com.ozyern.exhale.ui.component.settingsPageBackgroundColor
 
 object SettingsDimensions {
-    val GroupCardCornerRadius = 16.dp
+    val GroupCardCornerRadius = SettingsGroupCornerRadius
     val QuickActionCardCornerRadius = 20.dp
     val IntegrationPillCornerRadius = 14.dp
     val BannerCardCornerRadius = 20.dp
@@ -39,8 +44,8 @@ object SettingsDimensions {
     val BannerIconInnerSize = 22.dp
     val ChevronSize = 18.dp
 
-    val DividerThickness = 0.5.dp
-    val DividerStartIndent = 60.dp
+    val DividerThickness = SettingsDividerThickness
+    val DividerStartIndent = SettingsDividerStartIndent
 
     val SectionHeaderBottomPadding = 6.dp
     val SectionHeaderHorizontalPadding = 20.dp
@@ -55,15 +60,20 @@ object SettingsDimensions {
     val MediumPaneRightWeight = 0.58f
     val ExpandedListPaneWidth = 380.dp
 
-    /**
-     * The one canonical "frosted" surface every inset group sits on: the theme's onSurface
-     * ink at 5% over whatever is behind, so the group reads as a translucent glass plate on
-     * both light and dark themes (and over the liquid-glass backdrop) instead of the flat
-     * Material surfaceContainerLow slab.
-     */
+    // The grouped-table palette itself lives in `ui.component` so the shared preference widgets
+    // can reach it too; these are the settings-screen names for the same three colours.
+
+    /** The ground the inset group cards float on. */
     @Composable
-    fun groupSurfaceColor(): Color =
-        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f)
+    fun screenBackgroundColor(): Color = settingsPageBackgroundColor()
+
+    /** The card colour — one solid step off [screenBackgroundColor], never elevated. */
+    @Composable
+    fun groupSurfaceColor(): Color = settingsGroupSurfaceColor()
+
+    /** Hairline used only *between* rows of a group, never at a card's top or bottom edge. */
+    @Composable
+    fun dividerColor(): Color = settingsDividerColor()
 }
 
 object SettingsAnimations {

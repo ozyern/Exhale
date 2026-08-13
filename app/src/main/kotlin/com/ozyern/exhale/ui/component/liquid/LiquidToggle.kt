@@ -4,6 +4,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -55,7 +56,11 @@ fun LiquidToggle(
     @Suppress("UNUSED_PARAMETER") backdrop: Backdrop = rememberDefaultBackdrop()
 ) {
     val isLightTheme = !isSystemInDarkTheme()
-    val accentColor = if (isLightTheme) Color(0xFF34C759) else Color(0xFF30D158)
+    // The ON track is the app's brand colour, not iOS system green. Every interactive tint in the
+    // app (active tab icon, row accents, sliders) resolves to `colorScheme.primary`; hard-coding a
+    // green here made the one control the user touches most the only thing on screen that ignored
+    // their theme.
+    val accentColor = MaterialTheme.colorScheme.primary
     val trackColor = if (isLightTheme) Color(0xFF787878).copy(0.2f) else Color(0xFF787880).copy(0.36f)
 
     val density = LocalDensity.current

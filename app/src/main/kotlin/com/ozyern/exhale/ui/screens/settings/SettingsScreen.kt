@@ -176,6 +176,11 @@ fun SettingsScreen(
         onUpdateClick = { navController.navigate("settings/update") },
     )
 
+    // Solid, distinct page colour — the ground the inset groups float on. Hoisted so the app bar
+    // can sit on exactly the same colour and the header reads as part of the page, not as a
+    // separate elevated Material surface.
+    val pageBackground = SettingsDimensions.screenBackgroundColor()
+
     Scaffold(
         topBar = {
             if (!showSearchBar) {
@@ -183,6 +188,8 @@ fun SettingsScreen(
                     title = {
                         Text(
                             text = stringResource(R.string.settings),
+                            // iOS large-title weight. The type scale supplies the geometric face
+                            // and tight tracking; the header just asks for the heavy cut.
                             fontWeight = FontWeight.Bold,
                         )
                     },
@@ -209,14 +216,16 @@ fun SettingsScreen(
                         }
                     },
                     scrollBehavior = scrollBehavior,
+                    // Opaque and identical to the page in both states: no tonal-elevation shift
+                    // on scroll, which is the single most "Android" tell a settings screen has.
                     colors = TopAppBarDefaults.largeTopAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
-                        scrolledContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
+                        containerColor = pageBackground,
+                        scrolledContainerColor = pageBackground,
                     ),
                 )
             }
         },
-        containerColor = MaterialTheme.colorScheme.surface,
+        containerColor = pageBackground,
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         modifier = Modifier.fillMaxSize(),
     ) { innerPadding ->

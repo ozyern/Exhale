@@ -1141,7 +1141,9 @@ private fun LanSessionLinkCard(
             // Link display — scrollable code block
             Surface(
                 shape = RoundedCornerShape(14.dp),
-                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f),
+                // Solid grouped-list card colour: `surface` is the settings page itself, so a
+                // 60%-alpha wash of it left this code block invisible against its own screen.
+                color = SettingsDimensions.groupSurfaceColor(),
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Box(

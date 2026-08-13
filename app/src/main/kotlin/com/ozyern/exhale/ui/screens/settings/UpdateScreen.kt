@@ -627,7 +627,10 @@ private fun CommitItem(commit: GitCommit, onClick: () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
         shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        // The grouped-list card colour, not `surface` — on a settings page `surface` IS the
+        // page, so a card painted with it would be invisible.
+        colors = CardDefaults.cardColors(containerColor = SettingsDimensions.groupSurfaceColor()),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
         onClick = onClick
     ) {
         Row(modifier = Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.Top) {

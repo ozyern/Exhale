@@ -23,56 +23,68 @@ import com.ozyern.exhale.R
 // https://m3.material.io/styles/typography/type-scale-tokens
 // Note: M3 Expressive might introduce subtle changes or new roles.
 // Referencing standard M3 roles for now, adjust if Expressive spec differs significantly.
+// ---------------------------------------------------------------------------------------------
+// iOS large-title convention, applied to the display/headline/title band.
+//
+// Material's type scale sets its big roles at Normal weight with neutral tracking; Apple sets
+// theirs Bold-to-Heavy and tightens tracking as the size grows (optical sizing — large text needs
+// less letter space to read as one word). Leaving the app on the Material defaults is what made
+// the headers read as "Android" no matter what the surfaces around them did, so the weights and
+// tracking below follow the iOS convention instead. Body, label and the small title roles keep
+// the Material values: those are set for legibility at small sizes and Apple's are effectively
+// the same there.
+// ---------------------------------------------------------------------------------------------
 private fun buildTypography(fontFamily: FontFamily) =
     Typography(
         displayLarge = TextStyle(
             fontFamily = fontFamily,
-            fontWeight = FontWeight.Normal,
+            fontWeight = FontWeight.Bold,
             fontSize = 57.sp,
             lineHeight = 64.sp,
-            letterSpacing = (-0.25).sp
+            letterSpacing = (-1.0).sp
         ),
         displayMedium = TextStyle(
             fontFamily = fontFamily,
-            fontWeight = FontWeight.Normal,
+            fontWeight = FontWeight.Bold,
             fontSize = 45.sp,
             lineHeight = 52.sp,
-            letterSpacing = 0.sp
+            letterSpacing = (-0.8).sp
         ),
         displaySmall = TextStyle(
             fontFamily = fontFamily,
-            fontWeight = FontWeight.Normal,
+            fontWeight = FontWeight.Bold,
             fontSize = 36.sp,
             lineHeight = 44.sp,
-            letterSpacing = 0.sp
+            letterSpacing = (-0.6).sp
         ),
         headlineLarge = TextStyle(
             fontFamily = fontFamily,
-            fontWeight = FontWeight.Normal,
+            fontWeight = FontWeight.Bold,
             fontSize = 32.sp,
             lineHeight = 40.sp,
-            letterSpacing = 0.sp
+            letterSpacing = (-0.5).sp
         ),
         headlineMedium = TextStyle(
             fontFamily = fontFamily,
-            fontWeight = FontWeight.Normal,
+            fontWeight = FontWeight.Bold,
             fontSize = 28.sp,
             lineHeight = 36.sp,
-            letterSpacing = 0.sp
+            letterSpacing = (-0.4).sp
         ),
         headlineSmall = TextStyle(
             fontFamily = fontFamily,
-            fontWeight = FontWeight.Normal,
+            fontWeight = FontWeight.Bold,
             fontSize = 24.sp,
             lineHeight = 32.sp,
-            letterSpacing = 0.sp
+            letterSpacing = (-0.3).sp
         ),
         titleLarge = TextStyle(
             fontFamily = fontFamily,
-            fontWeight = FontWeight.Normal, // M3 uses Normal, M2 used Medium
+            // Section headers above every inset group land on this role — iOS sets them Bold.
+            fontWeight = FontWeight.Bold,
             fontSize = 22.sp,
             lineHeight = 28.sp,
-            letterSpacing = 0.sp
+            letterSpacing = (-0.2).sp
         ),
         titleMedium = TextStyle(
             fontFamily = fontFamily,

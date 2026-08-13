@@ -97,9 +97,24 @@ import com.ozyern.exhale.ui.screens.playlist.SpotifyPlaylistScreen
 import com.ozyern.exhale.ui.screens.settings.AODSettings
 import com.ozyern.exhale.ui.screens.settings.AndroidAutoSettings
 
+import com.ozyern.exhale.ui.screens.settings.SettingsPage
 import com.ozyern.exhale.ui.utils.ShowMediaInfo
 import com.ozyern.exhale.utils.rememberEnumPreference
 import com.ozyern.exhale.utils.rememberPreference
+
+/**
+ * Registers a settings destination already wrapped in [SettingsPage].
+ *
+ * Every settings screen has to sit on the same solid grouped background with flat, matching
+ * chrome. Doing that at the graph level means the ~20 individual settings screens stay free of
+ * layout boilerplate and — more importantly — cannot drift apart from each other over time.
+ */
+private fun NavGraphBuilder.settingsComposable(
+    route: String,
+    content: @Composable () -> Unit,
+) = composable(route) {
+    SettingsPage { content() }
+}
 
 @RequiresApi(Build.VERSION_CODES.R)
 @OptIn(ExperimentalMaterial3Api::class)
@@ -332,16 +347,16 @@ fun NavGraphBuilder.navigationBuilder(
     ) {
         YouTubeBrowseScreen(navController)
     }
-    composable("settings") {
+    settingsComposable("settings") {
         SettingsScreen(navController, scrollBehavior, latestVersionName)
     }
-    composable("settings/appearance") {
+    settingsComposable("settings/appearance") {
         AppearanceSettings(navController, scrollBehavior)
     }
-    composable("settings/appearance/palette_picker") {
+    settingsComposable("settings/appearance/palette_picker") {
         PalettePickerScreen(navController)
     }
-    composable("settings/appearance/theme_creator") {
+    settingsComposable("settings/appearance/theme_creator") {
         ThemeCreatorScreen(navController)
     }
     composable(
@@ -359,7 +374,7 @@ fun NavGraphBuilder.navigationBuilder(
             fadeOut(tween(200)) + slideOutHorizontally { it / 3 }
         },
     ) {
-        AODSettings(navController, scrollBehavior)
+        SettingsPage { AODSettings(navController, scrollBehavior) }
     }
 
 
@@ -374,68 +389,68 @@ fun NavGraphBuilder.navigationBuilder(
         SpotifyPlaylistScreen(navController, scrollBehavior)
     }
 
-    composable("settings/widget") {
+    settingsComposable("settings/widget") {
         WidgetSettings(navController, scrollBehavior)
     }
-    composable("settings/content") {
+    settingsComposable("settings/content") {
         ContentSettings(navController, scrollBehavior)
     }
-    composable("settings/player") {
+    settingsComposable("settings/player") {
         PlayerSettings(navController, scrollBehavior)
     }
-    composable("settings/storage") {
+    settingsComposable("settings/storage") {
         StorageSettings(navController, scrollBehavior)
     }
-    composable("settings/privacy") {
+    settingsComposable("settings/privacy") {
         PrivacySettings(navController, scrollBehavior)
     }
-    composable("settings/backup_restore") {
+    settingsComposable("settings/backup_restore") {
         BackupAndRestore(navController, scrollBehavior)
     }
-    composable("settings/discord") {
+    settingsComposable("settings/discord") {
         DiscordSettings(navController, scrollBehavior)
     }
-    composable("settings/integration") {
+    settingsComposable("settings/integration") {
         IntegrationScreen(navController, scrollBehavior)
     }
-    composable("settings/music_together") {
+    settingsComposable("settings/music_together") {
         MusicTogetherScreen(navController, scrollBehavior)
     }
-    composable("settings/lastfm") {
+    settingsComposable("settings/lastfm") {
         LastFMSettings(navController, scrollBehavior)
     }
-    composable("settings/discord/experimental") {
+    settingsComposable("settings/discord/experimental") {
         com.ozyern.exhale.ui.screens.settings.DiscordExperimental(navController)
     }
-    composable("settings/misc") {
+    settingsComposable("settings/misc") {
         DebugSettings(navController)
     }
-    composable("settings/update") {
+    settingsComposable("settings/update") {
         UpdateScreen(navController, scrollBehavior)
     }
-    composable("settings/changelog") {
+    settingsComposable("settings/changelog") {
         ChangelogScreen(navController, scrollBehavior)
     }
-    composable("settings/discord/login") {
+    settingsComposable("settings/discord/login") {
         DiscordLoginScreen(navController)
     }
-    composable("settings/android_auto") {
+    settingsComposable("settings/android_auto") {
         AndroidAutoSettings(
             navController,
             scrollBehavior,
             context = androidx.compose.ui.platform.LocalContext.current
         )
     }
-    composable("settings/about") {
+    settingsComposable("settings/about") {
         AboutScreen(navController, scrollBehavior)
     }
     composable(Screens.DownloadQueue.route) {
         DownloadQueueScreen(navController)
     }
-    composable("settings/po_token") {
+    settingsComposable("settings/po_token") {
         PoTokenScreen(navController, scrollBehavior)
     }
-    composable("customize_background") {
+    settingsComposable("customize_background") {
         CustomizeBackground(navController)
     }
     composable(

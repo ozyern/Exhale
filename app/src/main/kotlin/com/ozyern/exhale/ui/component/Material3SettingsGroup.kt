@@ -35,35 +35,33 @@ fun Material3SettingsGroup(
     Column(
         modifier = Modifier.fillMaxWidth()
     ) {
-        // Section title
+        // iOS-style section header: large, heavy and set in the normal ink colour, sitting
+        // ABOVE the group rather than as a small tinted eyebrow inside it.
         title?.let {
             Text(
                 text = it,
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.Medium,
-                modifier = Modifier.padding(start = 16.dp, bottom = 8.dp, top = 8.dp)
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 10.dp, top = 20.dp)
             )
         }
-        
-        // Settings card
-        Card(
+
+        // Apple Music inset group: a plain Column clipped to 16dp over the solid group surface.
+        // NOT a Material Card — a Card brings tonal elevation and a shadow with it, and the
+        // shadow is the single most obviously "Android" detail on a settings page.
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .animateContentSize(),
-            shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
-            ),
-            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                .animateContentSize()
+                .clip(RoundedCornerShape(SettingsGroupCornerRadius))
+                .background(settingsGroupSurfaceColor())
         ) {
-            Column {
-                items.forEachIndexed { index, item ->
-                    Material3SettingsItemRow(
-                        item = item,
-                        showDivider = index < items.size - 1
-                    )
-                }
+            items.forEachIndexed { index, item ->
+                Material3SettingsItemRow(
+                    item = item,
+                    showDivider = index < items.size - 1
+                )
             }
         }
     }
@@ -164,8 +162,8 @@ private fun Material3SettingsItemRow(
                     start = if (item.icon != null) 76.dp else 20.dp,
                     end = 20.dp
                 ),
-                thickness = 0.5.dp,
-                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+                thickness = SettingsDividerThickness,
+                color = settingsDividerColor()
             )
         }
     }

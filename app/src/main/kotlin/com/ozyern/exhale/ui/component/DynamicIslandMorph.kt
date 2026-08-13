@@ -14,16 +14,25 @@ import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
+import kotlin.math.sqrt
 
 /**
  * The clip window for the "Dynamic Island" player morph.
  *
  * At [progress] `1f` this is the plain full-screen rectangle the expanded player has always
- * drawn into. As the sheet collapses toward `0f` the window contracts — top-anchored — down to
- * exactly the collapsed mini-player pill: [pillHeightPx] tall, [pillInsetPx] in from each edge,
- * with [pillRadiusPx] corners. Because the pill lives at the *top* of the sheet's collapsed
- * region (the sheet box itself is what slides down), anchoring the window's top edge at 0 and
- * only animating its bottom edge makes the window track the sheet's visible area for free.
+ * drawn into. As the sheet collapses toward `0f` the window contracts down to exactly the target
+ * pill: [pillHeightPx] tall, [pillInsetPx] in from each edge, [pillRadiusPx] corners, and its top
+ * edge [pillTopOffsetPx] below the top of the sheet's collapsed region.
+ *
+ * That last value is what makes the two resting states possible from one shape:
+ *  - **State A** (player minimised at the top of a screen) → offset `0`, so the window lands on
+ *    the standalone mini-player pill floating above the nav bar.
+ *  - **State B** (minimised while scrolled, nav bar collapsed) → a positive offset that walks the
+ *    window further down, onto the frosted nav container itself, together with a narrower inset
+ *    that clears the home/search circles flanking it.
+ *
+ * Both edges are interpolated linearly against [progress], so the window tracks a drag frame for
+ * frame and only the eased scale below it carries the "settling" feel.
  *
  * Interpolating the outline instead of cross-fading two composables is what sells the effect:
  * the launcher-style rectangle→pill corner sweep happens on the render thread as a single
@@ -40,6 +49,7 @@ data class DynamicIslandMorphShape(
     val pillHeightPx: Float,
     val pillInsetPx: Float,
     val pillRadiusPx: Float,
+    val pillTopOffsetPx: Float = 0f,
 ) : Shape {
     override fun createOutline(
         size: Size,
@@ -55,13 +65,25 @@ data class DynamicIslandMorphShape(
         }
 
         val inset = (pillInsetPx * collapsing).coerceAtMost(size.width / 2f)
-        val bottom = (pillHeightPx + (size.height - pillHeightPx) * p).coerceIn(0f, size.height)
-        val radius = (pillRadiusPx * collapsing).coerceAtMost(minOf(size.width / 2f - inset, bottom / 2f))
+        // Both edges start at the full-screen rectangle and converge on the pill's own band.
+        val top = (pillTopOffsetPx * collapsing).coerceIn(0f, size.height)
+        val bottom =
+            ((pillTopOffsetPx + pillHeightPx) * collapsing + size.height * p)
+                .coerceIn(top, size.height)
+        val height = bottom - top
+        // The corner sweep is deliberately NOT linear. Rounding in step with the shrink leaves the
+        // window looking like a plain rectangle for most of the gesture and only "becoming a pill"
+        // at the very end, which reads as a slide. Front-loading it with a sqrt ramp (70% of the
+        // radius by the time the window is only halfway down) makes the rectangle round off
+        // immediately, so the eye tracks a shape morphing rather than a panel sliding away.
+        val radius =
+            (pillRadiusPx * sqrt(collapsing))
+                .coerceAtMost(minOf(size.width / 2f - inset, height / 2f))
 
         return Outline.Rounded(
             RoundRect(
                 left = inset,
-                top = 0f,
+                top = top,
                 right = size.width - inset,
                 bottom = bottom,
                 cornerRadius = CornerRadius(radius),

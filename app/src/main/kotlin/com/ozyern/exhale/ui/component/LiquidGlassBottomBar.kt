@@ -278,19 +278,26 @@ private fun frostedGlassModifier(shape: androidx.compose.ui.graphics.Shape): Mod
     // Apple Music's bar reads as a milky, heavily-frosted capsule — push the film opacity up a
     // touch and the blur/lens radii wider than the old subtle setting to match that reference.
     val film = if (isDark) Color.Black.copy(alpha = 0.34f) else Color.White.copy(alpha = 0.30f)
-    return Modifier
-        .drawBackdrop(
-            backdrop = backdrop,
-            shape = { shape },
-            effects = {
-                vibrancy()
-                blur(8f.dp.toPx())
-                lens(14f.dp.toPx(), 26f.dp.toPx())
-            },
-            onDrawSurface = { drawRect(film) },
-        )
-        // Clip the bar's own children (tabs/icons/mini-player) to the glass shape.
-        .clip(shape)
+    // PERF: memoised on everything it actually depends on. The A/B morph recomposes this bar's
+    // subtree, and rebuilding the chain each time hands Compose a structurally *new* modifier —
+    // which tears down and re-creates the backdrop node, re-capturing the (expensive) blur/lens
+    // layer mid-animation. None of these inputs change during a morph, so the node is now
+    // created once and simply re-drawn, and the glass keeps refracting live content for free.
+    return remember(backdrop, shape, film) {
+        Modifier
+            .drawBackdrop(
+                backdrop = backdrop,
+                shape = { shape },
+                effects = {
+                    vibrancy()
+                    blur(8f.dp.toPx())
+                    lens(14f.dp.toPx(), 26f.dp.toPx())
+                },
+                onDrawSurface = { drawRect(film) },
+            )
+            // Clip the bar's own children (tabs/icons/mini-player) to the glass shape.
+            .clip(shape)
+    }
 }
 
 @Composable
@@ -492,7 +499,9 @@ private fun MiniPlayerPill(
             val thumb = mediaMetadata?.thumbnailUrl
             if (thumb != null) {
                 AsyncImage(
-                    model = thumb,
+                    // Same pinned request the standalone mini-player pill uses, so the two share
+                    // one memory-cache entry and the art survives the A/B morph without a reload.
+                    model = rememberPinnedArtworkRequest(thumb),
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize(),

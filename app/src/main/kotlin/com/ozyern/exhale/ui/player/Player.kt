@@ -108,6 +108,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.DialogProperties
@@ -144,6 +145,9 @@ import com.ozyern.exhale.constants.DisableBlurKey
 import com.ozyern.exhale.constants.PlayerButtonsStyle
 import com.ozyern.exhale.constants.PlayerButtonsStyleKey
 import com.ozyern.exhale.ui.theme.PlayerColorExtractor
+import com.ozyern.exhale.constants.MiniPlayerHeight
+import com.ozyern.exhale.constants.MiniPlayerPillCornerRadius
+import com.ozyern.exhale.constants.MiniPlayerPillHorizontalInset
 import com.ozyern.exhale.constants.QueuePeekHeight
 import com.ozyern.exhale.constants.SliderStyle
 import com.ozyern.exhale.constants.SliderStyleKey
@@ -194,6 +198,13 @@ fun BottomSheetPlayer(
     // When true (State B / scrolled), the standalone collapsed mini-player is hidden
     // because the floating bottom bar shows the mini-player pill instead.
     hideMiniPlayer: Boolean = false,
+    // Dynamic-Island morph target. The host measures where the player is actually collapsing to
+    // — the floating pill above the nav bar (State A) or the nav bar's own centre capsule
+    // (State B) — and hands the bounds down, so this sheet never has to guess.
+    morphPillHeight: Dp = MiniPlayerHeight,
+    morphPillHorizontalInset: Dp = MiniPlayerPillHorizontalInset,
+    morphPillCornerRadius: Dp = MiniPlayerPillCornerRadius,
+    morphPillTopOffset: Dp = 0.dp,
 ) {
     val context = LocalContext.current
     val clipboardManager = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
@@ -826,6 +837,10 @@ fun BottomSheetPlayer(
         },
         // Opt this sheet — and only this sheet — into the rectangle→pill morph.
         dynamicIslandMorph = true,
+        pillHeight = morphPillHeight,
+        pillHorizontalInset = morphPillHorizontalInset,
+        pillCornerRadius = morphPillCornerRadius,
+        pillTopOffset = morphPillTopOffset,
         onDismiss = {
             playerConnection.service.stopAndClearPlayback()
         },

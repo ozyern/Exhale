@@ -90,6 +90,7 @@ import com.ozyern.exhale.constants.MiniPlayerHeight
 import com.ozyern.exhale.constants.MiniPlayerPillHorizontalInset
 import com.ozyern.exhale.extensions.togglePlayPause
 import com.ozyern.exhale.ui.component.pressScaleContainer
+import com.ozyern.exhale.ui.component.rememberPinnedArtworkRequest
 import com.ozyern.exhale.models.MediaMetadata
 import com.ozyern.exhale.playback.PlayerConnection
 import com.ozyern.exhale.together.TogetherSessionState
@@ -328,7 +329,9 @@ private fun MiniPlayerArtwork(
             val thumbnailUrl = mediaMetadata?.thumbnailUrl
             if (thumbnailUrl != null) {
                 AsyncImage(
-                    model = thumbnailUrl,
+                    // Pinned to the memory cache under the URL so the artwork does not blink
+                    // when the player morphs between this pill and the nav bar's capsule.
+                    model = rememberPinnedArtworkRequest(thumbnailUrl),
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()

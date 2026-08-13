@@ -90,10 +90,21 @@ fun BottomSheet(
      * the plain slide.
      */
     dynamicIslandMorph: Boolean = false,
-    /** Morph target geometry — the collapsed mini-player pill's bounds inside this sheet. */
+    /**
+     * Morph target geometry — the bounds, *inside this sheet's own coordinate space*, of whatever
+     * the player is collapsing into. Defaults describe the standalone mini-player pill (State A);
+     * the host overrides them with the nav bar's centre capsule when the bar is collapsed
+     * (State B). See [pillTopOffset].
+     */
     pillHeight: Dp = MiniPlayerHeight,
     pillHorizontalInset: Dp = MiniPlayerPillHorizontalInset,
     pillCornerRadius: Dp = MiniPlayerPillCornerRadius,
+    /**
+     * How far below the top of the sheet's collapsed region the target pill sits. `0` for the
+     * mini-player pill, which occupies that region's top strip; a positive value walks the morph
+     * down onto the nav bar for State B.
+     */
+    pillTopOffset: Dp = 0.dp,
     collapsedContent: @Composable BoxScope.() -> Unit,
     content: @Composable BoxScope.() -> Unit,
 ) {
@@ -158,6 +169,7 @@ fun BottomSheet(
                                 pillHeightPx = pillHeight.toPx(),
                                 pillInsetPx = pillHorizontalInset.toPx(),
                                 pillRadiusPx = pillCornerRadius.toPx(),
+                                pillTopOffsetPx = pillTopOffset.toPx(),
                             )
                         }
                 },
@@ -202,6 +214,15 @@ fun BottomSheet(
                             scaleX = pillWidthRatio + (1f - pillWidthRatio) * eased
                             scaleY = PILL_VERTICAL_SQUASH + (1f - PILL_VERTICAL_SQUASH) * eased
                             transformOrigin = TransformOrigin(0.5f, 0f)
+
+                            // The translate half of the morph. With a top-centre origin the scale
+                            // alone always parks the content at the top of the sheet, which is
+                            // right for State A but leaves it hovering above the nav bar in State
+                            // B. Sliding the layer down by the same offset the clip window uses
+                            // keeps content and window locked together, so the player appears to
+                            // travel *into* the bar. Pure graphicsLayer — no layout is involved,
+                            // so this costs nothing per frame beyond the render-thread transform.
+                            translationY = pillTopOffset.toPx() * (1f - eased)
 
                             // ---- The opacity half ----
                             //
