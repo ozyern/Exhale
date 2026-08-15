@@ -34,17 +34,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
@@ -91,6 +86,7 @@ import com.ozyern.exhale.constants.MiniPlayerPillHorizontalInset
 import com.ozyern.exhale.extensions.togglePlayPause
 import com.ozyern.exhale.ui.component.pressScaleContainer
 import com.ozyern.exhale.ui.component.rememberPinnedArtworkRequest
+import com.ozyern.exhale.ui.utils.safeHorizontalChromeInset
 import com.ozyern.exhale.models.MediaMetadata
 import com.ozyern.exhale.playback.PlayerConnection
 import com.ozyern.exhale.together.TogetherSessionState
@@ -127,21 +123,32 @@ fun SwipeableMiniPlayerBox(
     }
     val autoSwipeThreshold = calculateAutoSwipeThreshold(swipeSensitivity)
 
+    // Symmetric, and unioned with the display cutout — see `safeHorizontalChromeInset`. This
+    // replaced a `windowInsetsPadding(systemBars.only(Horizontal))`, which was wrong twice over:
+    // it ignored the cutout entirely (so the pill slid under a landscape "Fluid Cloud"), and it
+    // padded each edge independently while the morph that has to land on this pill uses ONE
+    // symmetric inset.
+    val safeChromeInset = safeHorizontalChromeInset()
+
     Box(
         modifier = modifier
             .fillMaxWidth()
             .height(MiniPlayerHeight)
-            .windowInsetsPadding(WindowInsets.systemBars.only(WindowInsetsSides.Horizontal))
             .let { baseModifier ->
                 if (useLegacyBackground) {
-                    baseModifier.background(
-                        if (pureBlack) Color.Black
-                        else MaterialTheme.colorScheme.surfaceContainer
-                    )
+                    baseModifier
+                        .padding(horizontal = safeChromeInset)
+                        .background(
+                            if (pureBlack) Color.Black
+                            else MaterialTheme.colorScheme.surfaceContainer
+                        )
                 } else {
                     // Must match BottomSheet's Dynamic-Island morph inset, or the full player
-                    // shrinks into a rectangle that doesn't line up with this pill.
-                    baseModifier.padding(horizontal = MiniPlayerPillHorizontalInset)
+                    // shrinks into a rectangle that doesn't line up with this pill. The host
+                    // composes the morph target from exactly these two terms.
+                    baseModifier.padding(
+                        horizontal = safeChromeInset + MiniPlayerPillHorizontalInset,
+                    )
                 }
             }
             .let { baseModifier ->

@@ -40,8 +40,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -109,7 +107,10 @@ import com.ozyern.exhale.innertube.YouTube
 import com.ozyern.exhale.innertube.utils.completed
 import com.ozyern.exhale.innertube.utils.parseCookieString
 import com.ozyern.exhale.ui.component.InfoLabel
+import com.ozyern.exhale.ui.component.SettingsDividerThickness
+import com.ozyern.exhale.ui.component.SettingsGroupCornerRadius
 import com.ozyern.exhale.ui.component.TextFieldDialog
+import com.ozyern.exhale.ui.component.settingsDividerColor
 import com.ozyern.exhale.ui.screens.buildLoginRoute
 import com.ozyern.exhale.utils.Updater
 import com.ozyern.exhale.utils.dataStore
@@ -229,10 +230,7 @@ fun AccountSettings(
                         }
                     )
 
-                    HorizontalDivider(
-                        modifier = Modifier.padding(start = 56.dp),
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
-                    )
+                    SettingsRowDivider()
 
                     SettingsToggleItem(
                         icon = painterResource(R.drawable.cached),
@@ -254,10 +252,7 @@ fun AccountSettings(
                     }
                 )
 
-                HorizontalDivider(
-                    modifier = Modifier.padding(start = 56.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
-                )
+                SettingsRowDivider()
 
                 SettingsClickableItem(
                     icon = painterResource(R.drawable.history),
@@ -279,10 +274,7 @@ fun AccountSettings(
                     onCheckedChange = onEnableUpdateNotificationChange
                 )
 
-                HorizontalDivider(
-                    modifier = Modifier.padding(start = 56.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
-                )
+                SettingsRowDivider()
 
                 SettingsClickableItem(
                     icon = painterResource(R.drawable.notifications),
@@ -311,10 +303,7 @@ fun AccountSettings(
                     onClick = { showPlaylistDialog = true }
                 )
 
-                HorizontalDivider(
-                    modifier = Modifier.padding(start = 56.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
-                )
+                SettingsRowDivider()
 
                 SettingsClickableItem(
                     icon = painterResource(R.drawable.integration),
@@ -326,10 +315,7 @@ fun AccountSettings(
                     }
                 )
 
-                HorizontalDivider(
-                    modifier = Modifier.padding(start = 56.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
-                )
+                SettingsRowDivider()
 
                 SettingsClickableItem(
                     icon = painterResource(R.drawable.fire),
@@ -371,10 +357,7 @@ fun AccountSettings(
                 )
 
                 if (hasUpdate) {
-                    HorizontalDivider(
-                        modifier = Modifier.padding(start = 56.dp),
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
-                    )
+                    SettingsRowDivider()
 
                     UpdateAvailableItem(
                         latestVersion = latestVersionName,
@@ -494,23 +477,27 @@ private fun AccountCard(
     onAccountClick: () -> Unit,
     onLogout: () -> Unit
 ) {
+    // Signed-in state gets a faint primary wash so the row still reads as "this is you"; signed-out
+    // falls back to the same neutral tint every other inset group uses. Both are translucent — the
+    // frosted sheet behind has to show through.
     val cardColor by animateColorAsState(
         targetValue = if (isLoggedIn)
-            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
+            MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)
         else
-            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f),
         animationSpec = tween(300),
         label = "cardColor"
     )
 
-    Card(
+    // A clipped Column, not a Material Card. Card brings a tonal elevation overlay and a shadow
+    // that no iOS grouped list has, and its 24dp radius disagreed with the 16dp every group below
+    // it uses — the account row visibly belonged to a different design system.
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(24.dp))
-            .clickable(onClick = onAccountClick),
-        shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = cardColor),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+            .clip(RoundedCornerShape(SettingsGroupCornerRadius))
+            .background(cardColor)
+            .clickable(onClick = onAccountClick)
     ) {
         Row(
             modifier = Modifier
@@ -626,19 +613,44 @@ private fun SettingsSection(
             )
         }
 
-        // Grouped inset list: a Column clipped to 16dp over a translucent tint so the sheet's
-        // frosted glass reads through. NO Material Card — no elevation, no border. Rows inside
-        // sit flush; callers place thin 1dp dividers only BETWEEN items (never at the very top
-        // or bottom of the group).
+        // Grouped inset list: a Column clipped to the shared 16dp corner over a translucent tint
+        // so the sheet's frosted glass reads through. NO Material Card — no elevation, no border.
+        // Rows inside sit flush; callers place thin dividers only BETWEEN items (never at the very
+        // top or bottom of the group) via [SettingsRowDivider].
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(16.dp))
+                .clip(RoundedCornerShape(SettingsGroupCornerRadius))
                 .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
         ) {
             content()
         }
     }
+}
+
+/**
+ * The hairline between two rows of an inset group.
+ *
+ * Indented to where the row's *text* starts, not to the row's edge — that is the detail that makes
+ * a grouped list read as iOS rather than as Material. The indent is derived from the row metrics
+ * below (16dp leading padding + 40dp icon tile + 14dp gap) instead of being a magic number, so it
+ * cannot silently fall out of alignment if the rows are ever re-padded.
+ *
+ * Never emitted at the top or bottom of a group; the clipped corners are the boundary there.
+ */
+private val AccountRowHorizontalPadding = 16.dp
+private val AccountRowIconSize = 40.dp
+private val AccountRowIconGap = 14.dp
+private val AccountRowTextIndent =
+    AccountRowHorizontalPadding + AccountRowIconSize + AccountRowIconGap
+
+@Composable
+private fun SettingsRowDivider() {
+    HorizontalDivider(
+        modifier = Modifier.padding(start = AccountRowTextIndent),
+        thickness = SettingsDividerThickness,
+        color = settingsDividerColor(),
+    )
 }
 
 @Composable
@@ -657,13 +669,13 @@ private fun SettingsClickableItem(
                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                 onClick()
             }
-            .padding(horizontal = 16.dp, vertical = 14.dp),
+            .padding(horizontal = AccountRowHorizontalPadding, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         // Icon Container
         Box(
             modifier = Modifier
-                .size(40.dp)
+                .size(AccountRowIconSize)
                 .clip(RoundedCornerShape(12.dp))
                 .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)),
             contentAlignment = Alignment.Center
@@ -691,7 +703,7 @@ private fun SettingsClickableItem(
             }
         }
 
-        Spacer(Modifier.width(14.dp))
+        Spacer(Modifier.width(AccountRowIconGap))
 
         Column(modifier = Modifier.weight(1f)) {
             Text(
@@ -736,13 +748,13 @@ private fun SettingsToggleItem(
                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                 onCheckedChange(!checked)
             }
-            .padding(horizontal = 16.dp, vertical = 14.dp),
+            .padding(horizontal = AccountRowHorizontalPadding, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         // Icon Container
         Box(
             modifier = Modifier
-                .size(40.dp)
+                .size(AccountRowIconSize)
                 .clip(RoundedCornerShape(12.dp))
                 .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)),
             contentAlignment = Alignment.Center
@@ -755,7 +767,7 @@ private fun SettingsToggleItem(
             )
         }
 
-        Spacer(Modifier.width(14.dp))
+        Spacer(Modifier.width(AccountRowIconGap))
 
         Column(modifier = Modifier.weight(1f)) {
             Text(
@@ -794,13 +806,13 @@ private fun UpdateAvailableItem(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 14.dp),
+            .padding(horizontal = AccountRowHorizontalPadding, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         // Icon Container with gradient
         Box(
             modifier = Modifier
-                .size(40.dp)
+                .size(AccountRowIconSize)
                 .clip(RoundedCornerShape(12.dp))
                 .background(
                     Brush.linearGradient(
@@ -826,7 +838,7 @@ private fun UpdateAvailableItem(
             }
         }
 
-        Spacer(Modifier.width(14.dp))
+        Spacer(Modifier.width(AccountRowIconGap))
 
         Column(modifier = Modifier.weight(1f)) {
             Text(

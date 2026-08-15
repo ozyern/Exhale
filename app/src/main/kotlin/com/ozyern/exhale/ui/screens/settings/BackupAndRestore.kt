@@ -637,14 +637,11 @@ fun BackupAndRestore(
                     modifier = Modifier
                         .fillMaxWidth()
                         .animateContentSize(),
-                    shape = RoundedCornerShape(28.dp),
+                    shape = RoundedCornerShape(SettingsDimensions.GroupCardCornerRadius),
                     colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainer
+                        containerColor = SettingsDimensions.groupSurfaceColor()
                     ),
-                    elevation = CardDefaults.cardElevation(
-                        defaultElevation = 4.dp,
-                        pressedElevation = 8.dp
-                    ),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
                 ) {
                     Column(
                         modifier = Modifier.padding(24.dp),

@@ -17,6 +17,12 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <uses-permission android:name="android.permission.VIBRATE" />
+    <!--
+        Lets the in-app updater hand a downloaded APK to the system installer. This only grants the
+        ability to *ask*: on API 26+ the user must still allow this app to install unknown apps,
+        which Updater.installApk checks for and Updater.requestInstallPermission sends them to.
+    -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <queries>
         <intent>

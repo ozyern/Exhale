@@ -89,6 +89,8 @@ import com.kyant.backdrop.effects.lens
 import com.kyant.backdrop.effects.vibrancy
 import com.ozyern.exhale.LocalPlayerConnection
 import com.ozyern.exhale.R
+import com.ozyern.exhale.constants.AquamorphicDampingRatio
+import com.ozyern.exhale.constants.AquamorphicStiffness
 import com.ozyern.exhale.extensions.togglePlayPause
 import com.ozyern.exhale.ui.component.liquid.LocalAppBackdrop
 import com.ozyern.exhale.ui.screens.Screens
@@ -150,12 +152,12 @@ fun LiquidGlassBottomBar(
                 // which run on the GPU via graphicsLayer (alpha/scale) and placement (slide),
                 // NOT by remeasuring layout.
                 val spring = spring<Float>(
-                    dampingRatio = 0.7f,
-                    stiffness = 400f
+                    dampingRatio = AquamorphicDampingRatio,
+                    stiffness = AquamorphicStiffness
                 )
                 val intSpring = spring<IntOffset>(
-                    dampingRatio = 0.7f,
-                    stiffness = 400f
+                    dampingRatio = AquamorphicDampingRatio,
+                    stiffness = AquamorphicStiffness
                 )
 
                 // PERF: `using SizeTransform { snap() }` makes the container jump to the target
@@ -670,6 +672,13 @@ fun SearchBottomBar(
 private fun itemContentColor(pureBlack: Boolean): Color =
     if (pureBlack) Color.White.copy(alpha = 0.82f) else MaterialTheme.colorScheme.onSurfaceVariant
 
+// A low-alpha wash of the PRIMARY brand colour, matching the floating toolbar — see the tint note
+// there. A solid `secondaryContainer` chip both drifted off-accent under dynamic colour and read as
+// opaque against the frosted bar it sits on.
 @Composable
 private fun selectedItemContainerColor(pureBlack: Boolean): Color =
-    if (pureBlack) Color.White.copy(alpha = 0.12f) else MaterialTheme.colorScheme.secondaryContainer
+    if (pureBlack) {
+        Color.White.copy(alpha = 0.12f)
+    } else {
+        MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
+    }

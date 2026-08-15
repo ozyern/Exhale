@@ -6,6 +6,12 @@
 
 package com.ozyern.exhale.utils
 
+import android.content.Context
+import android.content.Intent
+import android.os.Build
+import android.provider.Settings
+import androidx.core.content.FileProvider
+import androidx.core.net.toUri
 import androidx.datastore.preferences.core.edit
 import com.ozyern.exhale.BuildConfig
 import com.ozyern.exhale.App
@@ -18,12 +24,23 @@ import com.ozyern.exhale.constants.UpdateChannelKey
 import io.ktor.client.HttpClient
 import io.ktor.client.request.get
 import io.ktor.client.request.headers
+import io.ktor.client.request.prepareGet
 import io.ktor.client.statement.HttpResponse
+import io.ktor.client.statement.bodyAsChannel
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.contentLength
+import io.ktor.http.isSuccess
+import io.ktor.utils.io.readAvailable
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.runBlocking
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
+import java.io.FileOutputStream
 
 data class GitCommit(
     val sha: String,
@@ -67,7 +84,36 @@ data class UpdateInfo(
     val publishedAt: String,
 )
 
+/**
+ * A snapshot of an in-flight APK download.
+ *
+ * [totalBytes] is `-1` when the server sends no `Content-Length` — a real case for redirected
+ * release assets and for the nightly R2 bucket. That is modelled as a *nullable [fraction]* rather
+ * than the more obvious "emit -1f", so the UI cannot accidentally render a negative bar; a null
+ * fraction is the explicit signal to show an indeterminate indicator instead.
+ */
+data class DownloadProgress(
+    val downloadedBytes: Long,
+    val totalBytes: Long,
+) {
+    val fraction: Float?
+        get() = if (totalBytes > 0L) {
+            (downloadedBytes.toFloat() / totalBytes).coerceIn(0f, 1f)
+        } else {
+            null
+        }
+}
+
 private const val APK_ASSET_NAME = "app-universal-release.apk"
+
+/** 64 KB reads — large enough that the syscall overhead disappears against network latency. */
+private const val DOWNLOAD_BUFFER_BYTES = 64 * 1024
+
+/**
+ * Only surface progress every 512 KB. On a ~100 MB APK that is ~200 UI updates over the whole
+ * download, which is smooth to the eye while keeping recomposition off the critical path.
+ */
+private const val DOWNLOAD_EMIT_INTERVAL_BYTES = 512 * 1024L
 private const val NIGHTLY_JSON_URL = "https://pub-2218e6bbd5b948e1b5d882cf4d92086d.r2.dev/update.json"
 
 private data class ReleasesNetworkResult(
@@ -466,6 +512,107 @@ object Updater {
             }
             fallback
         }.getOrDefault(fallback)
+    }
+
+    // ── In-app APK update ────────────────────────────────────────────────────
+
+    /**
+     * Streams the APK at [url] into [destinationFile], emitting progress as it goes.
+     *
+     * The flow completes when the file is fully written; collect it to completion before calling
+     * [installApk]. On any failure the partially written file is deleted rather than left behind —
+     * a truncated APK would fail to parse at install time with a confusing "app not installed"
+     * error, and would be silently reused if the user retried.
+     *
+     * Emissions are throttled (see [DownloadProgress]); a 100 MB APK read in 64 KB chunks would
+     * otherwise emit ~1,600 times, and every emission recomposes the progress UI for a change too
+     * small to see.
+     */
+    fun downloadApk(url: String, destinationFile: File): Flow<DownloadProgress> = flow {
+        destinationFile.parentFile?.mkdirs()
+        try {
+            client.prepareGet(url).execute { response ->
+                if (!response.status.isSuccess()) {
+                    error("Download failed: HTTP ${response.status.value}")
+                }
+
+                val totalBytes = response.contentLength() ?: -1L
+                val channel = response.bodyAsChannel()
+                val buffer = ByteArray(DOWNLOAD_BUFFER_BYTES)
+                var downloadedBytes = 0L
+                var lastEmittedBytes = 0L
+
+                emit(DownloadProgress(0L, totalBytes))
+
+                FileOutputStream(destinationFile).use { output ->
+                    while (!channel.isClosedForRead) {
+                        val read = channel.readAvailable(buffer)
+                        if (read <= 0) break
+                        output.write(buffer, 0, read)
+                        downloadedBytes += read
+
+                        if (downloadedBytes - lastEmittedBytes >= DOWNLOAD_EMIT_INTERVAL_BYTES) {
+                            lastEmittedBytes = downloadedBytes
+                            emit(DownloadProgress(downloadedBytes, totalBytes))
+                        }
+                    }
+                    output.fd.sync()
+                }
+
+                // Always land on a final, exact emission — the throttle above will usually have
+                // skipped the last partial chunk, leaving the bar short of 100%.
+                emit(DownloadProgress(downloadedBytes, totalBytes))
+            }
+        } catch (e: Throwable) {
+            destinationFile.delete()
+            throw e
+        }
+    }.flowOn(Dispatchers.IO)
+
+    /**
+     * Hands [apkFile] to the system package installer.
+     *
+     * Returns `false` when the app is not allowed to install packages, which is the default on
+     * API 26+. There is no way to install without that grant, so the caller must send the user to
+     * the system settings page rather than firing an intent that silently does nothing — the
+     * failure mode this guards against is a button that appears to work and simply never installs.
+     */
+    fun installApk(context: Context, apkFile: File): Boolean {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
+            !context.packageManager.canRequestPackageInstalls()
+        ) {
+            return false
+        }
+
+        val uri = FileProvider.getUriForFile(
+            context,
+            "${context.packageName}.FileProvider",
+            apkFile,
+        )
+
+        val intent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(uri, "application/vnd.android.package-archive")
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        context.startActivity(intent)
+        return true
+    }
+
+    /**
+     * Opens the system screen where the user grants this app permission to install packages.
+     * Paired with [installApk] returning `false`.
+     */
+    fun requestInstallPermission(context: Context) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        runCatching {
+            context.startActivity(
+                Intent(
+                    Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                    "package:${context.packageName}".toUri(),
+                ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            )
+        }
     }
 
     // ─────────────────────────────────────────────────────────────────────────

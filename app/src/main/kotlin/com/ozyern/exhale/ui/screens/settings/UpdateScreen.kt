@@ -15,6 +15,10 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -26,6 +30,7 @@ import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -46,6 +51,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -63,12 +69,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -78,19 +86,28 @@ import com.ozyern.exhale.BuildConfig
 import com.ozyern.exhale.LocalPlayerAwareWindowInsets
 import com.ozyern.exhale.R
 import com.ozyern.exhale.constants.EnableUpdateNotificationKey
+import com.ozyern.exhale.constants.AquamorphicDampingRatio
+import com.ozyern.exhale.constants.AquamorphicStiffness
 import com.ozyern.exhale.constants.UpdateChannel
 import com.ozyern.exhale.constants.UpdateChannelKey
 import com.ozyern.exhale.ui.component.EnumListPreference
 import com.ozyern.exhale.ui.component.IconButton
+import com.ozyern.exhale.ui.component.LiquidGlassSheet
 import com.ozyern.exhale.ui.component.PreferenceGroupTitle
+import com.ozyern.exhale.ui.component.SettingsDividerThickness
+import com.ozyern.exhale.ui.component.SettingsGroupCornerRadius
 import com.ozyern.exhale.ui.component.SwitchPreference
+import com.ozyern.exhale.ui.component.liquid.LiquidButton
+import com.ozyern.exhale.ui.component.settingsDividerColor
 import com.ozyern.exhale.ui.utils.backToMain
+import com.ozyern.exhale.utils.DownloadProgress
 import com.ozyern.exhale.utils.GitCommit
 import com.ozyern.exhale.utils.UpdateInfo
 import com.ozyern.exhale.utils.UpdateNotificationManager
 import com.ozyern.exhale.utils.Updater
 import com.ozyern.exhale.utils.rememberEnumPreference
 import com.ozyern.exhale.utils.rememberPreference
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
@@ -182,9 +199,8 @@ fun UpdateScreen(
     // ── Diálogos ──────────────────────────────────────────────────────────────
     if (showUpdateDialog) {
         pendingUpdateInfo?.let { info ->
-            UpdateAvailableDialog(
+            UpdateAvailableSheet(
                 info = info,
-                onDownload    = { showUpdateDialog = false; uriHandler.openUri(info.downloadUrl) },
                 onViewRelease = { showUpdateDialog = false; uriHandler.openUri(info.releasePageUrl) },
                 onDismiss     = { showUpdateDialog = false }
             )
@@ -416,7 +432,23 @@ fun UpdateScreen(
                             Spacer(Modifier.height(10.dp))
                             Text(latestHash, style = MaterialTheme.typography.labelMedium, fontFamily = FontFamily.Monospace, color = MaterialTheme.colorScheme.primary)
                             Spacer(Modifier.height(14.dp))
-                            Button(onClick = { uriHandler.openUri(nightlyInstallUrl) }, modifier = Modifier.fillMaxWidth()) {
+                            // Routed through the same sheet as a stable release, so the nightly
+                            // channel gets in-app download and install too rather than dropping
+                            // the user into a browser.
+                            Button(
+                                onClick = {
+                                    pendingUpdateInfo = UpdateInfo(
+                                        tagName = "nightly",
+                                        versionName = latestHash,
+                                        downloadUrl = nightlyInstallUrl,
+                                        releasePageUrl = nightlyInstallUrl,
+                                        releaseNotes = null,
+                                        publishedAt = "",
+                                    )
+                                    showUpdateDialog = true
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
                                 Text("Install")
                             }
                         }
@@ -534,58 +566,412 @@ private fun UpdateCheckButton(
     }
 }
 
-// ─── UpdateAvailableDialog ────────────────────────────────────────────────────
+// ─── UpdateAvailableSheet ─────────────────────────────────────────────────────
 
+/** What the sheet's primary action is currently doing. */
+private sealed interface DownloadState {
+    data object Idle : DownloadState
+    data class Downloading(val progress: DownloadProgress) : DownloadState
+    data object Installing : DownloadState
+    data object NeedsPermission : DownloadState
+    data class Failed(val message: String) : DownloadState
+}
+
+/**
+ * The "Software Update" sheet — Apple's presentation of an available update, in our glass.
+ *
+ * Replaces an `AlertDialog` whose only action kicked the user out to a browser to download the APK
+ * by hand. The download now happens in place, which is the whole point of the ported backend: the
+ * sheet owns the transfer, shows real byte progress, and hands the finished file straight to the
+ * system installer.
+ */
 @Composable
-private fun UpdateAvailableDialog(
+private fun UpdateAvailableSheet(
     info: UpdateInfo,
-    onDownload: () -> Unit,
     onViewRelease: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        icon = { Icon(painterResource(R.drawable.update), null, tint = MaterialTheme.colorScheme.primary) },
-        title = { Text("New version available") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-                    Column {
-                        Text("Instalada", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text(BuildConfig.VERSION_NAME, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
-                    }
-                    Column {
-                        Text("Available", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text(info.versionName, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                    }
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    var state by remember { mutableStateOf<DownloadState>(DownloadState.Idle) }
+
+    val isBusy = state is DownloadState.Downloading || state is DownloadState.Installing
+
+    fun startDownload() {
+        coroutineScope.launch {
+            // Fixed filename in the cache dir: it is covered by the <cache-path> entry in
+            // provider_paths.xml (so FileProvider can hand it to the installer), and reusing one
+            // name means a previous abandoned download cannot accumulate copies of a ~100 MB APK.
+            val destination = File(context.cacheDir, "update.apk")
+            state = DownloadState.Downloading(DownloadProgress(0L, -1L))
+            runCatching {
+                Updater.downloadApk(info.downloadUrl, destination).collect { progress ->
+                    state = DownloadState.Downloading(progress)
                 }
-                if (!info.releaseNotes.isNullOrBlank()) {
-                    HorizontalDivider()
-                    Text("Novedades", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
-                    val notes = info.releaseNotes.let { if (it.length > 300) it.take(300) + "…" else it }
+            }.onSuccess {
+                state = DownloadState.Installing
+                state = if (Updater.installApk(context, destination)) {
+                    DownloadState.Installing
+                } else {
+                    DownloadState.NeedsPermission
+                }
+            }.onFailure { error ->
+                state = DownloadState.Failed(error.message ?: "Download failed")
+            }
+        }
+    }
+
+    LiquidGlassSheet(
+        onDismiss = onDismiss,
+        // A half-written APK is worse than no APK, so the sheet refuses every dismissal route
+        // while bytes are moving — scrim tap, back press and the grab handle all go away.
+        dismissible = !isBusy,
+    ) {
+        Column(
+            modifier = Modifier
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp)
+                .padding(top = 12.dp, bottom = 28.dp),
+        ) {
+            UpdateSheetHeader(versionName = info.versionName)
+
+            Spacer(Modifier.height(22.dp))
+
+            // Inset grouped table, the same language as Settings: two rows, one hairline between
+            // them, never at the card's outer edges.
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(SettingsGroupCornerRadius))
+                    .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f)),
+            ) {
+                UpdateVersionRow(
+                    label = stringResource(R.string.update_installed_version),
+                    value = BuildConfig.VERSION_NAME,
+                    highlight = false,
+                )
+                HorizontalDivider(
+                    modifier = Modifier.padding(start = 16.dp),
+                    thickness = SettingsDividerThickness,
+                    color = settingsDividerColor(),
+                )
+                UpdateVersionRow(
+                    label = stringResource(R.string.update_new_version),
+                    value = info.versionName,
+                    highlight = true,
+                )
+            }
+
+            if (!info.releaseNotes.isNullOrBlank()) {
+                Spacer(Modifier.height(22.dp))
+                Text(
+                    text = stringResource(R.string.update_whats_new),
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.padding(start = 4.dp, bottom = 10.dp),
+                )
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(SettingsGroupCornerRadius))
+                        .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
+                        .heightIn(max = 220.dp)
+                        .verticalScroll(rememberScrollState())
+                        .padding(16.dp),
+                ) {
                     Text(
-                        text = notes,
-                        style = MaterialTheme.typography.bodySmall,
+                        text = info.releaseNotes.trim(),
+                        style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.height(120.dp).verticalScroll(rememberScrollState())
                     )
                 }
             }
-        },
-        confirmButton = {
-            Button(onClick = onDownload) {
-                Icon(painterResource(R.drawable.download), null, Modifier.size(16.dp))
-                Spacer(Modifier.width(6.dp))
-                Text("Download APK")
-            }
-        },
-        dismissButton = {
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                TextButton(onClick = onViewRelease) { Text("Ver release") }
-                TextButton(onClick = onDismiss)    { Text("Ahora no") }
+
+            Spacer(Modifier.height(24.dp))
+
+            UpdateSheetActions(
+                state = state,
+                onDownload = ::startDownload,
+                onGrantPermission = {
+                    Updater.requestInstallPermission(context)
+                    state = DownloadState.Idle
+                },
+                onViewRelease = onViewRelease,
+                onDismiss = onDismiss,
+            )
+        }
+    }
+}
+
+/** Hero block: a large circular glyph over bold identity text, centred — the iOS sheet opening. */
+@Composable
+private fun UpdateSheetHeader(versionName: String) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(72.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.update),
+                contentDescription = null,
+                modifier = Modifier.size(34.dp),
+                tint = MaterialTheme.colorScheme.primary,
+            )
+        }
+
+        Spacer(Modifier.height(14.dp))
+
+        Text(
+            text = stringResource(R.string.update_available_title),
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            text = stringResource(R.string.update_version_label, versionName),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+private fun UpdateVersionRow(
+    label: String,
+    value: String,
+    highlight: Boolean,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyLarge,
+            fontWeight = if (highlight) FontWeight.Bold else FontWeight.Medium,
+            color = if (highlight) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            },
+        )
+    }
+}
+
+@Composable
+private fun UpdateSheetActions(
+    state: DownloadState,
+    onDownload: () -> Unit,
+    onGrantPermission: () -> Unit,
+    onViewRelease: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        AnimatedContent(
+            targetState = state,
+            transitionSpec = { fadeIn() togetherWith fadeOut() },
+            label = "updateAction",
+        ) { s ->
+            when (s) {
+                is DownloadState.Downloading -> UpdateProgressBlock(s.progress)
+
+                DownloadState.Installing -> Text(
+                    text = stringResource(R.string.update_opening_installer),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+
+                DownloadState.NeedsPermission -> Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Text(
+                        text = stringResource(R.string.update_install_permission_rationale),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                    )
+                    Spacer(Modifier.height(14.dp))
+                    LiquidButton(
+                        onClick = onGrantPermission,
+                        modifier = Modifier.fillMaxWidth(),
+                        tint = MaterialTheme.colorScheme.primary,
+                    ) {
+                        Text(
+                            text = stringResource(R.string.update_open_settings),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    }
+                }
+
+                is DownloadState.Failed -> Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Text(
+                        text = s.message,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error,
+                        textAlign = TextAlign.Center,
+                    )
+                    Spacer(Modifier.height(14.dp))
+                    LiquidButton(
+                        onClick = onDownload,
+                        modifier = Modifier.fillMaxWidth(),
+                        tint = MaterialTheme.colorScheme.primary,
+                    ) {
+                        Text(
+                            text = stringResource(R.string.update_retry),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    }
+                }
+
+                DownloadState.Idle -> LiquidButton(
+                    onClick = onDownload,
+                    modifier = Modifier.fillMaxWidth(),
+                    tint = MaterialTheme.colorScheme.primary,
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.download),
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp),
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = stringResource(R.string.update_download_and_install),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
             }
         }
+
+        // Secondary actions stay hidden while the transfer is in flight — there is nothing safe
+        // to do at that point except wait.
+        AnimatedVisibility(
+            visible = state !is DownloadState.Downloading && state != DownloadState.Installing,
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 6.dp),
+                horizontalArrangement = Arrangement.Center,
+            ) {
+                TextButton(onClick = onViewRelease) {
+                    Text(stringResource(R.string.update_view_release))
+                }
+                TextButton(onClick = onDismiss) {
+                    Text(stringResource(R.string.update_not_now))
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Apple-style transfer readout: a hairline capsule track with a spring-eased fill, the byte count
+ * underneath, and the percentage on the right.
+ *
+ * The fill is animated rather than snapped to each emission — progress arrives every 512 KB, so a
+ * raw binding would visibly step. Falls back to a full-width shimmer-free indeterminate bar when
+ * the server withheld a Content-Length.
+ */
+@Composable
+private fun UpdateProgressBlock(progress: DownloadProgress) {
+    val fraction = progress.fraction
+    val animatedFraction by animateFloatAsState(
+        targetValue = fraction ?: 0f,
+        animationSpec = spring(
+            dampingRatio = AquamorphicDampingRatio,
+            stiffness = AquamorphicStiffness,
+        ),
+        label = "downloadFill",
     )
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(8.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f)),
+        ) {
+            if (fraction == null) {
+                LinearProgressIndicator(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(8.dp)
+                        .clip(CircleShape),
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = Color.Transparent,
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(animatedFraction)
+                        .height(8.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primary),
+                )
+            }
+        }
+
+        Spacer(Modifier.height(10.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text(
+                text = if (progress.totalBytes > 0L) {
+                    stringResource(
+                        R.string.update_downloaded_of,
+                        formatBytes(progress.downloadedBytes),
+                        formatBytes(progress.totalBytes),
+                    )
+                } else {
+                    formatBytes(progress.downloadedBytes)
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            if (fraction != null) {
+                Text(
+                    text = "${(fraction * 100).toInt()}%",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
+        }
+    }
+}
+
+private fun formatBytes(bytes: Long): String = when {
+    bytes >= 1024L * 1024L -> String.format(Locale.US, "%.1f MB", bytes / (1024.0 * 1024.0))
+    bytes >= 1024L -> String.format(Locale.US, "%.0f KB", bytes / 1024.0)
+    else -> "$bytes B"
 }
 
 // ─── BuildChannelInfoDialog ───────────────────────────────────────────────────

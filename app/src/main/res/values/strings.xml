@@ -849,4 +849,19 @@ Exhale will only extract your token, and everything else is stored locally.</str
     <string name="reorder_lyrics_providers">Reorder Lyrics Providers</string>
     <string name="lyrics_provider_order">Lyrics Provider Order</string>
     <string name="lyrics_provider_priority">Priority: %1$s</string>
+
+    <!-- In-app updater -->
+    <string name="update_available_title">Update Available</string>
+    <string name="update_version_label">Version %1$s</string>
+    <string name="update_installed_version">Installed</string>
+    <string name="update_new_version">New version</string>
+    <string name="update_whats_new">What\'s New</string>
+    <string name="update_download_and_install">Download and Install</string>
+    <string name="update_downloaded_of">%1$s of %2$s</string>
+    <string name="update_opening_installer">Opening installer…</string>
+    <string name="update_install_permission_rationale">Exhale needs permission to install apps before it can finish updating.</string>
+    <string name="update_open_settings">Open Settings</string>
+    <string name="update_retry">Try Again</string>
+    <string name="update_view_release">View Release</string>
+    <string name="update_not_now">Not Now</string>
 </resources>

@@ -84,6 +84,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import android.os.Build
 import com.ozyern.exhale.R
+import com.ozyern.exhale.constants.AquamorphicDampingRatio
+import com.ozyern.exhale.constants.AquamorphicStiffness
 import com.ozyern.exhale.ui.screens.Screens
 import dev.chrisbanes.haze.HazeTint
 import dev.chrisbanes.haze.hazeEffect
@@ -251,13 +253,19 @@ private fun ToolbarItemsContainer(
     // Apple-style sliding active-tab indicator: glides to the selected tab.
     val slidingPillWidth by animateDpAsState(
         targetValue = targetWidth,
-        animationSpec = spring(dampingRatio = 0.7f, stiffness = 400f),
+        animationSpec = spring(
+            dampingRatio = AquamorphicDampingRatio,
+            stiffness = AquamorphicStiffness,
+        ),
         label = "pillWidth"
     )
 
     val slidingPillOffset by animateDpAsState(
         targetValue = targetPosition,
-        animationSpec = spring(dampingRatio = 0.7f, stiffness = 400f),
+        animationSpec = spring(
+            dampingRatio = AquamorphicDampingRatio,
+            stiffness = AquamorphicStiffness,
+        ),
         label = "pillOffset"
     )
 
@@ -282,10 +290,20 @@ private fun ToolbarItemsContainer(
                 // the active tab as a compact pill — the reference video's merge behavior.
                 AnimatedVisibility(
                     visible = selected || !collapsed,
-                    enter = fadeIn(spring(stiffness = 400f)) +
-                        expandHorizontally(spring(dampingRatio = 0.7f, stiffness = 400f)),
-                    exit = fadeOut(spring(stiffness = 400f)) +
-                        shrinkHorizontally(spring(dampingRatio = 0.7f, stiffness = 400f)),
+                    enter = fadeIn(spring(stiffness = AquamorphicStiffness)) +
+                        expandHorizontally(
+                            spring(
+                                dampingRatio = AquamorphicDampingRatio,
+                                stiffness = AquamorphicStiffness,
+                            )
+                        ),
+                    exit = fadeOut(spring(stiffness = AquamorphicStiffness)) +
+                        shrinkHorizontally(
+                            spring(
+                                dampingRatio = AquamorphicDampingRatio,
+                                stiffness = AquamorphicStiffness,
+                            )
+                        ),
                 ) {
                     FloatingNavigationToolbarItem(
                         screen = screen,
@@ -537,24 +555,44 @@ private fun floatingToolbarContainerColor(pureBlack: Boolean): Color {
     return Color.Transparent
 }
 
+// ---- Interactive tints ----
+//
+// Every "this is active / this is tappable" colour below resolves to the app's PRIMARY brand
+// colour, not to Material's secondary/tertiary tonal roles. Those roles are derived hues: on a
+// dynamic-colour device they drift away from the accent the user actually picked, so the selected
+// tab could end up a different colour from the toggles and the progress bar. iOS uses exactly one
+// accent for all of it, and that single-accent discipline is most of what separates this bar from
+// a stock Material one.
+//
+// The selected capsule is a low-alpha wash of primary rather than a solid fill: it sits on frosted
+// glass, and a solid container would read as an opaque chip pasted onto the blur.
+
 @Composable
 private fun floatingToolbarFabContainerColor(pureBlack: Boolean): Color {
-    return if (pureBlack) Color.White.copy(alpha = 0.12f) else MaterialTheme.colorScheme.tertiaryContainer
+    return if (pureBlack) {
+        Color.White.copy(alpha = 0.12f)
+    } else {
+        MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
+    }
 }
 
 @Composable
 private fun floatingToolbarFabContentColor(pureBlack: Boolean): Color {
-    return if (pureBlack) Color.White else MaterialTheme.colorScheme.onTertiaryContainer
+    return if (pureBlack) Color.White else MaterialTheme.colorScheme.primary
 }
 
 @Composable
 private fun floatingToolbarSelectedItemContainerColor(pureBlack: Boolean): Color {
-    return if (pureBlack) Color.White.copy(alpha = 0.12f) else MaterialTheme.colorScheme.secondaryContainer
+    return if (pureBlack) {
+        Color.White.copy(alpha = 0.12f)
+    } else {
+        MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
+    }
 }
 
 @Composable
 private fun floatingToolbarSelectedItemContentColor(pureBlack: Boolean): Color {
-    return if (pureBlack) Color.White else MaterialTheme.colorScheme.onSecondaryContainer
+    return if (pureBlack) Color.White else MaterialTheme.colorScheme.primary
 }
 
 @Composable
@@ -568,10 +606,14 @@ private fun floatingToolbarItemContentColor(pureBlack: Boolean): Color {
 
 @Composable
 private fun floatingToolbarMenuIconContainerColor(pureBlack: Boolean): Color {
-    return if (pureBlack) Color.White.copy(alpha = 0.12f) else MaterialTheme.colorScheme.secondaryContainer
+    return if (pureBlack) {
+        Color.White.copy(alpha = 0.12f)
+    } else {
+        MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
+    }
 }
 
 @Composable
 private fun floatingToolbarMenuIconContentColor(pureBlack: Boolean): Color {
-    return if (pureBlack) Color.White else MaterialTheme.colorScheme.onSecondaryContainer
+    return if (pureBlack) Color.White else MaterialTheme.colorScheme.primary
 }

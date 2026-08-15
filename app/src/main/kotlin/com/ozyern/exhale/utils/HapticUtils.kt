@@ -25,7 +25,24 @@ enum class HapticType {
     SegmentTick,
     SegmentFrequentTick,
     DragStart,
-    GestureEnd
+    GestureEnd,
+
+    /**
+     * The "snap" that lands with a geometric morph — the player expanding to full screen or
+     * collapsing into its pill.
+     *
+     * This is deliberately its own type rather than a reuse of [Click] or [LongPress]. A morph is
+     * a *heavier* event than a tap: something the size of the screen just changed shape, and the
+     * haptic has to carry that weight or the animation feels weightless. It resolves to the
+     * richest primitive the platform exposes, in descending order:
+     *
+     *  * **API 34+** `GESTURE_END` — the constant the system itself uses when a gesture-driven
+     *    surface settles. On OxygenOS 16 / ColorOS 16 this maps onto the vendor's own tuned
+     *    "damped" effect, which is exactly the physical vocabulary we are imitating.
+     *  * **API 30+** `CONFIRM` — a fuller, slightly longer envelope than a plain tick.
+     *  * **older** `LONG_PRESS` — the heaviest thing universally available.
+     */
+    Morph
 }
 
 class HapticManager(
@@ -101,6 +118,15 @@ class HapticManager(
                 } else {
                     HapticFeedbackConstants.CONTEXT_CLICK
                 }
+
+            HapticType.Morph ->
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                    HapticFeedbackConstants.GESTURE_END
+                } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    HapticFeedbackConstants.CONFIRM
+                } else {
+                    HapticFeedbackConstants.LONG_PRESS
+                }
         }
 
         view.performHapticFeedback(
@@ -140,6 +166,8 @@ class HapticManager(
     fun dragStart() = perform(HapticType.DragStart)
 
     fun gestureEnd() = perform(HapticType.GestureEnd)
+
+    fun morph() = perform(HapticType.Morph)
 }
 
 @Composable

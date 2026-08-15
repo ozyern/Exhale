@@ -6,9 +6,6 @@
 
 package com.ozyern.exhale.ui.component
 
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -48,7 +45,6 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -392,98 +388,14 @@ fun AccountSettingsDialog(
     onDismiss: () -> Unit,
     latestVersionName: String,
 ) {
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(
-            usePlatformDefaultWidth = false,
-            dismissOnClickOutside = true,
-        ),
-    ) {
-        val scheme = MaterialTheme.colorScheme
-        // Heavily-rounded frosted bottom sheet (iOS / Apple Music style): rises from the
-        // bottom edge, top corners 36dp, translucent layered glass over the system scrim
-        // with a bright hairline highlight along the top rim.
-        val sheetShape = RoundedCornerShape(topStart = 36.dp, topEnd = 36.dp)
-        // Slide-up spring entrance — the sheet rises from the bottom edge like a real
-        // iOS sheet presentation instead of popping in fully formed.
-        var sheetShown by remember { mutableStateOf(false) }
-        LaunchedEffect(Unit) { sheetShown = true }
-        val sheetOffset by animateFloatAsState(
-            targetValue = if (sheetShown) 0f else 1f,
-            animationSpec = spring(
-                dampingRatio = Spring.DampingRatioLowBouncy,
-                stiffness = Spring.StiffnessMediumLow,
-            ),
-            label = "accountSheetSlide",
+    // The frosted chrome (rising spring, layered gradient, hairline rim, grab handle) lives in
+    // LiquidGlassSheet so this sheet and the update sheet are literally the same material.
+    LiquidGlassSheet(onDismiss = onDismiss) {
+        AccountSettings(
+            navController = navController,
+            onClose = onDismiss,
+            latestVersionName = latestVersionName,
         )
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .clickable(
-                    indication = null,
-                    interactionSource = remember { MutableInteractionSource() },
-                ) {
-                    onDismiss()
-                },
-            contentAlignment = Alignment.BottomCenter,
-        ) {
-            BoxWithConstraints {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = maxHeight * 0.88f)
-                        .graphicsLayer {
-                            translationY = sheetOffset * size.height
-                        }
-                        .clip(sheetShape)
-                        .background(
-                            brush = Brush.verticalGradient(
-                                colors = listOf(
-                                    scheme.surfaceContainerHigh.copy(alpha = 0.96f),
-                                    scheme.surfaceContainer.copy(alpha = 0.92f),
-                                ),
-                            ),
-                        )
-                        .border(
-                            width = 1.dp,
-                            brush = Brush.verticalGradient(
-                                colors = listOf(
-                                    Color.White.copy(alpha = 0.24f),
-                                    Color.White.copy(alpha = 0.03f),
-                                ),
-                            ),
-                            shape = sheetShape,
-                        )
-                        // Swallow clicks so taps inside the sheet never dismiss it.
-                        .clickable(
-                            indication = null,
-                            interactionSource = remember { MutableInteractionSource() },
-                        ) {},
-                ) {
-                    Column {
-                        // Grab handle — signals the sheet affordance.
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(top = 10.dp, bottom = 2.dp),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(width = 40.dp, height = 4.dp)
-                                    .clip(RoundedCornerShape(percent = 50))
-                                    .background(scheme.onSurfaceVariant.copy(alpha = 0.35f)),
-                            )
-                        }
-                        AccountSettings(
-                            navController = navController,
-                            onClose = onDismiss,
-                            latestVersionName = latestVersionName,
-                        )
-                    }
-                }
-            }
-        }
     }
 }
 

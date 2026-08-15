@@ -35,6 +35,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -56,9 +57,11 @@ import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import com.ozyern.exhale.constants.BottomSheetAnimationSpec
 import com.ozyern.exhale.constants.BottomSheetSoftAnimationSpec
+import com.ozyern.exhale.constants.EnableHapticFeedbackKey
 import com.ozyern.exhale.constants.MiniPlayerHeight
 import com.ozyern.exhale.constants.MiniPlayerPillCornerRadius
 import com.ozyern.exhale.constants.MiniPlayerPillHorizontalInset
+import com.ozyern.exhale.utils.rememberHaptic
 import com.ozyern.exhale.utils.rememberPreference
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
@@ -447,9 +450,26 @@ fun rememberBottomSheetState(
     expandedBound: Dp,
     collapsedBound: Dp = dismissedBound,
     initialAnchor: Int = DISMISSED_ANCHOR,
+    /**
+     * Fire a physical "snap" when the sheet commits to a new anchor.
+     *
+     * Off by default. Only the *player* sheet opts in: it is the one whose morph is a whole-screen
+     * geometric transformation, and it is the outermost sheet, so the queue and lyrics sheets
+     * stacked inside it must stay silent or a single flick would fire two or three vibrations.
+     */
+    hapticFeedback: Boolean = false,
 ): BottomSheetState {
     val density = LocalDensity.current
     val coroutineScope = rememberCoroutineScope()
+
+    // Respect the app's own haptics switch as well as the caller's opt-in. Read here, at the
+    // composable, so toggling the preference takes effect without recreating the sheet state.
+    val (hapticsEnabled) = rememberPreference(EnableHapticFeedbackKey, defaultValue = true)
+    val haptic = rememberHaptic(enabled = hapticFeedback && hapticsEnabled)
+    // The state below is remembered across recompositions, so it would otherwise capture whatever
+    // HapticManager existed when it was first built and keep buzzing after the user turned
+    // haptics off. rememberUpdatedState keeps the captured reference current.
+    val currentHaptic by rememberUpdatedState(haptic)
 
     var previousAnchor by rememberSaveable {
         mutableIntStateOf(initialAnchor)
@@ -480,7 +500,15 @@ fun rememberBottomSheetState(
                     animatable.snapTo(animatable.value - with(density) { delta.toDp() })
                 }
             },
-            onAnchorChanged = { previousAnchor = it },
+            onAnchorChanged = { anchor ->
+                // Fire on the COMMIT, not on the landing. The spring takes ~half a second to
+                // settle; waiting for it would put the tick long after the finger left the glass
+                // and it would read as a delayed rattle rather than as the object being released.
+                // Guarded on an actual change so re-collapsing an already-collapsed sheet (a tap
+                // on the scrim, a redundant back-press) stays silent.
+                if (anchor != previousAnchor) currentHaptic.morph()
+                previousAnchor = anchor
+            },
             coroutineScope = coroutineScope,
             animatable = animatable,
             collapsedBound = collapsedBound,

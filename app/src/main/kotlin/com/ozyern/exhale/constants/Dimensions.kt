@@ -76,30 +76,52 @@ val NavigationBarAnimationSpec = spring<Dp>(
 )
 
 /**
- * The one spring every bottom sheet settles on, and therefore the curve the Dynamic-Island morph
- * is driven by — the morph reads `state.progress`, so this spec *is* the animation.
+ * The "Aquamorphic" spring — the single curve every *layout morph* in the app settles on.
  *
- * Deliberately under-damped. A critically damped spring glides to a stop, which makes the player
- * look like it is being lowered; 0.7 damping lets it land on the pill with a small physical
- * overshoot, which is what sells the morph as a single object settling into place. 400 stiffness
- * keeps it quick enough not to feel loose. Identical to the spec the floating nav bar uses for its
- * own A/B morph and sliding tab indicator, so the whole bottom of the screen moves as one system.
+ * Tuned to sit between two motion languages the app is deliberately borrowing from:
+ *
+ *  * **ColorOS / OxygenOS 16** move things as though they were viscous — mass arrives, decelerates
+ *    through a long tail and settles without a hard stop. That is a low stiffness.
+ *  * **iOS** never lets that tail turn into wobble; there is exactly one small overshoot and then
+ *    the object is at rest. That is damping just under 1.
+ *
+ * 0.75 / 250 is the meeting point. Against the previous 0.7 / 400 the travel is noticeably longer
+ * (~2.5× the settle time) and the single overshoot is smaller — the difference between an object
+ * being *snapped* into place and one being *poured* into it. Anything stiffer than ~300 loses the
+ * liquid tail entirely on a 120 Hz panel; anything below ~0.7 damping reads as loose rather than
+ * physical.
+ *
+ * Exposed as two scalars rather than a pre-built `spring()` because the call sites need different
+ * type arguments (`Dp`, `Float`, `IntSize`, `IntOffset`) and Kotlin cannot infer those through a
+ * shared `AnimationSpec` value.
+ */
+const val AquamorphicDampingRatio = 0.75f
+const val AquamorphicStiffness = 250f
+
+/**
+ * The spring every bottom sheet settles on, and therefore the curve the Dynamic-Island morph is
+ * driven by — the morph reads `state.progress`, so this spec *is* the animation.
+ *
+ * Deliberately under-damped: a critically damped spring glides to a stop, which makes the player
+ * look like it is being *lowered*. See [AquamorphicDampingRatio] for why these two numbers.
+ * Identical to the spec the floating nav bar uses for its own A/B morph and sliding tab indicator,
+ * so the whole bottom of the screen moves as one system.
  *
  * Expansion cannot visibly overshoot: `Animatable` is bounded by `expandedBound`, so the bounce
  * only ever appears on the way *down*, which is the direction the transition is about.
  */
 val BottomSheetAnimationSpec = spring<Dp>(
-	dampingRatio = 0.7f,
-	stiffness = 400f
+	dampingRatio = AquamorphicDampingRatio,
+	stiffness = AquamorphicStiffness
 )
 
 /**
- * Used for programmatic (tapped, not flung) transitions — `expandSoft` / `collapseSoft`. Now the
- * same curve as [BottomSheetAnimationSpec] on purpose: minimising by tapping the chevron and
- * minimising by flinging the sheet are the same gesture as far as the user is concerned, and they
- * used to settle on visibly different springs.
+ * Used for programmatic (tapped, not flung) transitions — `expandSoft` / `collapseSoft`. The same
+ * curve as [BottomSheetAnimationSpec] on purpose: minimising by tapping the chevron and minimising
+ * by flinging the sheet are the same gesture as far as the user is concerned, and they used to
+ * settle on visibly different springs.
  */
 val BottomSheetSoftAnimationSpec = spring<Dp>(
-	dampingRatio = 0.7f,
-	stiffness = 400f
+	dampingRatio = AquamorphicDampingRatio,
+	stiffness = AquamorphicStiffness
 )

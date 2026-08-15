@@ -54,6 +54,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.add
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -64,6 +65,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.border
@@ -277,6 +279,7 @@ import com.ozyern.exhale.ui.theme.ThemeSeedPaletteCodec
 import com.ozyern.exhale.ui.theme.extractThemeColor
 import com.ozyern.exhale.ui.utils.appBarScrollBehavior
 import com.ozyern.exhale.ui.utils.backToMain
+import com.ozyern.exhale.ui.utils.safeHorizontalChromeInset
 import com.ozyern.exhale.ui.utils.resetHeightOffset
 import com.ozyern.exhale.utils.SyncUtils
 import com.ozyern.exhale.utils.UpdateNotificationManager
@@ -728,9 +731,27 @@ class MainActivity : ComponentActivity() {
 
                     val focusManager = LocalFocusManager.current
                     val density = LocalDensity.current
-                    val windowsInsets = WindowInsets.systemBars
+                    // ---- Cutout safety (OxygenOS 16 / ColorOS 16 "Fluid Cloud") ----
+                    //
+                    // `systemBars` alone is not the unsafe region on these skins. OnePlus and Oppo
+                    // draw a live capsule AROUND the camera cutout — playback state, timers, call
+                    // status — and that capsule can be TALLER than the status bar it sits in. On
+                    // top of that, `displayCutout` is the only inset that reports a *side* cutout
+                    // at all, which is what a landscape device actually has.
+                    //
+                    // Unioning the two gives the region that is genuinely unsafe to paint chrome
+                    // in, and everything downstream (the top gradient, the floating bars, the
+                    // per-screen content insets) derives from this one value rather than each
+                    // guessing separately.
+                    val windowsInsets = WindowInsets.systemBars.union(WindowInsets.displayCutout)
                     val bottomInset = with(density) { windowsInsets.getBottom(density).toDp() }
-                    val bottomInsetDp = WindowInsets.systemBars.asPaddingValues().calculateBottomPadding()
+                    val bottomInsetDp = windowsInsets.asPaddingValues().calculateBottomPadding()
+                    // Shared by the floating bars, the mini-player pill and the morph target that
+                    // has to land on them — see `safeHorizontalChromeInset` for why it is a single
+                    // symmetric value rather than a per-edge pair.
+                    val safeChromeInset = safeHorizontalChromeInset()
+                    val chromeHorizontalPadding =
+                        FloatingToolbarHorizontalPadding + safeChromeInset
 
                     val useRail = currentWindowAdaptiveInfo().windowSizeClass
                         .isWidthAtLeastBreakpoint(WindowSizeClass.WIDTH_DP_MEDIUM_LOWER_BOUND)
@@ -886,6 +907,10 @@ class MainActivity : ComponentActivity() {
                                         (if (useNewMiniPlayerDesign) MiniPlayerBottomSpacing else 0.dp) +
                                         MiniPlayerHeight,
                             expandedBound = maxHeight,
+                            // The player is the only sheet that morphs geometrically, and it is
+                            // the outermost one — the queue and lyrics sheets nested inside it
+                            // stay silent so a single flick never fires two vibrations.
+                            hapticFeedback = true,
                         )
 
                     val miniPlayerAnchor by remember {
@@ -1334,10 +1359,14 @@ class MainActivity : ComponentActivity() {
                                                 Box(
                                                     modifier = Modifier
                                                         .fillMaxWidth()
-                                                        .height(AppBarHeight + with(LocalDensity.current) {
-                                                            WindowInsets.systemBars.getTop(
-                                                                LocalDensity.current
-                                                            ).toDp()
+                                                        // `windowsInsets` is systemBars ∪ cutout:
+                                                        // on a device whose Fluid Cloud capsule is
+                                                        // taller than the status bar, sizing this
+                                                        // to systemBars alone left a strip of raw
+                                                        // content showing beside the camera, above
+                                                        // where the gradient stopped.
+                                                        .height(AppBarHeight + with(density) {
+                                                            windowsInsets.getTop(density).toDp()
                                                         })
                                                         .background(
                                                             Brush.verticalGradient(
@@ -1742,7 +1771,13 @@ class MainActivity : ComponentActivity() {
                                                 hideMiniPlayer = bottomBarCollapsed && nowPlayingMetadata != null,
                                                 morphPillHeight =
                                                     if (mergeIntoNavBar) NavBarPillHeight else MiniPlayerHeight,
-                                                morphPillHorizontalInset =
+                                                // Both branches carry `safeChromeInset` because
+                                                // both targets are padded by it — the nav bar via
+                                                // `chromeHorizontalPadding`, the mini-player pill
+                                                // via the same helper inside `MiniPlayer`. Drop it
+                                                // from either side and the morph lands off-centre
+                                                // on a cutout device.
+                                                morphPillHorizontalInset = safeChromeInset +
                                                     if (mergeIntoNavBar) NavBarPillSideSlot
                                                     else MiniPlayerPillHorizontalInset,
                                                 morphPillCornerRadius =
@@ -1809,8 +1844,8 @@ class MainActivity : ComponentActivity() {
                                                     modifier = Modifier
                                                         .align(Alignment.BottomCenter)
                                                         .padding(
-                                                            start = FloatingToolbarHorizontalPadding,
-                                                            end = FloatingToolbarHorizontalPadding,
+                                                            start = chromeHorizontalPadding,
+                                                            end = chromeHorizontalPadding,
                                                             bottom = bottomInset + floatingBarsBottomPadding,
                                                         ),
                                                 )
@@ -1826,8 +1861,8 @@ class MainActivity : ComponentActivity() {
                                                 modifier = Modifier
                                                     .align(Alignment.BottomCenter)
                                                     .padding(
-                                                        start = FloatingToolbarHorizontalPadding,
-                                                        end = FloatingToolbarHorizontalPadding,
+                                                        start = chromeHorizontalPadding,
+                                                        end = chromeHorizontalPadding,
                                                         bottom = bottomInset + floatingBarsBottomPadding,
                                                     ),
                                                 isSelected = { screen ->
