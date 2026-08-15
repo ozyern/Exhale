@@ -13,17 +13,26 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsetsSides
@@ -36,17 +45,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -54,9 +56,12 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -66,53 +71,46 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.navigation.NavController
-import kotlinx.coroutines.launch
 import com.ozyern.exhale.BuildConfig
 import com.ozyern.exhale.LocalPlayerAwareWindowInsets
 import com.ozyern.exhale.R
-import com.ozyern.exhale.constants.EnableUpdateNotificationKey
 import com.ozyern.exhale.constants.AquamorphicDampingRatio
 import com.ozyern.exhale.constants.AquamorphicStiffness
-import com.ozyern.exhale.constants.UpdateChannel
-import com.ozyern.exhale.constants.UpdateChannelKey
-import com.ozyern.exhale.ui.component.EnumListPreference
+import com.ozyern.exhale.constants.EnableUpdateNotificationKey
+import com.ozyern.exhale.ui.component.AuroraBackdrop
 import com.ozyern.exhale.ui.component.IconButton
 import com.ozyern.exhale.ui.component.LiquidGlassSheet
-import com.ozyern.exhale.ui.component.PreferenceGroupTitle
 import com.ozyern.exhale.ui.component.SettingsDividerThickness
 import com.ozyern.exhale.ui.component.SettingsGroupCornerRadius
-import com.ozyern.exhale.ui.component.SwitchPreference
+import com.ozyern.exhale.ui.component.liquidGlassSurface
 import com.ozyern.exhale.ui.component.liquid.LiquidButton
 import com.ozyern.exhale.ui.component.settingsDividerColor
 import com.ozyern.exhale.ui.utils.backToMain
+import com.ozyern.exhale.utils.BundledChangelog
 import com.ozyern.exhale.utils.DownloadProgress
-import com.ozyern.exhale.utils.GitCommit
 import com.ozyern.exhale.utils.UpdateInfo
 import com.ozyern.exhale.utils.UpdateNotificationManager
 import com.ozyern.exhale.utils.Updater
-import com.ozyern.exhale.utils.rememberEnumPreference
 import com.ozyern.exhale.utils.rememberPreference
+import kotlinx.coroutines.launch
 import java.io.File
-import java.text.SimpleDateFormat
 import java.util.Locale
-import java.util.TimeZone
 
-// ─── Estado de comprobación de actualización ──────────────────────────────────
+// ─── Update check state ───────────────────────────────────────────────────────
 
 private sealed interface UpdateCheckState {
     data object Idle : UpdateCheckState
@@ -122,8 +120,20 @@ private sealed interface UpdateCheckState {
     data class Error(val message: String) : UpdateCheckState
 }
 
-// ─── Pantalla ─────────────────────────────────────────────────────────────────
+// ─── Screen ───────────────────────────────────────────────────────────────────
 
+/**
+ * Software Update.
+ *
+ * Deliberately a *short* page. It used to carry a stable/nightly channel picker and a scrolling
+ * feed of raw git commits; the picker offered a choice between one real channel and one that is
+ * not published, and the commit feed answered a question ("what changed in the source this week")
+ * that nobody standing on an update screen is asking. Both are gone. What is left is the only
+ * thing the page is for: which version you are on, whether there is a newer one, and one button
+ * that fetches it.
+ *
+ * The changelog still exists in full behind the last row.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun UpdateScreen(
@@ -134,28 +144,16 @@ fun UpdateScreen(
     val uriHandler = LocalUriHandler.current
     val coroutineScope = rememberCoroutineScope()
 
-    var nightlyInstallUrl by remember {
-        mutableStateOf("https://pub-2218e6bbd5b948e1b5d882cf4d92086d.r2.dev/app-universal-release.apk")
-    }
-
     val (enableUpdateNotification, onEnableUpdateNotificationChange) = rememberPreference(
         EnableUpdateNotificationKey, defaultValue = false
     )
-    val (updateChannel, onUpdateChannelChange) = rememberEnumPreference(
-        UpdateChannelKey, defaultValue = UpdateChannel.STABLE
-    )
 
-    var commits by remember { mutableStateOf<List<GitCommit>>(emptyList()) }
-    var isLoadingCommits by remember { mutableStateOf(true) }
     var latestVersion by remember { mutableStateOf<String?>(null) }
-    var isExpanded by remember { mutableStateOf(true) }
-
     var updateCheckState by remember { mutableStateOf<UpdateCheckState>(UpdateCheckState.Idle) }
     var showUpdateDialog by remember { mutableStateOf(false) }
+    var whatsNewExpanded by remember { mutableStateOf(false) }
     var pendingUpdateInfo by remember { mutableStateOf<UpdateInfo?>(null) }
 
-    var showNightlyConfirmDialog by remember { mutableStateOf(false) }
-    var showNotifConfirmDialog by remember { mutableStateOf(false) }
     var hasNotificationPermission by remember {
         mutableStateOf(
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
@@ -175,7 +173,6 @@ fun UpdateScreen(
         }
     }
 
-    // ── Función de comprobación ───────────────────────────────────────────────
     fun checkForUpdate() {
         if (updateCheckState == UpdateCheckState.Loading) return
         coroutineScope.launch {
@@ -191,377 +188,501 @@ fun UpdateScreen(
                     }
                 }
                 .onFailure { err ->
-                    updateCheckState = UpdateCheckState.Error(err.message ?: "Error desconocido")
+                    updateCheckState = UpdateCheckState.Error(err.message ?: "Check failed")
                 }
         }
     }
 
-    // ── Diálogos ──────────────────────────────────────────────────────────────
     if (showUpdateDialog) {
         pendingUpdateInfo?.let { info ->
             UpdateAvailableSheet(
                 info = info,
                 onViewRelease = { showUpdateDialog = false; uriHandler.openUri(info.releasePageUrl) },
-                onDismiss     = { showUpdateDialog = false }
+                onDismiss = { showUpdateDialog = false }
             )
         }
-    }
-
-    if (showNotifConfirmDialog) {
-        BuildChannelInfoDialog(
-            title = stringResource(R.string.enable_update_notification),
-            onConfirm = {
-                showNotifConfirmDialog = false
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !hasNotificationPermission)
-                    permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                else {
-                    onEnableUpdateNotificationChange(true)
-                    UpdateNotificationManager.schedulePeriodicUpdateCheck(context)
-                }
-            },
-            onDismiss = { showNotifConfirmDialog = false }
-        )
-    }
-
-    if (showNightlyConfirmDialog) {
-        BuildChannelInfoDialog(
-            title = stringResource(R.string.channel_nightly),
-            onConfirm = { showNightlyConfirmDialog = false; onUpdateChannelChange(UpdateChannel.NIGHTLY) },
-            onDismiss = { showNightlyConfirmDialog = false }
-        )
     }
 
     LaunchedEffect(Unit) {
-        coroutineScope.launch {
-            Updater.getLatestVersionName().onSuccess { latestVersion = it }
-            Updater.getCommitHistory(30).onSuccess { commits = it }.onFailure { commits = emptyList() }
-            isLoadingCommits = false
-        }
+        Updater.getLatestVersionName().onSuccess { latestVersion = it }
     }
 
-    LaunchedEffect(updateChannel) {
-        if (updateChannel == UpdateChannel.NIGHTLY) {
-            coroutineScope.launch {
-                Updater.getLatestReleaseInfo().onSuccess { info ->
-                    nightlyInstallUrl = info.htmlUrl
-                }
-            }
-        } else {
-            nightlyInstallUrl = "https://pub-2218e6bbd5b948e1b5d882cf4d92086d.r2.dev/app-universal-release.apk"
-        }
-    }
+    val updateAvailable = latestVersion?.let { Updater.hasUpdate(it, BuildConfig.VERSION_NAME) } == true
 
-    val rotationAngle by animateFloatAsState(if (isExpanded) 180f else 0f, label = "rotation")
+    Box(modifier = Modifier.fillMaxSize()) {
+        AuroraBackdrop()
 
-    // ── Layout ────────────────────────────────────────────────────────────────
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.updates)) },
-                navigationIcon = {
-                    IconButton(
-                        onClick = navController::navigateUp,
-                        onLongClick = navController::backToMain
-                    ) { Icon(painterResource(R.drawable.arrow_back), null) }
-                },
-                scrollBehavior = scrollBehavior
-            )
-        }
-    ) { paddingValues ->
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .windowInsetsPadding(
-                    LocalPlayerAwareWindowInsets.current.only(
-                        WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom
-                    )
-                )
-                .padding(horizontal = 16.dp)
-        ) {
-
-            // ── Tarjeta versión + botón comprobar ─────────────────────────────
-            item {
-                Spacer(Modifier.height(8.dp))
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
-                    )
-                ) {
-                    Column(Modifier.padding(16.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(
-                                modifier = Modifier
-                                    .size(48.dp)
-                                    .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    painter = painterResource(R.drawable.update),
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(24.dp)
-                                )
-                            }
-                            Spacer(Modifier.width(16.dp))
-                            Column(Modifier.weight(1f)) {
-                                Text(
-                                    text = stringResource(R.string.current_version),
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Text(
-                                    text = BuildConfig.VERSION_NAME,
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                latestVersion?.let { latest ->
-                                    if (Updater.hasUpdate(latest, BuildConfig.VERSION_NAME)) {
-                                        Spacer(Modifier.height(2.dp))
-                                        Text(
-                                            text = stringResource(R.string.latest_version_format, latest),
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.primary
-                                        )
-                                    }
-                                }
-                            }
-                        }
-
-                        Spacer(Modifier.height(14.dp))
-
-                        // Botón con estado animado
-                        UpdateCheckButton(
-                            state = updateCheckState,
-                            onClick = ::checkForUpdate
+        Scaffold(
+            containerColor = Color.Transparent,
+            topBar = {
+                TopAppBar(
+                    title = {
+                        Text(
+                            text = stringResource(R.string.updates),
+                            fontWeight = FontWeight.Bold,
                         )
-
-                        // Feedback textual bajo el botón
-                        AnimatedVisibility(
-                            visible = updateCheckState == UpdateCheckState.UpToDate ||
-                                    updateCheckState is UpdateCheckState.Error
-                        ) {
-                            val (msg, color) = when (val s = updateCheckState) {
-                                UpdateCheckState.UpToDate  ->
-                                    "You already have the latest version." to MaterialTheme.colorScheme.tertiary
-                                is UpdateCheckState.Error  ->
-                                    "Error: ${s.message}" to MaterialTheme.colorScheme.error
-                                else -> "" to MaterialTheme.colorScheme.onSurface
-                            }
-                            Spacer(Modifier.height(8.dp))
-                            Text(text = msg, style = MaterialTheme.typography.bodySmall, color = color)
-                        }
-                    }
-                }
-                Spacer(Modifier.height(16.dp))
-            }
-
-            // ── Preferencias ──────────────────────────────────────────────────
-            item { PreferenceGroupTitle(title = stringResource(R.string.notification_settings)) }
-
-            item {
-                SwitchPreference(
-                    title = { Text(stringResource(R.string.enable_update_notification)) },
-                    description = stringResource(R.string.enable_update_notification_desc),
-                    icon = { Icon(painterResource(R.drawable.new_release), null) },
-                    checked = enableUpdateNotification,
-                    onCheckedChange = { enabled ->
-                        if (enabled) showNotifConfirmDialog = true
-                        else {
-                            onEnableUpdateNotificationChange(false)
-                            UpdateNotificationManager.cancelPeriodicUpdateCheck(context)
-                        }
-                    }
-                )
-            }
-
-            item {
-                EnumListPreference(
-                    title = { Text(stringResource(R.string.update_channel)) },
-                    icon = { Icon(painterResource(R.drawable.tune), null) },
-                    selectedValue = updateChannel,
-                    valueText = { ch ->
-                        when (ch) {
-                            UpdateChannel.STABLE  -> stringResource(R.string.channel_stable)
-                            UpdateChannel.NIGHTLY -> stringResource(R.string.channel_nightly)
-                        }
                     },
-                    onValueSelected = { ch ->
-                        if (ch == UpdateChannel.NIGHTLY && updateChannel != UpdateChannel.NIGHTLY)
-                            showNightlyConfirmDialog = true
-                        else
-                            onUpdateChannelChange(ch)
-                    }
+                    navigationIcon = {
+                        IconButton(
+                            onClick = navController::navigateUp,
+                            onLongClick = navController::backToMain
+                        ) { Icon(painterResource(R.drawable.arrow_back), null) }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = Color.Transparent,
+                        scrolledContainerColor = Color.Transparent,
+                    ),
+                    scrollBehavior = scrollBehavior
                 )
             }
-
-            item {
-                Spacer(Modifier.height(8.dp))
-                Button(
-                    onClick = { navController.navigate("settings/changelog") },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Icon(painterResource(R.drawable.update), null, Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text(stringResource(R.string.view_changelog))
-                }
-            }
-
-            // ── Card nightly ──────────────────────────────────────────────────
-            item {
-                AnimatedVisibility(visible = updateChannel == UpdateChannel.NIGHTLY) {
-                    val latestHash = commits.firstOrNull()?.sha ?: "—"
-                    Card(
-                        modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+        ) { paddingValues ->
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+                    .windowInsetsPadding(
+                        LocalPlayerAwareWindowInsets.current.only(
+                            WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom
                         )
-                    ) {
-                        Column(Modifier.padding(16.dp)) {
-                            Text("Nightly Builds", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                            Spacer(Modifier.height(6.dp))
-                            Text(
-                                "Latest features and fixes from the development branch. May contain experimental features and occasional bugs",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Spacer(Modifier.height(10.dp))
-                            Text(latestHash, style = MaterialTheme.typography.labelMedium, fontFamily = FontFamily.Monospace, color = MaterialTheme.colorScheme.primary)
-                            Spacer(Modifier.height(14.dp))
-                            // Routed through the same sheet as a stable release, so the nightly
-                            // channel gets in-app download and install too rather than dropping
-                            // the user into a browser.
-                            Button(
-                                onClick = {
-                                    pendingUpdateInfo = UpdateInfo(
-                                        tagName = "nightly",
-                                        versionName = latestHash,
-                                        downloadUrl = nightlyInstallUrl,
-                                        releasePageUrl = nightlyInstallUrl,
-                                        releaseNotes = null,
-                                        publishedAt = "",
-                                    )
-                                    showUpdateDialog = true
-                                },
-                                modifier = Modifier.fillMaxWidth(),
-                            ) {
-                                Text("Install")
-                            }
-                        }
-                    }
-                }
-            }
-
-            // ── Historial de commits ──────────────────────────────────────────
-            item {
-                Spacer(Modifier.height(16.dp))
-                PreferenceGroupTitle(title = stringResource(R.string.commit_history))
-            }
-
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth().animateContentSize(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
                     )
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp),
+            ) {
+                Spacer(Modifier.height(12.dp))
+
+                UpdateHero(state = updateCheckState, updateAvailable = updateAvailable)
+
+                Spacer(Modifier.height(26.dp))
+
+                LiquidButton(
+                    onClick = ::checkForUpdate,
+                    modifier = Modifier.fillMaxWidth(),
+                    tint = MaterialTheme.colorScheme.primary,
                 ) {
-                    Column {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { isExpanded = !isExpanded }
-                                .padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(painterResource(R.drawable.history), null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
-                                Spacer(Modifier.width(12.dp))
-                                Text(stringResource(R.string.recent_commits), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Medium)
+                    if (updateCheckState == UpdateCheckState.Loading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.onPrimary,
+                        )
+                    } else {
+                        Icon(
+                            painter = painterResource(R.drawable.update),
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
+                    Text(
+                        text = stringResource(
+                            if (updateAvailable) R.string.update_check_download
+                            else R.string.update_check_now
+                        ),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+
+                Spacer(Modifier.height(22.dp))
+
+                // ── Version ───────────────────────────────────────────────────
+                UpdateGroupTitle(stringResource(R.string.update_group_version))
+                UpdateGlassGroup {
+                    UpdateRow(
+                        icon = painterResource(R.drawable.info),
+                        title = stringResource(R.string.update_installed_version),
+                        value = BuildConfig.VERSION_NAME,
+                    )
+                    UpdateRowDivider()
+                    UpdateRow(
+                        icon = painterResource(R.drawable.new_release),
+                        title = stringResource(R.string.update_latest_available),
+                        value = latestVersion ?: "—",
+                        valueColor = if (updateAvailable) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                        valueBold = updateAvailable,
+                    )
+                }
+
+                Spacer(Modifier.height(22.dp))
+
+                // ── Notifications ─────────────────────────────────────────────
+                UpdateGroupTitle(stringResource(R.string.notification_settings))
+                UpdateGlassGroup {
+                    UpdateRow(
+                        icon = painterResource(R.drawable.notifications),
+                        title = stringResource(R.string.enable_update_notification),
+                        subtitle = stringResource(R.string.enable_update_notification_desc),
+                        trailing = {
+                            Switch(
+                                checked = enableUpdateNotification,
+                                onCheckedChange = null,
+                                colors = SwitchDefaults.colors(
+                                    checkedTrackColor = MaterialTheme.colorScheme.primary,
+                                ),
+                            )
+                        },
+                        // Handled on the whole row rather than on the switch so the hit target is
+                        // the row, which is how an iOS grouped list behaves.
+                        onClick = {
+                            val enabled = !enableUpdateNotification
+                            when {
+                                !enabled -> {
+                                    onEnableUpdateNotificationChange(false)
+                                    UpdateNotificationManager.cancelPeriodicUpdateCheck(context)
+                                }
+
+                                Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                                        !hasNotificationPermission ->
+                                    permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+
+                                else -> {
+                                    onEnableUpdateNotificationChange(true)
+                                    UpdateNotificationManager.schedulePeriodicUpdateCheck(context)
+                                }
                             }
-                            Icon(painterResource(R.drawable.expand_more), null, modifier = Modifier.rotate(rotationAngle))
-                        }
-                        AnimatedVisibility(visible = isExpanded) {
-                            Column {
-                                HorizontalDivider(
-                                    modifier = Modifier.padding(horizontal = 16.dp),
-                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                        },
+                    )
+                }
+
+                Spacer(Modifier.height(22.dp))
+
+                // ── Changelog ─────────────────────────────────────────────────
+                // One card, not two. The release notes for this build used to sit in their own
+                // group above, which meant the page carried two separate answers to "what
+                // changed" — a long uncollapsible list of features and, further down, a lone row
+                // pointing at the real changelog. They belong together: this build's notes fold
+                // out of the top row, and the full history is the row underneath.
+                UpdateGroupTitle(stringResource(R.string.update_group_changelog))
+                UpdateGlassGroup {
+                    if (BundledChangelog.isCurrentBuild) {
+                        val chevronRotation by animateFloatAsState(
+                            targetValue = if (whatsNewExpanded) 90f else 0f,
+                            animationSpec = spring(
+                                dampingRatio = AquamorphicDampingRatio,
+                                stiffness = AquamorphicStiffness,
+                            ),
+                            label = "whatsNewChevron",
+                        )
+
+                        UpdateRow(
+                            icon = painterResource(R.drawable.new_release),
+                            title = stringResource(
+                                R.string.update_whats_new_in_version,
+                                BundledChangelog.VERSION,
+                            ),
+                            subtitle = stringResource(R.string.update_first_release_badge),
+                            onClick = { whatsNewExpanded = !whatsNewExpanded },
+                            trailing = {
+                                Icon(
+                                    painter = painterResource(R.drawable.chevron_right),
+                                    contentDescription = null,
+                                    modifier = Modifier
+                                        .size(20.dp)
+                                        .graphicsLayer { rotationZ = chevronRotation },
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                        .copy(alpha = 0.6f),
                                 )
-                                if (isLoadingCommits) {
-                                    Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
-                                        CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
-                                    }
+                            },
+                        )
+
+                        AnimatedVisibility(visible = whatsNewExpanded) {
+                            Column {
+                                BundledChangelog.highlights.forEach { highlight ->
+                                    UpdateRowDivider()
+                                    UpdateRow(
+                                        icon = painterResource(highlight.icon),
+                                        title = stringResource(highlight.title),
+                                        subtitle = stringResource(highlight.description),
+                                    )
                                 }
                             }
                         }
+
+                        UpdateRowDivider()
                     }
-                }
-            }
 
-            if (isExpanded && !isLoadingCommits) {
-                items(commits) { commit ->
-                    CommitItem(commit = commit, onClick = { uriHandler.openUri(commit.url) })
+                    UpdateRow(
+                        icon = painterResource(R.drawable.history),
+                        title = stringResource(R.string.view_changelog),
+                        subtitle = stringResource(R.string.update_changelog_all_releases),
+                        onClick = { navController.navigate("settings/changelog") },
+                        trailing = {
+                            Icon(
+                                painter = painterResource(R.drawable.chevron_right),
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                            )
+                        },
+                    )
                 }
-            }
 
-            item { Spacer(Modifier.height(16.dp)) }
+                Spacer(Modifier.height(32.dp))
+            }
         }
     }
 }
 
-// ─── UpdateCheckButton ────────────────────────────────────────────────────────
+// ─── Hero ─────────────────────────────────────────────────────────────────────
+
+/**
+ * The identity block: a glass disc holding the update glyph, ringed by two halos that breathe
+ * outward, over the app name and a status line that swaps as the check runs.
+ *
+ * The halos are pure `graphicsLayer` scale and alpha on two fixed-size circles — no layout, no
+ * redraw, so the animation runs on the render thread and keeps running while the check is in
+ * flight. They are the whole reason the page feels alive rather than static.
+ */
+@Composable
+private fun UpdateHero(
+    state: UpdateCheckState,
+    updateAvailable: Boolean,
+) {
+    val transition = rememberInfiniteTransition(label = "updateHero")
+
+    // One phase drives both rings; the second reads it offset by half a cycle, so they pulse
+    // alternately off a single animation.
+    val phase by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 2800, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart,
+        ),
+        label = "haloPhase",
+    )
+
+    val spin by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1400, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart,
+        ),
+        label = "glyphSpin",
+    )
+
+    val accent = when (state) {
+        is UpdateCheckState.Error -> MaterialTheme.colorScheme.error
+        UpdateCheckState.UpToDate -> MaterialTheme.colorScheme.tertiary
+        else -> MaterialTheme.colorScheme.primary
+    }
+    val accentColor by animateColorAsState(
+        targetValue = accent,
+        animationSpec = tween(400),
+        label = "heroAccent",
+    )
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Box(
+            modifier = Modifier.size(148.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Halo(phase = phase, color = accentColor)
+            Halo(phase = (phase + 0.5f) % 1f, color = accentColor)
+
+            Box(
+                modifier = Modifier
+                    .size(96.dp)
+                    .liquidGlassSurface(CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    painter = painterResource(
+                        when (state) {
+                            UpdateCheckState.UpToDate -> R.drawable.done
+                            else -> R.drawable.update
+                        }
+                    ),
+                    contentDescription = null,
+                    tint = accentColor,
+                    modifier = Modifier
+                        .size(42.dp)
+                        .graphicsLayer {
+                            rotationZ = if (state == UpdateCheckState.Loading) spin else 0f
+                        },
+                )
+            }
+        }
+
+        Spacer(Modifier.height(18.dp))
+
+        Text(
+            text = stringResource(R.string.app_name),
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+
+        Spacer(Modifier.height(6.dp))
+
+        AnimatedContent(
+            targetState = state,
+            transitionSpec = {
+                (fadeIn(tween(220)) + slideInVertically { it / 3 }) togetherWith
+                        (fadeOut(tween(160)) + slideOutVertically { -it / 3 })
+            },
+            label = "updateStatus",
+        ) { s ->
+            val message = when (s) {
+                UpdateCheckState.Loading -> stringResource(R.string.update_status_checking)
+                UpdateCheckState.UpToDate -> stringResource(R.string.update_status_up_to_date)
+                is UpdateCheckState.UpdateAvailable ->
+                    stringResource(R.string.update_version_label, s.info.versionName)
+
+                is UpdateCheckState.Error ->
+                    stringResource(R.string.update_status_failed, s.message)
+
+                UpdateCheckState.Idle ->
+                    if (updateAvailable) {
+                        stringResource(R.string.update_status_available)
+                    } else {
+                        stringResource(R.string.update_version_label, BuildConfig.VERSION_NAME)
+                    }
+            }
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodyMedium,
+                color = when (s) {
+                    is UpdateCheckState.Error -> MaterialTheme.colorScheme.error
+                    else -> MaterialTheme.colorScheme.onSurfaceVariant
+                },
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+    }
+}
+
+/** One expanding, fading ring. [phase] runs 0→1 and restarts. */
+@Composable
+private fun Halo(
+    phase: Float,
+    color: Color,
+) {
+    Box(
+        modifier = Modifier
+            .size(96.dp)
+            .graphicsLayer {
+                val scale = 1f + phase * 0.52f
+                scaleX = scale
+                scaleY = scale
+                alpha = (1f - phase) * 0.28f
+            }
+            .clip(CircleShape)
+            .background(color),
+    )
+}
+
+// ─── Grouped rows ─────────────────────────────────────────────────────────────
 
 @Composable
-private fun UpdateCheckButton(
-    state: UpdateCheckState,
-    onClick: () -> Unit,
+private fun UpdateGroupTitle(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelLarge,
+        fontWeight = FontWeight.SemiBold,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(start = 6.dp, bottom = 8.dp),
+    )
+}
+
+@Composable
+private fun UpdateGlassGroup(content: @Composable ColumnScope.() -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .liquidGlassSurface(RoundedCornerShape(SettingsGroupCornerRadius)),
+        content = content,
+    )
+}
+
+/** Hairline between rows. Never at a group's top or bottom edge — the caller places these. */
+@Composable
+private fun UpdateRowDivider() {
+    HorizontalDivider(
+        modifier = Modifier.padding(start = 60.dp),
+        thickness = SettingsDividerThickness,
+        color = settingsDividerColor(),
+    )
+}
+
+/**
+ * One grouped-list row: tinted glyph, title over optional subtitle, and either a value string or a
+ * trailing composable on the right.
+ */
+@Composable
+private fun UpdateRow(
+    title: String,
     modifier: Modifier = Modifier,
+    icon: Painter? = null,
+    subtitle: String? = null,
+    value: String? = null,
+    valueColor: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+    valueBold: Boolean = false,
+    trailing: (@Composable () -> Unit)? = null,
+    onClick: (() -> Unit)? = null,
 ) {
-    Button(
-        onClick = onClick,
-        enabled = state != UpdateCheckState.Loading,
-        modifier = modifier.fillMaxWidth(),
-        colors = ButtonDefaults.buttonColors(
-            containerColor = when (state) {
-                UpdateCheckState.UpToDate           -> MaterialTheme.colorScheme.tertiary
-                is UpdateCheckState.Error           -> MaterialTheme.colorScheme.error
-                else                                -> MaterialTheme.colorScheme.primary
-            }
-        )
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        AnimatedContent(targetState = state, label = "btnContent") { s ->
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
-                when (s) {
-                    UpdateCheckState.Loading -> {
-                        CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
-                        Spacer(Modifier.width(8.dp))
-                        Text("Comprobando…")
-                    }
-                    UpdateCheckState.UpToDate -> {
-                        Icon(painterResource(R.drawable.done), null, Modifier.size(16.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text("Up to date")
-                    }
-                    is UpdateCheckState.UpdateAvailable -> {
-                        Icon(painterResource(R.drawable.update), null, Modifier.size(16.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text("View update (${s.info.versionName})")
-                    }
-                    is UpdateCheckState.Error -> {
-                        Text("Reintentar")
-                    }
-                    else -> {
-                        Icon(painterResource(R.drawable.update), null, Modifier.size(16.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text(stringResource(R.string.updates))
-                    }
-                }
+        if (icon != null) {
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .clip(RoundedCornerShape(9.dp))
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    painter = icon,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                    tint = MaterialTheme.colorScheme.primary,
+                )
             }
+            Spacer(Modifier.width(14.dp))
+        }
+
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            if (subtitle != null) {
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+
+        if (value != null) {
+            Spacer(Modifier.width(12.dp))
+            Text(
+                text = value,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = if (valueBold) FontWeight.Bold else FontWeight.Medium,
+                color = valueColor,
+            )
+        }
+
+        if (trailing != null) {
+            Spacer(Modifier.width(10.dp))
+            trailing()
         }
     }
 }
@@ -894,8 +1015,8 @@ private fun UpdateSheetActions(
  * underneath, and the percentage on the right.
  *
  * The fill is animated rather than snapped to each emission — progress arrives every 512 KB, so a
- * raw binding would visibly step. Falls back to a full-width shimmer-free indeterminate bar when
- * the server withheld a Content-Length.
+ * raw binding would visibly step. Falls back to an indeterminate bar when the server withheld a
+ * Content-Length.
  */
 @Composable
 private fun UpdateProgressBlock(progress: DownloadProgress) {
@@ -972,79 +1093,4 @@ private fun formatBytes(bytes: Long): String = when {
     bytes >= 1024L * 1024L -> String.format(Locale.US, "%.1f MB", bytes / (1024.0 * 1024.0))
     bytes >= 1024L -> String.format(Locale.US, "%.0f KB", bytes / 1024.0)
     else -> "$bytes B"
-}
-
-// ─── BuildChannelInfoDialog ───────────────────────────────────────────────────
-
-@Composable
-private fun BuildChannelInfoDialog(
-    title: String,
-    onConfirm: () -> Unit,
-    onDismiss: () -> Unit,
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(title) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-                Text("Exhale provides two download channels for builds:", style = MaterialTheme.typography.bodyMedium)
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text("• Stable builds", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
-                    Text("Distributed via official GitHub Releases.", style = MaterialTheme.typography.bodySmall)
-                    Text("These versions are tested and recommended for most users.", style = MaterialTheme.typography.bodySmall)
-                }
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text("• Nightly builds", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
-                    Text("Automatically generated development builds hosted via nightly.link.", style = MaterialTheme.typography.bodySmall)
-                    Text("Nightly builds may include experimental features, unfinished changes, or temporary regressions.", style = MaterialTheme.typography.bodySmall)
-                }
-                Text("By continuing, you acknowledge that nightly builds may be unstable and use them at your own risk.", style = MaterialTheme.typography.bodySmall)
-            }
-        },
-        confirmButton = { TextButton(onClick = onConfirm) { Text(stringResource(android.R.string.ok)) } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(android.R.string.cancel)) } }
-    )
-}
-
-// ─── CommitItem ───────────────────────────────────────────────────────────────
-
-@Composable
-private fun CommitItem(commit: GitCommit, onClick: () -> Unit) {
-    Card(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-        shape = RoundedCornerShape(12.dp),
-        // The grouped-list card colour, not `surface` — on a settings page `surface` IS the
-        // page, so a card painted with it would be invisible.
-        colors = CardDefaults.cardColors(containerColor = SettingsDimensions.groupSurfaceColor()),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-        onClick = onClick
-    ) {
-        Row(modifier = Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.Top) {
-            Box(Modifier.padding(top = 4.dp).size(8.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary))
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text(commit.message, style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                Spacer(Modifier.height(4.dp))
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(commit.sha, style = MaterialTheme.typography.labelSmall, fontFamily = FontFamily.Monospace, color = MaterialTheme.colorScheme.primary)
-                    Text("•", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text(commit.author, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    if (commit.date.isNotEmpty()) {
-                        Text("•", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text(formatCommitDate(commit.date), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
-            }
-            Icon(painterResource(R.drawable.arrow_forward), null, Modifier.padding(start = 8.dp).size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
-        }
-    }
-}
-
-private fun formatCommitDate(isoDate: String): String = try {
-    val inputFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply {
-        timeZone = TimeZone.getTimeZone("UTC")
-    }
-    SimpleDateFormat("MMM d", Locale.getDefault()).format(inputFormat.parse(isoDate)!!)
-} catch (e: Exception) {
-    isoDate.take(10)
 }

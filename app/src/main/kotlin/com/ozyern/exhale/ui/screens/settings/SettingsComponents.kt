@@ -91,24 +91,115 @@ fun SettingsPage(content: @Composable BoxScope.() -> Unit) {
     }
 }
 
+/**
+ * The header plate at the top of Settings.
+ *
+ * Modelled on the account row iOS puts at the top of its Settings app: an oversized rounded-square
+ * glyph, the name at headline weight, a quiet second line, and a chevron - because the row *goes*
+ * somewhere. It used to be a dead card, which meant the most prominent element on the screen was
+ * also the only one that did nothing when you tapped it.
+ */
+/**
+ * The search field that sits under the large title.
+ *
+ * iOS puts a real, visible search field at the top of Settings; we had a magnifier in the app bar
+ * that swapped the entire screen for a search overlay. A tap target you have to already know about
+ * is not a search affordance — this one states that the page is searchable before you look for it.
+ *
+ * It is a button rather than a text field: focus, the keyboard and the result list all belong to
+ * the existing search overlay, and duplicating a second editable field here would mean two places
+ * holding the same query.
+ */
 @Composable
-fun SettingsProfileHeader(modifier: Modifier = Modifier) {
-    // Frosted inset hero — same translucent plate as every settings group, no gradient
-    // wash, no Material Card. Reads as one glass family with the rest of the screen.
+fun SettingsSearchPill(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val bgAlpha by animateFloatAsState(
+        targetValue = if (isPressed) 0.14f else 0.08f,
+        animationSpec = SettingsAnimations.pressSpring(),
+        label = "searchPillBg",
+    )
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = bgAlpha))
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick,
+            )
+            .padding(horizontal = 12.dp, vertical = 11.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            painter = painterResource(R.drawable.search),
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(20.dp),
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(
+            text = stringResource(R.string.settings_search_hint),
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+fun SettingsProfileHeader(
+    modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null,
+) {
+    val haptic = LocalHapticFeedback.current
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val bgAlpha by animateFloatAsState(
+        targetValue = if (isPressed && onClick != null) 0.09f else 0f,
+        animationSpec = SettingsAnimations.pressSpring(),
+        label = "heroBgAlpha",
+    )
+
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(SettingsDimensions.HeroCardCornerRadius))
             .background(SettingsDimensions.groupSurfaceColor())
-            .padding(horizontal = 20.dp, vertical = 22.dp),
+            .then(
+                if (onClick != null) {
+                    Modifier.clickable(
+                        interactionSource = interactionSource,
+                        indication = null,
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            onClick()
+                        },
+                    )
+                } else {
+                    Modifier
+                }
+            )
+            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = bgAlpha))
+            .padding(horizontal = 18.dp, vertical = 18.dp),
     ) {
         Box(
             modifier = Modifier
                 .size(SettingsDimensions.HeroIconSize)
                 .clip(RoundedCornerShape(18.dp))
-                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
+                .background(
+                    Brush.linearGradient(
+                        colors = listOf(
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.26f),
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.10f),
+                        ),
+                    )
+                ),
             contentAlignment = Alignment.Center,
         ) {
             Icon(
@@ -119,7 +210,12 @@ fun SettingsProfileHeader(modifier: Modifier = Modifier) {
             )
         }
 
-        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Spacer(modifier = Modifier.width(16.dp))
+
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(3.dp),
+        ) {
             Text(
                 text = stringResource(R.string.app_name),
                 style = MaterialTheme.typography.headlineSmall,
@@ -127,10 +223,21 @@ fun SettingsProfileHeader(modifier: Modifier = Modifier) {
                 color = MaterialTheme.colorScheme.onSurface,
             )
             Text(
-                text = "v${BuildConfig.VERSION_NAME}",
-                style = MaterialTheme.typography.labelMedium,
+                text = stringResource(
+                    R.string.settings_hero_subtitle,
+                    BuildConfig.VERSION_NAME,
+                ),
+                style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontWeight = FontWeight.Medium,
+            )
+        }
+
+        if (onClick != null) {
+            Icon(
+                painter = painterResource(R.drawable.navigate_next),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
+                modifier = Modifier.size(SettingsDimensions.ChevronSize),
             )
         }
     }
@@ -325,25 +432,39 @@ fun SettingsSearchEmpty(
     }
 }
 
+/**
+ * The header that sits above every grouped block.
+ *
+ * One definition, used by the categories, the quick actions and the integrations alike. Before
+ * this, two of the three groups on the Settings screen had *no* header at all — they were bare
+ * cards floating with nothing naming them, which is the one thing an iOS grouped table never does.
+ */
+@Composable
+fun SettingsSectionHeader(
+    title: String,
+    modifier: Modifier = Modifier,
+) {
+    Text(
+        text = title,
+        style = MaterialTheme.typography.titleLarge,
+        fontWeight = FontWeight.Bold,
+        color = MaterialTheme.colorScheme.onSurface,
+        modifier = modifier.padding(
+            start = SettingsDimensions.SectionHeaderHorizontalPadding,
+            end = SettingsDimensions.SectionHeaderHorizontalPadding,
+            top = 20.dp,
+            bottom = 10.dp,
+        ),
+    )
+}
+
 @Composable
 fun SettingsGroupCard(
     group: SettingsGroup,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier) {
-        // Large, bold, iOS-style section header sitting ABOVE the grouped block.
-        Text(
-            text = group.title,
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.padding(
-                start = SettingsDimensions.SectionHeaderHorizontalPadding,
-                end = SettingsDimensions.SectionHeaderHorizontalPadding,
-                top = 20.dp,
-                bottom = 10.dp,
-            ),
-        )
+        SettingsSectionHeader(group.title)
 
         // Apple Music-style grouped inset list: a Column clipped to 16dp over a frosted
         // translucent surface — NO Material Card. Dividers appear only BETWEEN rows
@@ -376,18 +497,7 @@ fun InsetGroup(
     rows: List<@Composable () -> Unit>,
 ) {
     Column(modifier = modifier) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.padding(
-                start = SettingsDimensions.SectionHeaderHorizontalPadding,
-                end = SettingsDimensions.SectionHeaderHorizontalPadding,
-                top = 20.dp,
-                bottom = 10.dp,
-            ),
-        )
+        SettingsSectionHeader(title)
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -425,13 +535,13 @@ fun SettingsRow(
     val haptic = LocalHapticFeedback.current
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.98f else 1f,
-        animationSpec = SettingsAnimations.pressSpring(),
-        label = "rowScale",
-    )
+
+    // A pressed row in iOS fills edge to edge with a neutral grey and does not move. The previous
+    // behaviour shrank the row to 98% and tinted it with the brand colour, which reads as a
+    // *button* — and a grouped table is a list of destinations, not a panel of buttons. Scaling
+    // also visibly detached each row from the hairlines above and below it.
     val bgAlpha by animateFloatAsState(
-        targetValue = if (isPressed) 0.06f else 0f,
+        targetValue = if (isPressed) 0.09f else 0f,
         animationSpec = SettingsAnimations.pressSpring(),
         label = "rowBgAlpha",
     )
@@ -440,8 +550,7 @@ fun SettingsRow(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .graphicsLayer { scaleX = scale; scaleY = scale }
-                .background(MaterialTheme.colorScheme.primary.copy(alpha = bgAlpha))
+                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = bgAlpha))
                 .clickable(
                     interactionSource = interactionSource,
                     indication = null,

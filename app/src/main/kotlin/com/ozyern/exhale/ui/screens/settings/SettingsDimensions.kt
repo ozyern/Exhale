@@ -48,7 +48,14 @@ object SettingsDimensions {
     val DividerStartIndent = SettingsDividerStartIndent
 
     val SectionHeaderBottomPadding = 6.dp
-    val SectionHeaderHorizontalPadding = 20.dp
+
+    /**
+     * Header indent *inside* the screen gutter. The groups are already inset by
+     * [ScreenHorizontalPadding], so 4dp here puts the header 20dp from the screen edge — a hair
+     * proud of the card, which is how iOS sets a grouped-table header. The previous 20dp pushed it
+     * to 36dp, past even the row text, so no header lined up with anything.
+     */
+    val SectionHeaderHorizontalPadding = 4.dp
 
     val QuickActionTileAspectRatio = 1.4f
 

@@ -2,29 +2,20 @@
  * Exhale Project Original (2026)
  * ozyern (github.com/ozyern)
  * Licensed Under GPL-3.0 | see git history for contributors
- *
- * Rediseñado con sistema de diseño Exhale + Material 3 Expressive
  */
 
 package com.ozyern.exhale.ui.screens.settings
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -39,47 +30,35 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.ElevatedButton
-import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LargeTopAppBar
-import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.TopAppBarScrollBehavior
-import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -87,84 +66,93 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.navigation.NavController
 import coil3.compose.AsyncImage
 import com.ozyern.exhale.BuildConfig
 import com.ozyern.exhale.LocalPlayerAwareWindowInsets
-import com.ozyern.exhale.LocalPlayerConnection
 import com.ozyern.exhale.R
+import com.ozyern.exhale.constants.AquamorphicDampingRatio
+import com.ozyern.exhale.constants.AquamorphicStiffness
+import com.ozyern.exhale.ui.component.AuroraBackdrop
 import com.ozyern.exhale.ui.component.IconButton
+import com.ozyern.exhale.ui.component.liquidGlassSurface
 import com.ozyern.exhale.ui.utils.backToMain
-import com.ozyern.exhale.viewmodels.AboutViewModel
-import com.ozyern.exhale.viewmodels.Contributor
-import kotlinx.coroutines.delay
 
-// ── Shimmer brush (Material 3 Expressive) ──────────────────────────────────
+// ─── People and links ─────────────────────────────────────────────────────────
 
-@Composable
-fun shimmerEffect(): Brush {
-    val shimmerColors = listOf(
-        MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.2f),
-        MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.5f),
-        MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.2f),
-    )
-    val transition = rememberInfiniteTransition(label = "shimmer")
-    val translateAnim by transition.animateFloat(
-        initialValue = -400f,
-        targetValue = 1200f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1400, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Restart,
-        ),
-        label = "shimmerX",
-    )
-    return Brush.linearGradient(
-        colors = shimmerColors,
-        start = Offset(x = translateAnim, y = 0f),
-        end = Offset(x = translateAnim + 500f, y = 0f),
-    )
-}
+private const val LeadDeveloperName = "Aditya Jha"
+private const val LeadDeveloperHandle = "ozyern"
 
-// ── Data ───────────────────────────────────────────────────────────────────
+/**
+ * GitHub serves every user's avatar at `github.com/<handle>.png`, so the maintainer's picture
+ * follows whatever they set on their profile instead of being pinned to a numeric asset id that
+ * silently rots the day they change it.
+ */
+private const val LeadDeveloperAvatar = "https://github.com/$LeadDeveloperHandle.png"
+private const val LeadDeveloperUrl = "https://github.com/$LeadDeveloperHandle"
+
+private const val LicenseUrl = "https://github.com/ozyern/Exhale/blob/master/LICENSE"
 
 private data class SocialLink(
     val iconRes: Int,
-    val url: String,
     val label: String,
+    val handle: String,
+    val url: String,
 )
 
-// ── Main screen ────────────────────────────────────────────────────────────
+private val SocialLinks = listOf(
+    SocialLink(R.drawable.github, "GitHub", "@ozyern", "https://github.com/ozyern"),
+    SocialLink(R.drawable.telegram, "Telegram", "@ozyern", "https://t.me/ozyern"),
+    SocialLink(
+        R.drawable.instagram,
+        "Instagram",
+        "@imozyern",
+        "https://www.instagram.com/imozyern/",
+    ),
+)
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
+// ─── Screen ───────────────────────────────────────────────────────────────────
+
+/**
+ * About.
+ *
+ * Rebuilt as an inset grouped table on the same ground as the rest of Settings. What was here
+ * before was a stack of `ElevatedCard`s at 20–32dp radii with shadows, shimmer sweeps, fake hover
+ * states and a hero that rotated two degrees when tapped — a different design language on every
+ * card. Now there is one: a hero plate, then labelled groups of rows, the same rows Settings uses.
+ *
+ * The hero keeps exactly one flourish, and it is hidden. See [ExhaleBreathingEgg].
+ */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AboutScreen(
     navController: NavController,
     scrollBehavior: TopAppBarScrollBehavior,
-    viewModel: AboutViewModel = viewModel()
 ) {
     val uriHandler = LocalUriHandler.current
-    val contributors by viewModel.contributors.collectAsStateWithLifecycle()
-    val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
-    val error by viewModel.error.collectAsStateWithLifecycle()
+    var showEasterEgg by remember { mutableStateOf(false) }
 
-    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
-    val playerConnection = LocalPlayerConnection.current
-    val configuration = LocalConfiguration.current
-    val isTablet = configuration.screenWidthDp >= 600
+    if (showEasterEgg) {
+        ExhaleBreathingEgg(onDismiss = { showEasterEgg = false })
+    }
+
+    val pageBackground = SettingsDimensions.screenBackgroundColor()
+    val pad = SettingsDimensions.ScreenHorizontalPadding
+    val spacing = SettingsDimensions.SectionSpacing
 
     Scaffold(
         modifier = Modifier
             .fillMaxSize()
             .nestedScroll(scrollBehavior.nestedScrollConnection),
-        containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
+        containerColor = pageBackground,
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             LargeTopAppBar(
                 title = {
                     Text(
-                        stringResource(R.string.about),
+                        text = stringResource(R.string.about),
                         fontWeight = FontWeight.Bold,
                     )
                 },
@@ -179,794 +167,574 @@ fun AboutScreen(
                         )
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
-                    scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    navigationIconContentColor = Color.Unspecified,
-                    titleContentColor = MaterialTheme.colorScheme.onSurface,
-                    actionIconContentColor = Color.Unspecified
+                // Flat and identical in both states, like every other settings destination.
+                colors = TopAppBarDefaults.largeTopAppBarColors(
+                    containerColor = pageBackground,
+                    scrolledContainerColor = pageBackground,
                 ),
                 scrollBehavior = scrollBehavior,
             )
         },
     ) { innerPadding ->
-
         LazyColumn(
             modifier = Modifier
-                .nestedScroll(scrollBehavior.nestedScrollConnection)
                 .padding(innerPadding)
                 .windowInsetsPadding(
                     LocalPlayerAwareWindowInsets.current.only(
                         WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom
                     )
                 ),
-            verticalArrangement = Arrangement.spacedBy(20.dp),
-            contentPadding = PaddingValues(
-                start = 16.dp,
-                end = 16.dp,
-                top = 8.dp,
-                bottom = if (playerConnection?.player?.isPlaying == true) 96.dp else 32.dp,
-            ),
+            contentPadding = PaddingValues(start = pad, end = pad, top = 4.dp, bottom = 40.dp),
         ) {
-
-            // ── Hero card (Expresivo con morphing) ─────────────────────────
             item(key = "hero") {
-                HeroCardExpressive(shimmerBrush = shimmerEffect())
+                AboutHero(
+                    onSecretUnlocked = { showEasterEgg = true },
+                    modifier = Modifier.padding(bottom = spacing),
+                )
             }
 
-            // ── Social card ───────────────────────────────────────────────
+            item(key = "maintainer") {
+                Column(modifier = Modifier.padding(bottom = spacing)) {
+                    SettingsSectionHeader(stringResource(R.string.about_maintainer))
+                    AboutGroup {
+                        AboutPersonRow(
+                            avatarUrl = LeadDeveloperAvatar,
+                            name = LeadDeveloperName,
+                            role = stringResource(R.string.about_lead_developer),
+                            onClick = { uriHandler.openUri(LeadDeveloperUrl) },
+                        )
+                    }
+                }
+            }
+
             item(key = "social") {
-                SocialCardExpressive(
-                    links = listOf(
-                        SocialLink(
-                            R.drawable.github,
-                            "https://github.com/ozyern/Exhale",
-                            "GitHub"
-                        ),
-                        SocialLink(
-                            R.drawable.telegram,
-                            "https://t.me/exhale_updates",
-                            "Telegram"
-                        ),
-                        SocialLink(
-                            R.drawable.facebook,
-                            "https://www.facebook.com/ozyern",
-                            "Facebook"
-                        ),
-                        SocialLink(R.drawable.paypal, "https://www.paypal.me/Exhale", "PayPal"),
-                        SocialLink(
-                            R.drawable.instagram,
-                            "https://www.instagram.com/arturocg.dev/",
-                            "Instagram"
-                        ),
-                        SocialLink(
-                            R.drawable.resource_public,
-                            "https://exhale.netlify.app/",
-                            "Website"
-                        ),
-                    ),
-                    onLinkClick = { uriHandler.openUri(it) },
-                    columns = if (isTablet) 4 else 3,
-                )
-            }
-
-            // ── Contributors section header ───────────────────────────────
-            item(key = "contributors_header") {
-                SectionHeaderExpressive(
-                    title = stringResource(R.string.contributors),
-                    iconRes = R.drawable.person,
-                    iconColor = MaterialTheme.colorScheme.secondaryContainer
-                )
-            }
-
-            // ── Contributors content ───────────────────────────────────────
-            when {
-                isLoading -> {
-                    items(4, key = { "loading_$it" }) {
-                        ContributorShimmerExpressive()
-                    }
-                }
-
-                error != null -> {
-                    item(key = "error") {
-                        ErrorCardExpressive(
-                            message = error ?: "Unknown error",
-                            onRetry = { viewModel.fetchContributorsFromGitHub() }
-                        )
-                    }
-                }
-
-                contributors.isNotEmpty() -> {
-                    items(
-                        items = contributors,
-                        key = { contributor -> contributor.name }
-                    ) { contributor ->
-                        ContributorCardExpressive(
-                            contributor = contributor,
-                            onClick = { uriHandler.openUri(contributor.profileUrl) },
-                        )
-                    }
-                }
-            }
-
-            // ── License footer ────────────────────────────────────────────
-            item(key = "license") {
-                LicenseFooterExpressive(
-                    onLicenseClick = {
-                        uriHandler.openUri("https://github.com/ozyern/Exhale/blob/master/LICENSE")
-                    }
-                )
-            }
-
-            // ── Bottom spacer ─────────────────────────────────────────────
-            item(key = "bottom_spacer") {
-                Spacer(modifier = Modifier.height(16.dp))
-            }
-        }
-    }
-}
-
-// ── Section Header (Material 3) ────────────────────────────────────────────
-
-@Composable
-private fun SectionHeaderExpressive(
-    title: String,
-    iconRes: Int,
-    iconColor: Color,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 8.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Surface(
-            shape = RoundedCornerShape(14.dp),
-            color = iconColor,
-            modifier = Modifier.size(40.dp),
-        ) {
-            Box(contentAlignment = Alignment.Center) {
-                Icon(
-                    painter = painterResource(iconRes),
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                    modifier = Modifier.size(22.dp),
-                )
-            }
-        }
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-    }
-}
-
-// ── Hero card (Expresivo con morphing) ─────────────────────────────────────
-
-@Composable
-private fun HeroCardExpressive(shimmerBrush: Brush) {
-    var isExpanded by remember { mutableStateOf(false) }
-    val scale = remember { Animatable(1f) }
-    val rotation = remember { Animatable(0f) }
-    val elevation = remember { Animatable(2f) }
-
-    LaunchedEffect(isExpanded) {
-        if (isExpanded) {
-            scale.animateTo(1.02f, spring(stiffness = Spring.StiffnessLow))
-            rotation.animateTo(1f, spring(stiffness = Spring.StiffnessVeryLow))
-            elevation.animateTo(8f, spring(stiffness = Spring.StiffnessLow))
-        } else {
-            scale.animateTo(1f, spring(stiffness = Spring.StiffnessLow))
-            rotation.animateTo(0f, spring(stiffness = Spring.StiffnessVeryLow))
-            elevation.animateTo(2f, spring(stiffness = Spring.StiffnessLow))
-        }
-    }
-
-    // Contenedor con padding superior para evitar corte al expandir
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = if (isExpanded) 8.dp else 0.dp),
-        contentAlignment = Alignment.TopCenter
-    ) {
-        ElevatedCard(
-            modifier = Modifier
-                .fillMaxWidth()
-                .graphicsLayer {
-                    scaleX = scale.value
-                    scaleY = scale.value
-                    rotationZ = rotation.value * 2f
-                }
-                .clickable { isExpanded = !isExpanded },
-            shape = RoundedCornerShape(32.dp),
-            colors = CardDefaults.elevatedCardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-            ),
-            elevation = CardDefaults.elevatedCardElevation(
-            ),
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(28.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-            ) {
-                // App icon with morphing shape
-                Surface(
-                    shape = if (isExpanded) CircleShape else RoundedCornerShape(24.dp),
-                    color = MaterialTheme.colorScheme.primaryContainer,
-                    modifier = Modifier.size(if (isExpanded) 100.dp else 84.dp),
-                    shadowElevation = if (isExpanded) 12.dp else 4.dp,
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Image(
-                            painter = painterResource(R.drawable.exhale_monochrome),
-                            contentDescription = null,
-                            colorFilter = ColorFilter.tint(
-                                MaterialTheme.colorScheme.onPrimaryContainer,
-                                BlendMode.SrcIn,
-                            ),
-                            modifier = Modifier
-                                .size(if (isExpanded) 68.dp else 56.dp)
-                                .clip(RoundedCornerShape(if (isExpanded) 24.dp else 16.dp)),
-                        )
-                        // Shimmer overlay (solo visible en estado no expandido)
-                        if (!isExpanded) {
-                            Box(
-                                modifier = Modifier
-                                    .matchParentSize()
-                                    .background(shimmerBrush),
+                Column(modifier = Modifier.padding(bottom = spacing)) {
+                    SettingsSectionHeader(stringResource(R.string.about_connect))
+                    AboutGroup {
+                        SocialLinks.forEachIndexed { index, link ->
+                            if (index > 0) AboutDivider()
+                            AboutRow(
+                                icon = link.iconRes,
+                                title = link.label,
+                                value = link.handle,
+                                onClick = { uriHandler.openUri(link.url) },
                             )
                         }
                     }
                 }
+            }
 
-                // App name (animated)
-                AnimatedVisibility(
-                    visible = isExpanded,
-                    enter = fadeIn(animationSpec = tween(300)) + scaleIn(
-                        initialScale = 0.7f,
-                        animationSpec = spring(stiffness = Spring.StiffnessLow)
-                    ),
-                    exit = fadeOut(animationSpec = tween(150)) + scaleOut(
-                        targetScale = 0.7f,
-                        animationSpec = spring(stiffness = Spring.StiffnessLow)
-                    )
-                ) {
-                    Text(
-                        text = stringResource(R.string.app_name),
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.Black,
-                        color = MaterialTheme.colorScheme.primary,
-                        textAlign = TextAlign.Center,
-                    )
-                }
-
-                if (!isExpanded) {
-                    Text(
-                        text = stringResource(R.string.app_name),
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-                }
-
-                // Version badges
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    VersionBadgeExpressive(
-                        text = "v${BuildConfig.VERSION_NAME}",
-                        containerColor = MaterialTheme.colorScheme.primaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                    )
-                    VersionBadgeExpressive(
-                        text = "#${BuildConfig.VERSION_CODE}",
-                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                    )
-                    if (BuildConfig.DEBUG) {
-                        VersionBadgeExpressive(
-                            text = "DEBUG",
-                            containerColor = MaterialTheme.colorScheme.errorContainer,
-                            contentColor = MaterialTheme.colorScheme.onErrorContainer,
+            item(key = "info") {
+                Column(modifier = Modifier.padding(bottom = spacing)) {
+                    SettingsSectionHeader(stringResource(R.string.about_information))
+                    AboutGroup {
+                        AboutValueRow(
+                            icon = R.drawable.info,
+                            title = stringResource(R.string.update_installed_version),
+                            value = BuildConfig.VERSION_NAME,
+                        )
+                        AboutDivider()
+                        AboutValueRow(
+                            icon = R.drawable.token,
+                            title = stringResource(R.string.about_build),
+                            value = BuildConfig.VERSION_CODE.toString(),
+                        )
+                        AboutDivider()
+                        AboutValueRow(
+                            icon = R.drawable.exhale,
+                            title = stringResource(R.string.about_package),
+                            value = BuildConfig.APPLICATION_ID,
                         )
                     }
                 }
+            }
 
-                HorizontalDivider(
-                    modifier = Modifier.padding(vertical = 8.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
-                )
-
-                // Developer info
-                DeveloperInfoExpressive()
-
-                AnimatedVisibility(
-                    visible = isExpanded,
-                    enter = fadeIn(animationSpec = tween(300, delayMillis = 100)) + scaleIn(
-                        initialScale = 0.9f,
-                        animationSpec = spring(stiffness = Spring.StiffnessLow)
-                    ),
-                    exit = fadeOut(animationSpec = tween(150))
-                ) {
-                    Text(
-                        text = "Jesus Christ loves you",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(top = 8.dp)
-                    )
+            item(key = "license") {
+                Column {
+                    SettingsSectionHeader(stringResource(R.string.about_legal))
+                    AboutGroup {
+                        AboutRow(
+                            icon = R.drawable.policy,
+                            title = "GNU General Public License v3.0",
+                            value = null,
+                            onClick = { uriHandler.openUri(LicenseUrl) },
+                        )
+                    }
                 }
             }
         }
     }
 }
 
-// ── Developer Info Component ───────────────────────────────────────────────
+// ─── Hero ─────────────────────────────────────────────────────────────────────
 
+/** Taps on the hero needed to open the easter egg. Android's version-tap egg wants seven too. */
+private const val SecretTapCount = 7
+
+/**
+ * The identity plate: app mark, name, version.
+ *
+ * It counts taps. Nothing visible acknowledges them until the fourth, at which point the mark
+ * starts leaning into each press a little harder than a normal tap would — enough that someone
+ * poking at it realises something is happening, and invisible to someone who is not. On the
+ * seventh, [ExhaleBreathingEgg] opens.
+ */
 @Composable
-private fun DeveloperInfoExpressive() {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+private fun AboutHero(
+    onSecretUnlocked: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var taps by remember { mutableIntStateOf(0) }
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+
+    // The tell. Below the halfway mark this is an ordinary, almost imperceptible press response;
+    // past it the mark visibly winds up, which is the only hint the egg exists.
+    val warmth = (taps.toFloat() / SecretTapCount).coerceIn(0f, 1f)
+    val markScale by animateFloatAsState(
+        targetValue = if (isPressed) 1f - 0.04f - 0.10f * warmth else 1f + 0.06f * warmth,
+        animationSpec = spring(
+            dampingRatio = AquamorphicDampingRatio,
+            stiffness = AquamorphicStiffness,
+        ),
+        label = "markScale",
+    )
+    val markRotation by animateFloatAsState(
+        targetValue = if (isPressed) -8f * warmth else 0f,
+        animationSpec = spring(
+            dampingRatio = AquamorphicDampingRatio,
+            stiffness = AquamorphicStiffness,
+        ),
+        label = "markRotation",
+    )
+
+    // Taps have to be consecutive-ish; wandering off and coming back later starts over.
+    LaunchedEffect(taps) {
+        if (taps in 1 until SecretTapCount) {
+            kotlinx.coroutines.delay(2_500)
+            taps = 0
+        }
+    }
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(SettingsDimensions.HeroCardCornerRadius))
+            .background(SettingsDimensions.groupSurfaceColor())
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+            ) {
+                val next = taps + 1
+                if (next >= SecretTapCount) {
+                    taps = 0
+                    onSecretUnlocked()
+                } else {
+                    taps = next
+                }
+            }
+            .padding(horizontal = 24.dp, vertical = 28.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Surface(
-            shape = CircleShape,
-            color = MaterialTheme.colorScheme.tertiaryContainer,
-            modifier = Modifier.size(44.dp),
+        Box(
+            modifier = Modifier.size(112.dp),
+            contentAlignment = Alignment.Center,
         ) {
-            AsyncImage(
-                model = "https://avatars.githubusercontent.com/u/87346871?v=4",
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
+            Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .clip(CircleShape),
+                    .background(
+                        Brush.radialGradient(
+                            colors = listOf(
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.30f + 0.25f * warmth),
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.10f),
+                                Color.Transparent,
+                            ),
+                        )
+                    )
             )
+            Box(
+                modifier = Modifier
+                    .size(84.dp)
+                    .graphicsLayer {
+                        scaleX = markScale
+                        scaleY = markScale
+                        rotationZ = markRotation
+                    }
+                    .clip(RoundedCornerShape(26.dp))
+                    .background(
+                        Brush.linearGradient(
+                            colors = listOf(
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.28f),
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.10f),
+                            ),
+                        )
+                    )
+                    .border(
+                        width = 1.dp,
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.25f),
+                        shape = RoundedCornerShape(26.dp),
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.exhale),
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(44.dp),
+                )
+            }
         }
-        Column {
+
+        Spacer(Modifier.height(18.dp))
+
+        Text(
+            text = stringResource(R.string.app_name),
+            style = MaterialTheme.typography.displaySmall,
+            fontWeight = FontWeight.Black,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            text = stringResource(
+                R.string.about_version_build,
+                BuildConfig.VERSION_NAME,
+                BuildConfig.VERSION_CODE.toString(),
+            ),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
+    }
+}
+
+// ─── Easter egg ───────────────────────────────────────────────────────────────
+
+private const val InhaleMillis = 4_000
+private const val ExhaleMillis = 6_000
+
+/**
+ * The hidden thing behind seven taps on the About hero.
+ *
+ * The app is called Exhale, so the egg is a breathing pacer: an orb that swells over four seconds
+ * and empties over six — the 4-6 rhythm that actually slows a heart rate rather than a decorative
+ * loop that merely looks calm. It runs over the app's own aurora, and it is the one screen in the
+ * app with no controls on it at all: tap anywhere to leave.
+ *
+ * The orb is driven by a single `Animatable` read inside `graphicsLayer`, so the whole thing is
+ * two scaling layers on the render thread and nothing else.
+ */
+@Composable
+private fun ExhaleBreathingEgg(onDismiss: () -> Unit) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        val breath = remember { Animatable(0f) }
+        var inhaling by remember { mutableStateOf(true) }
+        var breaths by remember { mutableIntStateOf(0) }
+
+        LaunchedEffect(Unit) {
+            while (true) {
+                inhaling = true
+                breath.animateTo(1f, tween(InhaleMillis, easing = FastOutSlowInEasing))
+                inhaling = false
+                breath.animateTo(0f, tween(ExhaleMillis, easing = FastOutSlowInEasing))
+                breaths++
+            }
+        }
+
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .clickable(
+                    indication = null,
+                    interactionSource = remember { MutableInteractionSource() },
+                    onClick = onDismiss,
+                ),
+            contentAlignment = Alignment.Center,
+        ) {
+            AuroraBackdrop()
+
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+            ) {
+                Box(
+                    modifier = Modifier.size(300.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    // Outer bloom, lagging slightly behind the core so the orb has depth rather
+                    // than reading as one flat disc changing size.
+                    Box(
+                        modifier = Modifier
+                            .size(300.dp)
+                            .graphicsLayer {
+                                val scale = 0.55f + 0.45f * breath.value
+                                scaleX = scale
+                                scaleY = scale
+                                alpha = 0.30f + 0.35f * breath.value
+                            }
+                            .background(
+                                Brush.radialGradient(
+                                    colors = listOf(
+                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.55f),
+                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
+                                        Color.Transparent,
+                                    ),
+                                )
+                            )
+                    )
+
+                    Box(
+                        modifier = Modifier
+                            .size(180.dp)
+                            .graphicsLayer {
+                                val scale = 0.62f + 0.38f * breath.value
+                                scaleX = scale
+                                scaleY = scale
+                            }
+                            .liquidGlassSurface(
+                                shape = CircleShape,
+                                tint = MaterialTheme.colorScheme.primary,
+                            ),
+                    )
+                }
+
+                Spacer(Modifier.height(36.dp))
+
+                Text(
+                    text = stringResource(
+                        if (inhaling) R.string.egg_breathe_in else R.string.egg_breathe_out
+                    ),
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+
+                Spacer(Modifier.height(10.dp))
+
+                Text(
+                    text = if (breaths == 0) {
+                        stringResource(R.string.egg_hint)
+                    } else {
+                        stringResource(R.string.egg_breath_count, breaths.toString())
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                )
+            }
+        }
+    }
+}
+
+// ─── Grouped rows ─────────────────────────────────────────────────────────────
+
+@Composable
+private fun AboutGroup(content: @Composable () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(SettingsDimensions.GroupCardCornerRadius))
+            .background(SettingsDimensions.groupSurfaceColor()),
+    ) {
+        content()
+    }
+}
+
+@Composable
+private fun AboutDivider() {
+    HorizontalDivider(
+        modifier = Modifier.padding(start = SettingsDimensions.DividerStartIndent),
+        thickness = SettingsDimensions.DividerThickness,
+        color = SettingsDimensions.dividerColor(),
+    )
+}
+
+/** A row fronted by a circular photograph rather than a glyph tile: a person, not a setting. */
+@Composable
+private fun AboutPersonRow(
+    avatarUrl: String,
+    name: String,
+    role: String,
+    onClick: () -> Unit,
+) {
+    AboutRowScaffold(onClick = onClick) {
+        AsyncImage(
+            model = avatarUrl,
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier
+                .size(SettingsDimensions.RowIconSize)
+                .clip(CircleShape)
+                .border(
+                    width = 1.dp,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f),
+                    shape = CircleShape,
+                ),
+        )
+
+        Spacer(Modifier.width(14.dp))
+
+        Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = "Arturo Cervantes",
+                text = name,
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
             Text(
-                text = "Lead Developer",
+                text = role,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
         }
+
+        AboutChevron()
     }
 }
 
-// ── Social card (Material 3 Expressive) ────────────────────────────────────
-
 @Composable
-private fun SocialCardExpressive(
-    links: List<SocialLink>,
-    onLinkClick: (String) -> Unit,
-    columns: Int = 3,
-) {
-    ElevatedCard(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(28.dp),
-        colors = CardDefaults.elevatedCardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-        ),
-        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp),
-    ) {
-        Column(
-            modifier = Modifier.padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            // Section header
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                Surface(
-                    shape = RoundedCornerShape(14.dp),
-                    color = MaterialTheme.colorScheme.tertiaryContainer,
-                    modifier = Modifier.size(44.dp),
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            painter = painterResource(R.drawable.link),
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onTertiaryContainer,
-                            modifier = Modifier.size(22.dp),
-                        )
-                    }
-                }
-                Text(
-                    text = stringResource(R.string.social_links),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-            }
-
-            // Social links FlowRow (responsive)
-            androidx.compose.foundation.layout.FlowRow(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                links.forEach { link ->
-                    SocialPillExpressive(
-                        iconRes = link.iconRes,
-                        label = link.label,
-                        onClick = { onLinkClick(link.url) },
-                    )
-                }
-            }
-        }
-    }
-}
-
-// ── Contributor Card (Expresivo) ───────────────────────────────────────────
-
-@Composable
-private fun ContributorCardExpressive(
-    contributor: Contributor,
+private fun AboutRow(
+    icon: Int,
+    title: String,
+    value: String?,
     onClick: () -> Unit,
 ) {
-    var isHovered by remember { mutableStateOf(false) }
-    val elevation by androidx.compose.animation.core.animateDpAsState(
-        targetValue = if (isHovered) 6.dp else 2.dp,
-        animationSpec = spring(stiffness = Spring.StiffnessLow),
-        label = "elevation"
-    )
-
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .graphicsLayer {
-                scaleX = if (isHovered) 1.01f else 1f
-                scaleY = if (isHovered) 1.01f else 1f
-            },
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isHovered)
-                MaterialTheme.colorScheme.surfaceContainerHighest
-            else
-                MaterialTheme.colorScheme.surfaceContainer,
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = elevation),
-    ) {
-        Row(
+    AboutRowScaffold(onClick = onClick) {
+        Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
+                .size(SettingsDimensions.RowIconSize)
+                .clip(RoundedCornerShape(SettingsDimensions.RowIconCornerRadius))
+                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
+            contentAlignment = Alignment.Center,
         ) {
-            Surface(
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.secondaryContainer,
-                modifier = Modifier.size(52.dp),
-                shadowElevation = if (isHovered) 4.dp else 2.dp,
-            ) {
-                AsyncImage(
-                    model = contributor.avatarUrl,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .clip(CircleShape),
-                )
-            }
-
-            // Name + role
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = contributor.name,
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Spacer(Modifier.height(2.dp))
-                Text(
-                    text = contributor.role,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-
-            // Forward arrow
             Icon(
-                painter = painterResource(R.drawable.arrow_forward),
+                painter = painterResource(icon),
                 contentDescription = null,
-                tint = if (isHovered)
-                    MaterialTheme.colorScheme.primary
-                else
-                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                modifier = Modifier.size(20.dp),
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(SettingsDimensions.RowIconInnerSize),
             )
         }
-    }
-}
 
-// ── License footer (Material 3 Expressive) ─────────────────────────────────
+        Spacer(Modifier.width(14.dp))
 
-@Composable
-private fun LicenseFooterExpressive(onLicenseClick: () -> Unit) {
-    var isPressed by remember { mutableStateOf(false) }
+        Text(
+            text = title,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(1f),
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
 
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onLicenseClick)
-            .graphicsLayer {
-                scaleX = if (isPressed) 0.98f else 1f
-                scaleY = if (isPressed) 0.98f else 1f
-            },
-        shape = RoundedCornerShape(24.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-        shadowElevation = 2.dp,
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 18.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            Surface(
-                shape = RoundedCornerShape(14.dp),
-                color = MaterialTheme.colorScheme.primaryContainer,
-                modifier = Modifier.size(44.dp),
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        painter = painterResource(R.drawable.policy),
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                        modifier = Modifier.size(24.dp),
-                    )
-                }
-            }
-
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "GNU General Public License v3.0",
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                Text(
-                    text = stringResource(R.string.view_license),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-
-            Icon(
-                painter = painterResource(R.drawable.arrow_forward),
-                contentDescription = null,
-                tint = if (isPressed)
-                    MaterialTheme.colorScheme.primary
-                else
-                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                modifier = Modifier.size(18.dp),
-            )
-        }
-    }
-}
-
-// ── Loading shimmer (Expresivo) ────────────────────────────────────────────
-
-@Composable
-private fun ContributorShimmerExpressive() {
-    val shimmer = shimmerEffect()
-
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainer,
-        ),
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            // Avatar shimmer (clean circle)
-            Surface(
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.secondaryContainer,
-                modifier = Modifier.size(52.dp),
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(shimmer)
-                        .clip(CircleShape),
-                )
-            }
-
-            Column(modifier = Modifier.weight(1f)) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth(0.6f)
-                        .height(20.dp)
-                        .background(shimmer, RoundedCornerShape(6.dp))
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth(0.4f)
-                        .height(14.dp)
-                        .background(shimmer, RoundedCornerShape(4.dp))
-                )
-            }
-
-            Box(
-                modifier = Modifier
-                    .size(20.dp)
-                    .background(shimmer, CircleShape)
-            )
-        }
-    }
-}
-
-// ── Error card (Material 3 Expressive) ─────────────────────────────────────
-
-@Composable
-private fun ErrorCardExpressive(
-    message: String,
-    onRetry: () -> Unit,
-) {
-    ElevatedCard(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(28.dp),
-        colors = CardDefaults.elevatedCardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-        ),
-        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp),
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(32.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            Surface(
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.errorContainer,
-                modifier = Modifier.size(80.dp),
-                shadowElevation = 4.dp,
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        painter = painterResource(R.drawable.error),
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onErrorContainer,
-                        modifier = Modifier.size(44.dp),
-                    )
-                }
-            }
-
+        if (value != null) {
             Text(
-                text = "Could not load contributors",
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface,
-                textAlign = TextAlign.Center,
-            )
-
-            Text(
-                text = message,
+                text = value,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
+                maxLines = 1,
             )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            ElevatedButton(
-                onClick = onRetry,
-                shape = RoundedCornerShape(50.dp),
-                colors = ButtonDefaults.elevatedButtonColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                ),
-            ) {
-                Text(
-                    text = stringResource(R.string.retry),
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                )
-            }
+            Spacer(Modifier.width(6.dp))
         }
+
+        AboutChevron()
     }
 }
 
-// ── Small helpers ──────────────────────────────────────────────────────────
-
+/** A row that states a fact. No chevron, no press state — nothing here is tappable. */
 @Composable
-private fun VersionBadgeExpressive(
-    text: String,
-    containerColor: Color,
-    contentColor: Color,
+private fun AboutValueRow(
+    icon: Int,
+    title: String,
+    value: String,
 ) {
-    Surface(
-        shape = RoundedCornerShape(50.dp),
-        color = containerColor,
-        shadowElevation = 1.dp,
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(
+                horizontal = SettingsDimensions.RowHorizontalPadding,
+                vertical = SettingsDimensions.RowVerticalPadding,
+            ),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
+        Box(
+            modifier = Modifier
+                .size(SettingsDimensions.RowIconSize)
+                .clip(RoundedCornerShape(SettingsDimensions.RowIconCornerRadius))
+                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                painter = painterResource(icon),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(SettingsDimensions.RowIconInnerSize),
+            )
+        }
+
+        Spacer(Modifier.width(14.dp))
+
         Text(
-            text = text,
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.Medium,
-            color = contentColor,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+            text = title,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(1f),
+        )
+
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }
 
 @Composable
-private fun SocialPillExpressive(
-    iconRes: Int,
-    label: String,
-    onClick: () -> Unit,
-) {
-    var isHovered by remember { mutableStateOf(false) }
+private fun AboutChevron() {
+    Icon(
+        painter = painterResource(R.drawable.navigate_next),
+        contentDescription = null,
+        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
+        modifier = Modifier.size(SettingsDimensions.ChevronSize),
+    )
+}
 
-    Surface(
+/** Shared row geometry and the iOS press fill, so every About row behaves like a Settings row. */
+@Composable
+private fun AboutRowScaffold(
+    onClick: () -> Unit,
+    content: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit,
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val bgAlpha by animateFloatAsState(
+        targetValue = if (isPressed) 0.09f else 0f,
+        animationSpec = SettingsAnimations.pressSpring(),
+        label = "aboutRowBg",
+    )
+
+    Row(
         modifier = Modifier
-            .clickable(onClick = onClick)
-            .graphicsLayer {
-                scaleX = if (isHovered) 1.05f else 1f
-                scaleY = if (isHovered) 1.05f else 1f
-            },
-        shape = RoundedCornerShape(40.dp),
-        color = if (isHovered)
-            MaterialTheme.colorScheme.primaryContainer
-        else
-            MaterialTheme.colorScheme.secondaryContainer,
-        shadowElevation = if (isHovered) 6.dp else 2.dp,
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(
-                painter = painterResource(iconRes),
-                contentDescription = label,
-                modifier = Modifier.size(20.dp),
-                tint = if (isHovered)
-                    MaterialTheme.colorScheme.onPrimaryContainer
-                else
-                    MaterialTheme.colorScheme.onSecondaryContainer,
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = bgAlpha))
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick,
             )
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.Medium,
-                color = if (isHovered)
-                    MaterialTheme.colorScheme.onPrimaryContainer
-                else
-                    MaterialTheme.colorScheme.onSecondaryContainer,
-                maxLines = 1,
-            )
-        }
-    }
+            .padding(
+                horizontal = SettingsDimensions.RowHorizontalPadding,
+                vertical = SettingsDimensions.RowVerticalPadding,
+            ),
+        verticalAlignment = Alignment.CenterVertically,
+        content = content,
+    )
 }

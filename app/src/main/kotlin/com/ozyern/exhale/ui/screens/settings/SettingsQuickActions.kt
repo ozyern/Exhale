@@ -30,8 +30,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.ozyern.exhale.R
@@ -53,17 +53,20 @@ fun SettingsQuickActionsSection(
 ) {
     if (actions.isEmpty()) return
 
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(SettingsDimensions.GroupCardCornerRadius))
-            .background(SettingsDimensions.groupSurfaceColor()),
-    ) {
-        actions.forEachIndexed { index, action ->
-            QuickActionRow(
-                action = action,
-                showDivider = index < actions.size - 1,
-            )
+    Column(modifier = modifier) {
+        SettingsSectionHeader(stringResource(R.string.settings_group_essentials))
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(SettingsDimensions.GroupCardCornerRadius))
+                .background(SettingsDimensions.groupSurfaceColor()),
+        ) {
+            actions.forEachIndexed { index, action ->
+                QuickActionRow(
+                    action = action,
+                    showDivider = index < actions.size - 1,
+                )
+            }
         }
     }
 }
@@ -76,13 +79,8 @@ private fun QuickActionRow(
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.98f else 1f,
-        animationSpec = SettingsAnimations.pressSpring(),
-        label = "quickActionRowScale",
-    )
     val bgAlpha by animateFloatAsState(
-        targetValue = if (isPressed) 0.06f else 0f,
+        targetValue = if (isPressed) 0.09f else 0f,
         animationSpec = SettingsAnimations.pressSpring(),
         label = "quickActionRowBg",
     )
@@ -91,8 +89,7 @@ private fun QuickActionRow(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .graphicsLayer { scaleX = scale; scaleY = scale }
-                .background(action.accentColor.copy(alpha = bgAlpha))
+                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = bgAlpha))
                 .clickable(
                     interactionSource = interactionSource,
                     indication = null,

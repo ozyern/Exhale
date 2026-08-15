@@ -67,6 +67,8 @@ data class SettingsContentState(
     val hasSearchResults: Boolean,
     val onRequestPermission: () -> Unit,
     val onUpdateClick: () -> Unit,
+    val onAboutClick: () -> Unit,
+    val onSearchClick: () -> Unit,
 )
 
 @Composable
@@ -175,6 +177,17 @@ private fun CompactSettingsLayout(
             ),
         contentPadding = PaddingValues(top = topPadding, bottom = 32.dp),
     ) {
+        if (!state.isSearchActive) {
+            item(key = "search") {
+                SettingsSearchPill(
+                    onClick = state.onSearchClick,
+                    modifier = Modifier
+                        .padding(horizontal = pad)
+                        .padding(top = 2.dp, bottom = spacing),
+                )
+            }
+        }
+
         item(key = "hero") {
             AnimatedVisibility(
                 visible = heroVisible,
@@ -185,9 +198,10 @@ private fun CompactSettingsLayout(
                     ),
             ) {
                 SettingsProfileHeader(
+                    onClick = state.onAboutClick,
                     modifier = Modifier
                         .padding(horizontal = pad)
-                        .padding(top = 4.dp, bottom = spacing),
+                        .padding(bottom = spacing),
                 )
             }
         }
@@ -357,6 +371,7 @@ private fun MediumSettingsLayout(
                     enter = fadeIn(SettingsAnimations.entranceSpring()),
                 ) {
                     SettingsProfileHeader(
+                        onClick = state.onAboutClick,
                         modifier = Modifier.padding(top = 4.dp, bottom = spacing),
                     )
                 }
@@ -512,6 +527,7 @@ private fun ExpandedSettingsLayout(
                     enter = fadeIn(SettingsAnimations.entranceSpring()),
                 ) {
                     SettingsProfileHeader(
+                        onClick = state.onAboutClick,
                         modifier = Modifier.padding(top = 4.dp, bottom = spacing),
                     )
                 }

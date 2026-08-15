@@ -174,6 +174,8 @@ fun SettingsScreen(
             }
         },
         onUpdateClick = { navController.navigate("settings/update") },
+        onAboutClick = { navController.navigate("settings/about") },
+        onSearchClick = { isSearching = true },
     )
 
     // Solid, distinct page colour — the ground the inset groups float on. Hoisted so the app bar

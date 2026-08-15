@@ -459,6 +459,15 @@ val UseLyricsV2Key = booleanPreferencesKey("useLyricsV2")
 
 // Queue lyrics pre-load settings
 val PreloadQueueLyricsEnabledKey = booleanPreferencesKey("preload_queue_lyrics_enabled")
+
+/**
+ * Publish timed lyrics to the OxygenOS / ColorOS lock screen ("Live Space").
+ *
+ * On every other ROM this is inert — the payload rides along on metadata we already build and is
+ * simply ignored — so it defaults on. The switch exists for anyone who would rather their lyrics
+ * not leave the app at all.
+ */
+val EnableLockScreenLyricsKey = booleanPreferencesKey("enableLockScreenLyrics")
 val QueueLyricsPreloadCountKey = intPreferencesKey("queue_lyrics_preload_count")
 
 val PlayerVolumeKey = floatPreferencesKey("playerVolume")

@@ -36,7 +36,10 @@ class StatsViewModel
 constructor(
     val database: MusicDatabase,
 ) : ViewModel() {
-    val selectedOption = MutableStateFlow(OptionStats.CONTINUOUS)
+    // Sound Chem is month-by-month, so the period mode is fixed here rather than being something
+    // the screen has to correct after its first query has already run against the wrong window.
+    // [indexChips] is the months-back offset: 0 is the current month.
+    val selectedOption = MutableStateFlow(OptionStats.MONTHS)
     val indexChips = MutableStateFlow(0)
 
     val mostPlayedSongsStats =

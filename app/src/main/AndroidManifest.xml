@@ -47,6 +47,19 @@
             android:name="org.apache.http.legacy"
             android:required="false" />
 
+        <!--
+            OxygenOS / ColorOS "Live Space" opt-in.
+
+            Stock ColorOS keeps a whitelist of players allowed into its media-history stack, which
+            is what keeps the lock-screen music card (and its lyric surface) alive after our
+            process has been fully stopped. This flag asks to be admitted alongside it. It is inert
+            on every other ROM — an unread meta-data string — and grants nothing by itself: the
+            lyrics themselves travel as `lyricInfo` on the media session. See OplusLiveLyrics.
+        -->
+        <meta-data
+            android:name="io.github.andrealtb.lockscreenlyrics.OPLUS_MEDIA_HISTORY"
+            android:value="true" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"

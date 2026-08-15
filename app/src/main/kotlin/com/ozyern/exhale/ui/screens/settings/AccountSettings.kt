@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -81,6 +82,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -110,6 +112,7 @@ import com.ozyern.exhale.ui.component.InfoLabel
 import com.ozyern.exhale.ui.component.SettingsDividerThickness
 import com.ozyern.exhale.ui.component.SettingsGroupCornerRadius
 import com.ozyern.exhale.ui.component.TextFieldDialog
+import com.ozyern.exhale.ui.component.liquidGlassSurface
 import com.ozyern.exhale.ui.component.settingsDividerColor
 import com.ozyern.exhale.ui.screens.buildLoginRoute
 import com.ozyern.exhale.utils.Updater
@@ -159,26 +162,22 @@ fun AccountSettings(
         modifier = Modifier
             .verticalScroll(rememberScrollState())
     ) {
-        // iOS-style header: LARGE centered profile avatar + bold identity text.
-        AccountSettingsHeader(
-            isLoggedIn = isLoggedIn,
-            accountName = accountName,
-            accountEmail = accountEmail,
-            accountImageUrl = accountImageUrl,
-            onClose = onClose,
-        )
+        AccountSheetTopBar(onClose = onClose)
 
         Column(
             modifier = Modifier.padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Account Card
-            AccountCard(
+            // One identity block, not two. The sheet used to open with a large centred avatar and
+            // then repeat the same avatar, name and email in a card immediately underneath it —
+            // a third of the sheet's height spent saying the same thing twice before the first
+            // actionable row.
+            AccountIdentityCard(
                 isLoggedIn = isLoggedIn,
-                accountName = accountName,
+                accountName = accountName.ifEmpty { accountNamePref },
                 accountEmail = accountEmail,
                 accountImageUrl = accountImageUrl,
-                onAccountClick = {
+                onClick = {
                     onClose()
                     if (isLoggedIn) {
                         navController.navigate("account")
@@ -186,11 +185,35 @@ fun AccountSettings(
                         navController.navigate(buildLoginRoute())
                     }
                 },
-                onLogout = {
-                    onInnerTubeCookieChange("")
-                    forgetAccount(context)
-                }
             )
+
+            // The four things people actually open this sheet for, as tiles rather than as rows
+            // buried in three separate captioned groups further down.
+            AccountQuickTiles(
+                isLoggedIn = isLoggedIn,
+                hasUpdate = hasUpdate,
+                onSoundChem = { onClose(); navController.navigate("stats") },
+                onHistory = { onClose(); navController.navigate("history") },
+                onSettings = { onClose(); navController.navigate("settings") },
+                onSignInOut = {
+                    if (isLoggedIn) {
+                        onInnerTubeCookieChange("")
+                        forgetAccount(context)
+                    } else {
+                        onClose()
+                        navController.navigate(buildLoginRoute())
+                    }
+                },
+            )
+
+            if (hasUpdate) {
+                SettingsSection {
+                    UpdateAvailableItem(
+                        latestVersion = latestVersionName,
+                        onClick = { uriHandler.openUri(Updater.getLatestDownloadUrl()) }
+                    )
+                }
+            }
 
             // Token Editor Dialog
             if (showTokenEditor) {
@@ -239,29 +262,6 @@ fun AccountSettings(
                         onCheckedChange = onYtmSyncChange
                     )
                 }
-            }
-
-            // Your Activity Section (Stats & History relocated from the main header)
-            SettingsSection(title = "Your Activity") {
-                SettingsClickableItem(
-                    icon = painterResource(R.drawable.stats),
-                    title = stringResource(R.string.stats),
-                    onClick = {
-                        onClose()
-                        navController.navigate("stats")
-                    }
-                )
-
-                SettingsRowDivider()
-
-                SettingsClickableItem(
-                    icon = painterResource(R.drawable.history),
-                    title = stringResource(R.string.history),
-                    onClick = {
-                        onClose()
-                        navController.navigate("history")
-                    }
-                )
             }
 
             // Notifications Section (relocated into the Accounts area)
@@ -344,28 +344,6 @@ fun AccountSettings(
                 )
             }
 
-            // Settings & Updates Section
-            SettingsSection {
-                SettingsClickableItem(
-                    icon = painterResource(R.drawable.settings),
-                    title = stringResource(R.string.settings),
-                    showBadge = hasUpdate,
-                    onClick = {
-                        onClose()
-                        navController.navigate("settings")
-                    }
-                )
-
-                if (hasUpdate) {
-                    SettingsRowDivider()
-
-                    UpdateAvailableItem(
-                        latestVersion = latestVersionName,
-                        onClick = { uriHandler.openUri(Updater.getLatestDownloadUrl()) }
-                    )
-                }
-            }
-
             // App Version Footer
             AppVersionFooter()
 
@@ -381,25 +359,24 @@ fun AccountSettings(
     }
 }
 
+/** Just a close affordance. The sheet's own grab handle is the primary dismissal. */
 @Composable
-private fun AccountSettingsHeader(
-    isLoggedIn: Boolean,
-    accountName: String,
-    accountEmail: String,
-    accountImageUrl: String?,
-    onClose: () -> Unit,
-) {
-    Box(
+private fun AccountSheetTopBar(onClose: () -> Unit) {
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 4.dp, bottom = 20.dp)
+            .padding(start = 16.dp, end = 12.dp, top = 4.dp, bottom = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        // Close pill, top-right — floats over the centered avatar column.
+        Text(
+            text = stringResource(R.string.account),
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(1f),
+        )
         IconButton(
             onClick = onClose,
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(end = 12.dp),
             colors = IconButtonDefaults.iconButtonColors(
                 containerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
             )
@@ -410,113 +387,60 @@ private fun AccountSettingsHeader(
                 tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
-
-        // Apple-Music-style centered identity block: LARGE avatar + bold name.
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 12.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(84.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
-                contentAlignment = Alignment.Center
-            ) {
-                if (isLoggedIn && accountImageUrl != null) {
-                    AsyncImage(
-                        model = accountImageUrl,
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier
-                            .size(84.dp)
-                            .clip(CircleShape)
-                    )
-                } else {
-                    Icon(
-                        painter = painterResource(R.drawable.account),
-                        contentDescription = null,
-                        modifier = Modifier.size(40.dp),
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                }
-            }
-
-            Text(
-                text = if (isLoggedIn && accountName.isNotEmpty()) accountName
-                else stringResource(R.string.app_name),
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-
-            if (isLoggedIn && accountEmail.isNotEmpty()) {
-                Text(
-                    text = accountEmail,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-        }
     }
 }
 
+/**
+ * The identity block: portrait, name, second line, chevron.
+ *
+ * Left-aligned and compact rather than a centred column with a 112dp halo. A sheet has a hard
+ * height budget and everything below this has to fit in what is left; a centred hero spends that
+ * budget on the one piece of information the user already knows.
+ */
 @Composable
-private fun AccountCard(
+private fun AccountIdentityCard(
     isLoggedIn: Boolean,
     accountName: String,
     accountEmail: String,
     accountImageUrl: String?,
-    onAccountClick: () -> Unit,
-    onLogout: () -> Unit
+    onClick: () -> Unit,
 ) {
-    // Signed-in state gets a faint primary wash so the row still reads as "this is you"; signed-out
-    // falls back to the same neutral tint every other inset group uses. Both are translucent — the
-    // frosted sheet behind has to show through.
-    val cardColor by animateColorAsState(
-        targetValue = if (isLoggedIn)
-            MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)
-        else
-            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f),
-        animationSpec = tween(300),
-        label = "cardColor"
-    )
-
-    // A clipped Column, not a Material Card. Card brings a tonal elevation overlay and a shadow
-    // that no iOS grouped list has, and its 24dp radius disagreed with the 16dp every group below
-    // it uses — the account row visibly belonged to a different design system.
-    Column(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(SettingsGroupCornerRadius))
-            .background(cardColor)
-            .clickable(onClick = onAccountClick)
+            .liquidGlassSurface(RoundedCornerShape(20.dp))
+            .clickable(onClick = onClick)
+            .padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(20.dp),
-            verticalAlignment = Alignment.CenterVertically
+        Box(
+            modifier = Modifier.size(76.dp),
+            contentAlignment = Alignment.Center,
         ) {
-            // Avatar
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.radialGradient(
+                            colors = listOf(
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.35f),
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                                Color.Transparent,
+                            ),
+                        )
+                    )
+            )
             Box(
                 modifier = Modifier
                     .size(60.dp)
                     .clip(CircleShape)
-                    .background(
-                        if (isLoggedIn)
-                            MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
-                        else
-                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.1f)
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f))
+                    .border(
+                        width = 1.5.dp,
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.35f),
+                        shape = CircleShape,
                     ),
-                contentAlignment = Alignment.Center
+                contentAlignment = Alignment.Center,
             ) {
                 if (isLoggedIn && accountImageUrl != null) {
                     AsyncImage(
@@ -529,70 +453,157 @@ private fun AccountCard(
                     )
                 } else {
                     Icon(
-                        painter = painterResource(
-                            if (isLoggedIn) R.drawable.account else R.drawable.login
-                        ),
+                        painter = painterResource(R.drawable.account),
                         contentDescription = null,
-                        modifier = Modifier.size(28.dp),
-                        tint = if (isLoggedIn)
-                            MaterialTheme.colorScheme.primary
-                        else
-                            MaterialTheme.colorScheme.onSurfaceVariant
+                        modifier = Modifier.size(30.dp),
+                        tint = MaterialTheme.colorScheme.primary
                     )
                 }
             }
+        }
 
-            Spacer(Modifier.width(16.dp))
+        Spacer(Modifier.width(14.dp))
 
-            // Account Info
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = if (isLoggedIn) accountName else stringResource(R.string.login),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = if (isLoggedIn && accountName.isNotEmpty()) {
+                    accountName
+                } else {
+                    stringResource(R.string.account_signed_out_title)
+                },
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Spacer(Modifier.height(2.dp))
+            Text(
+                text = when {
+                    isLoggedIn && accountEmail.isNotEmpty() -> accountEmail
+                    isLoggedIn -> stringResource(R.string.account_signed_in_subtitle)
+                    else -> stringResource(R.string.account_signed_out_subtitle)
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
 
-                if (isLoggedIn && accountEmail.isNotEmpty()) {
-                    Spacer(Modifier.height(2.dp))
-                    Text(
-                        text = accountEmail,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                } else if (!isLoggedIn) {
-                    Spacer(Modifier.height(2.dp))
-                    Text(
-                        text = stringResource(R.string.not_logged_in),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
+        Spacer(Modifier.width(8.dp))
 
-            // Logout Button or Arrow
-            if (isLoggedIn) {
-                FilledTonalButton(
-                    onClick = onLogout,
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Text(
-                        text = stringResource(R.string.action_logout),
-                        style = MaterialTheme.typography.labelMedium
-                    )
-                }
+        Icon(
+            painter = painterResource(R.drawable.navigate_next),
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+            modifier = Modifier.size(20.dp),
+        )
+    }
+}
+
+/**
+ * Four square tiles under the identity card.
+ *
+ * These four destinations used to be scattered across three separate captioned groups, each one a
+ * full-width row indistinguishable from a preference toggle. As tiles they are the sheet's answer
+ * to "why did I open this" — glanceable, reachable with a thumb, and done in one tap.
+ */
+@Composable
+private fun AccountQuickTiles(
+    isLoggedIn: Boolean,
+    hasUpdate: Boolean,
+    onSoundChem: () -> Unit,
+    onHistory: () -> Unit,
+    onSettings: () -> Unit,
+    onSignInOut: () -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        AccountTile(
+            icon = painterResource(R.drawable.stats),
+            label = stringResource(R.string.sound_chem),
+            accent = MaterialTheme.colorScheme.primary,
+            onClick = onSoundChem,
+            modifier = Modifier.weight(1f),
+        )
+        AccountTile(
+            icon = painterResource(R.drawable.history),
+            label = stringResource(R.string.history),
+            accent = MaterialTheme.colorScheme.secondary,
+            onClick = onHistory,
+            modifier = Modifier.weight(1f),
+        )
+        AccountTile(
+            icon = painterResource(R.drawable.settings),
+            label = stringResource(R.string.settings),
+            accent = MaterialTheme.colorScheme.tertiary,
+            showBadge = hasUpdate,
+            onClick = onSettings,
+            modifier = Modifier.weight(1f),
+        )
+        AccountTile(
+            icon = painterResource(
+                if (isLoggedIn) R.drawable.logout else R.drawable.login
+            ),
+            label = stringResource(
+                if (isLoggedIn) R.string.logout else R.string.login
+            ),
+            accent = if (isLoggedIn) {
+                MaterialTheme.colorScheme.error
             } else {
-                Icon(
-                    painter = painterResource(R.drawable.arrow_forward),
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                MaterialTheme.colorScheme.primary
+            },
+            onClick = onSignInOut,
+            modifier = Modifier.weight(1f),
+        )
+    }
+}
+
+@Composable
+private fun AccountTile(
+    icon: Painter,
+    label: String,
+    accent: Color,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    showBadge: Boolean = false,
+) {
+    Column(
+        modifier = modifier
+            .liquidGlassSurface(RoundedCornerShape(18.dp), tint = accent)
+            .clickable(onClick = onClick)
+            .padding(vertical = 14.dp, horizontal = 6.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Box(contentAlignment = Alignment.TopEnd) {
+            Icon(
+                painter = icon,
+                contentDescription = null,
+                tint = accent,
+                modifier = Modifier.size(24.dp),
+            )
+            if (showBadge) {
+                Box(
+                    modifier = Modifier
+                        .size(7.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.error)
                 )
             }
         }
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.Center,
+        )
     }
 }
 
@@ -617,11 +628,14 @@ private fun SettingsSection(
         // so the sheet's frosted glass reads through. NO Material Card — no elevation, no border.
         // Rows inside sit flush; callers place thin dividers only BETWEEN items (never at the very
         // top or bottom of the group) via [SettingsRowDivider].
+        // The shared glass plate, the same one the Sound Chem deck is built from: gradient fill,
+        // diagonal sheen, hairline rim. This used to be a flat 5% ink wash, which on the sheet's
+        // already-translucent backdrop came out as a barely-there grey smudge — the groups did not
+        // read as plates so much as as slightly dirty patches of the sheet.
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(SettingsGroupCornerRadius))
-                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
+                .liquidGlassSurface(RoundedCornerShape(SettingsGroupCornerRadius))
         ) {
             content()
         }

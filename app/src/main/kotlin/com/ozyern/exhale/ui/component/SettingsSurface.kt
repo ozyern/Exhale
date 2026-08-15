@@ -32,8 +32,15 @@ val SettingsGroupCornerRadius = 16.dp
 /** Hairline between rows inside a group. Never drawn at a card's top or bottom edge. */
 val SettingsDividerThickness = 1.dp
 
-/** Left indent so a divider starts under the row's text, not under its leading icon. */
-val SettingsDividerStartIndent = 60.dp
+/**
+ * Left indent so a divider starts under the row's text, not under its leading icon.
+ *
+ * This is not a taste value — it is the sum of the row geometry above it: 16dp of card padding,
+ * a 36dp glyph tile, and the 14dp gap after it. At 60dp (what it used to be) every hairline in
+ * Settings stopped 6dp short of the text it was supposed to align with, which is exactly the kind
+ * of near-miss that makes a grouped list read as an imitation of iOS rather than as iOS.
+ */
+val SettingsDividerStartIndent = 66.dp
 
 /**
  * The ground the group cards float on. Pure black on dark (correct on OLED and the strongest

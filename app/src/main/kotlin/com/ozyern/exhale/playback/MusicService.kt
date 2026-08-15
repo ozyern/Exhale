@@ -108,6 +108,7 @@ import com.ozyern.exhale.constants.EqualizerSelectedProfileIdKey
 import com.ozyern.exhale.constants.EqualizerVirtualizerEnabledKey
 import com.ozyern.exhale.constants.EqualizerVirtualizerStrengthKey
 import com.ozyern.exhale.constants.EnableDiscordRPCKey
+import com.ozyern.exhale.constants.EnableLockScreenLyricsKey
 import com.ozyern.exhale.constants.HideExplicitKey
 import com.ozyern.exhale.constants.HideVideoKey
 import com.ozyern.exhale.constants.HistoryDuration
@@ -758,17 +759,25 @@ class MusicService :
         currentMediaMetadata
             .distinctUntilChangedBy { it?.id }
             .collectLatest(ioScope) { mediaMetadata ->
-                if (mediaMetadata != null && database.lyrics(mediaMetadata.id).first() == null) {
-                    val lyrics = lyricsHelper.getLyrics(mediaMetadata)
-                    database.query {
-                        upsert(
-                            LyricsEntity(
-                                id = mediaMetadata.id,
-                                lyrics = lyrics,
-                            ),
-                        )
+                if (mediaMetadata == null) return@collectLatest
+
+                val cached = database.lyrics(mediaMetadata.id).first()
+                val lyrics = if (cached == null) {
+                    lyricsHelper.getLyrics(mediaMetadata).also { fetched ->
+                        database.query {
+                            upsert(
+                                LyricsEntity(
+                                    id = mediaMetadata.id,
+                                    lyrics = fetched,
+                                ),
+                            )
+                        }
                     }
+                } else {
+                    cached.lyrics
                 }
+
+                publishLiveLyrics(mediaMetadata, lyrics)
             }
 
         dataStore.data
@@ -1488,6 +1497,53 @@ class MusicService :
 
     private fun stopOnError() {
         player.pause()
+    }
+
+    /**
+     * Hands the current track's timed lyrics to OxygenOS / ColorOS Live Space.
+     *
+     * The ROM reads them off the current media item's metadata, so "publishing" means replacing
+     * that item with a copy carrying one extra extras string. `replaceMediaItem` is the right
+     * lever: when only metadata differs, ExoPlayer patches it in place rather than re-preparing
+     * the source, so nothing about playback is disturbed.
+     *
+     * Two rules from the OPlus protocol shape the code:
+     *
+     *  - **One publication per track.** Position updates, pause/resume and notification refreshes
+     *    must never rewrite the payload, so this hangs off the same collector that resolves lyrics
+     *    — which fires exactly once per media id — and not off any ticking state.
+     *  - **Beware the debounce.** OPlus drops a metadata update that lands too soon after the
+     *    track change, which leaves the first song of a session stuck at "no lyrics" until the
+     *    next transition. The protocol's remedy is a single delayed re-check, not a retry loop;
+     *    [OplusLiveLyrics.lyricInfo] makes the second pass a no-op whenever the first one stuck.
+     */
+    private suspend fun publishLiveLyrics(
+        metadata: com.ozyern.exhale.models.MediaMetadata,
+        lyrics: String?,
+    ) {
+        val enabled = dataStore.data.first()[EnableLockScreenLyricsKey] ?: true
+        if (!enabled) return
+
+        val payload = OplusLiveLyrics.buildPayload(
+            songId = metadata.id,
+            songName = metadata.title,
+            artist = metadata.artists.joinToString { it.name },
+            lyrics = lyrics?.takeIf { it != LyricsEntity.LYRICS_NOT_FOUND },
+        ) ?: return
+
+        withContext(Dispatchers.Main) { applyLyricInfo(metadata.id, payload) }
+        delay(800)
+        withContext(Dispatchers.Main) { applyLyricInfo(metadata.id, payload) }
+    }
+
+    /** Main-thread half of [publishLiveLyrics]. No-ops unless the track is still the current one. */
+    private fun applyLyricInfo(songId: String, payload: String) {
+        with(OplusLiveLyrics) {
+            val item = player.currentMediaItem ?: return
+            if (item.mediaId != songId) return
+            if (item.lyricInfo() == payload) return
+            player.replaceMediaItem(player.currentMediaItemIndex, item.withLyricInfo(payload))
+        }
     }
 
     private fun updateNotification() {

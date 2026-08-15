@@ -30,8 +30,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -50,17 +50,20 @@ fun SettingsIntegrationsSection(
 ) {
     if (integrations.isEmpty()) return
 
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(SettingsDimensions.GroupCardCornerRadius))
-            .background(SettingsDimensions.groupSurfaceColor()),
-    ) {
-        integrations.forEachIndexed { index, action ->
-            IntegrationRow(
-                action = action,
-                showDivider = index < integrations.size - 1,
-            )
+    Column(modifier = modifier) {
+        SettingsSectionHeader(stringResource(R.string.integrations))
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(SettingsDimensions.GroupCardCornerRadius))
+                .background(SettingsDimensions.groupSurfaceColor()),
+        ) {
+            integrations.forEachIndexed { index, action ->
+                IntegrationRow(
+                    action = action,
+                    showDivider = index < integrations.size - 1,
+                )
+            }
         }
     }
 }
@@ -73,13 +76,9 @@ private fun IntegrationRow(
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.98f else 1f,
-        animationSpec = SettingsAnimations.pressSpring(),
-        label = "integrationRowScale",
-    )
+
     val bgAlpha by animateFloatAsState(
-        targetValue = if (isPressed) 0.06f else 0f,
+        targetValue = if (isPressed) 0.09f else 0f,
         animationSpec = SettingsAnimations.pressSpring(),
         label = "integrationRowBg",
     )
@@ -88,8 +87,7 @@ private fun IntegrationRow(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .graphicsLayer { scaleX = scale; scaleY = scale }
-                .background(action.accentColor.copy(alpha = bgAlpha))
+                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = bgAlpha))
                 .clickable(
                     interactionSource = interactionSource,
                     indication = null,

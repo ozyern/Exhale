@@ -12,6 +12,12 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -19,6 +25,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.pullToRefresh
 import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults.Indicator
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
@@ -33,6 +41,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.navigation.NavController
@@ -41,6 +50,15 @@ import com.ozyern.exhale.innertube.utils.parseCookieString
 import com.ozyern.exhale.LocalPlayerAwareWindowInsets
 import com.ozyern.exhale.LocalPlayerConnection
 import com.ozyern.exhale.R
+import com.ozyern.exhale.db.entities.Album
+import com.ozyern.exhale.db.entities.Artist
+import com.ozyern.exhale.db.entities.LocalItem
+import com.ozyern.exhale.db.entities.Playlist
+import com.ozyern.exhale.db.entities.Song
+import com.ozyern.exhale.extensions.togglePlayPause
+import com.ozyern.exhale.innertube.models.WatchEndpoint
+import com.ozyern.exhale.models.toMediaMetadata
+import com.ozyern.exhale.playback.queues.YouTubeQueue
 import com.ozyern.exhale.constants.InnerTubeCookieKey
 import com.ozyern.exhale.constants.ShowHomeCategoryChipsKey
 import com.ozyern.exhale.ui.component.ChipsRow
@@ -49,6 +67,9 @@ import com.ozyern.exhale.ui.component.LocalMenuState
 import com.ozyern.exhale.ui.component.NavigationTitle
 import com.ozyern.exhale.utils.rememberPreference
 import com.ozyern.exhale.viewmodels.HomeViewModel
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
@@ -123,6 +144,27 @@ fun HomeScreen(
         }
     }
 
+    // One handler for the shortcut grid. Songs play in place; everything else is a destination.
+    val onShortcutClick: (LocalItem) -> Unit = { item ->
+        when (item) {
+            is Song ->
+                if (item.id == mediaMetadata?.id) {
+                    playerConnection.player.togglePlayPause()
+                } else {
+                    playerConnection.playQueue(
+                        YouTubeQueue(
+                            endpoint = WatchEndpoint(item.id),
+                            preloadItem = item.toMediaMetadata(),
+                        )
+                    )
+                }
+
+            is Album -> navController.navigate("album/${item.id}")
+            is Artist -> navController.navigate("artist/${item.id}")
+            is Playlist -> navController.navigate("local_playlist/${item.id}")
+        }
+    }
+
     Box(
         modifier = Modifier.fillMaxSize()
     ) {
@@ -141,6 +183,24 @@ fun HomeScreen(
                 state = lazylistState,
                 contentPadding = LocalPlayerAwareWindowInsets.current.asPaddingValues()
             ) {
+                // Apple Music's large title: the weekday as a quiet eyebrow over a heavy
+                // display-size "Home". It lives *inside* the scroll content rather than in the app
+                // bar, which is the whole point of the pattern — it scrolls away under the bar as
+                // you move down, leaving the compact chrome behind.
+                item(key = "home_large_title", contentType = "large_title") {
+                    HomeLargeTitle()
+                }
+
+                keepListening?.takeIf { it.isNotEmpty() }?.let { items ->
+                    item(key = "home_shortcuts", contentType = "shortcuts") {
+                        HomeShortcutsGrid(
+                            items = items.take(6),
+                            onItemClick = onShortcutClick,
+                            modifier = Modifier.animateItem(),
+                        )
+                    }
+                }
+
                 if (showHomeCategoryChips) {
                     item(key = "chips_row", contentType = "chips_row") {
                         ChipsRow(
@@ -177,31 +237,10 @@ fun HomeScreen(
                 }
             }
 
-            // Apple-Music declutter: the Speed-Dial and Forgotten-Favorites shelves were
-            // removed from Home — the reference layout is featured cards + a handful of
-            // clean horizontal rows, not a stack of micro-sections.
-            keepListening?.takeIf { it.isNotEmpty() }?.let { items ->
-                item(key = "keep_listening_title", contentType = "section_title") {
-                    NavigationTitle(
-                        title = stringResource(R.string.keep_listening),
-                        modifier = Modifier.animateItem()
-                    )
-                }
-
-                item(key = "keep_listening", contentType = "keep_listening") {
-                    KeepListeningSection(
-                        keepListening = items,
-                        mediaMetadata = mediaMetadata,
-                        isPlaying = isPlaying,
-                        navController = navController,
-                        playerConnection = playerConnection,
-                        menuState = menuState,
-                        haptic = haptic,
-                        scope = scope,
-                        metadataMap = allItemsMetadata
-                    )
-                }
-            }
+            // Keep Listening used to be a horizontal shelf of grid cards down here, behind
+            // Quick Picks. It is the shelf people actually came for, and a sideways-scrolling
+            // row shows four items at a time — so it moved to the top of the page and became a
+            // Spotify shortcut grid instead, which shows six at once and needs no aiming.
 
             AccountPlaylistsContainer(
                 viewModel = viewModel,
@@ -272,5 +311,42 @@ fun HomeScreen(
                     .padding(LocalPlayerAwareWindowInsets.current.asPaddingValues()),
             )
         }
+    }
+}
+
+/**
+ * The Apple Music large title.
+ *
+ * Two lines: the weekday, quiet and small, over the section name at display weight. Apple leads
+ * Home with the day rather than a greeting because it is the one piece of context that is always
+ * true and never has to guess at the hour or the mood.
+ *
+ * Horizontal insets are applied the same way [com.ozyern.exhale.ui.component.NavigationTitle] does
+ * them, so the title's left edge lands exactly on the section headers below it.
+ */
+@Composable
+private fun HomeLargeTitle(modifier: Modifier = Modifier) {
+    val weekday = remember {
+        DateTimeFormatter.ofPattern("EEEE", Locale.getDefault()).format(LocalDate.now())
+    }
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .windowInsetsPadding(WindowInsets.systemBars.only(WindowInsetsSides.Horizontal))
+            .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 2.dp),
+    ) {
+        Text(
+            text = weekday,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            text = stringResource(R.string.home),
+            style = MaterialTheme.typography.displaySmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
     }
 }

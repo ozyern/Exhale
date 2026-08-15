@@ -8,57 +8,76 @@
 
 package com.ozyern.exhale.ui.screens
 
+import android.content.Intent
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.navigation.NavController
-import com.ozyern.exhale.innertube.models.WatchEndpoint
 import com.ozyern.exhale.LocalPlayerAwareWindowInsets
 import com.ozyern.exhale.LocalPlayerConnection
 import com.ozyern.exhale.R
-import com.ozyern.exhale.constants.StatPeriod
-import com.ozyern.exhale.extensions.togglePlayPause
+import com.ozyern.exhale.constants.DisableBlurKey
 import com.ozyern.exhale.extensions.toMediaItem
+import com.ozyern.exhale.extensions.togglePlayPause
+import com.ozyern.exhale.innertube.models.WatchEndpoint
 import com.ozyern.exhale.models.toMediaMetadata
 import com.ozyern.exhale.playback.queues.ListQueue
 import com.ozyern.exhale.playback.queues.YouTubeQueue
-import com.ozyern.exhale.ui.component.ChoiceChipsRow
+import com.ozyern.exhale.ui.component.AuroraBackdrop
 import com.ozyern.exhale.ui.component.HideOnScrollFAB
 import com.ozyern.exhale.ui.component.IconButton
+import com.ozyern.exhale.ui.component.ItemThumbnail
+import com.ozyern.exhale.ui.component.ListItem
 import com.ozyern.exhale.ui.component.LocalAlbumsGrid
 import com.ozyern.exhale.ui.component.LocalArtistsGrid
 import com.ozyern.exhale.ui.component.LocalMenuState
-import com.ozyern.exhale.ui.component.NavigationTitle
+import com.ozyern.exhale.ui.component.liquidGlassSurface
 import com.ozyern.exhale.ui.menu.AlbumMenu
 import com.ozyern.exhale.ui.menu.ArtistMenu
 import com.ozyern.exhale.ui.menu.SongMenu
@@ -66,40 +85,24 @@ import com.ozyern.exhale.ui.utils.backToMain
 import com.ozyern.exhale.utils.joinByBullet
 import com.ozyern.exhale.utils.makeTimeString
 import com.ozyern.exhale.utils.rememberPreference
-import com.ozyern.exhale.constants.DisableBlurKey
-import com.ozyern.exhale.ui.component.ListItem
-import com.ozyern.exhale.ui.component.ItemThumbnail
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.shape.GenericShape
-import kotlin.math.cos
-import kotlin.math.sin
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawWithCache
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.zIndex
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.size
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
-import coil3.compose.AsyncImage
-import com.ozyern.exhale.db.entities.Artist
-import com.ozyern.exhale.db.entities.Song
-import com.ozyern.exhale.db.entities.SongWithStats
 import com.ozyern.exhale.viewmodels.StatsViewModel
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
+import java.util.Locale
 
+/**
+ * Your Sound Chem — the listening capsule.
+ *
+ * Month by month, one month at a time. The screen used to open on a mode dropdown
+ * (Continuous / Weeks / Months / Years) above a rail of period chips, which meant the first thing
+ * it asked you to do was configure a query. A capsule is a *period*, so the period is now fixed:
+ * the month is the title, and the only control is a pair of chevrons to step through the months
+ * you actually have history for.
+ *
+ * The deck below it is the point — total time, top artist, top song, and the share of listening a
+ * single artist took, each stated once and stated large. The exhaustive ranked lists are still
+ * here, below the deck, for anyone who wants to scroll into the detail.
+ */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun StatsScreen(
@@ -113,197 +116,103 @@ fun StatsScreen(
     val mediaMetadata by playerConnection.mediaMetadata.collectAsState()
     val context = LocalContext.current
 
-    val indexChips by viewModel.indexChips.collectAsState()
+    val monthIndex by viewModel.indexChips.collectAsState()
     val mostPlayedSongs by viewModel.mostPlayedSongs.collectAsState()
     val mostPlayedSongsStats by viewModel.mostPlayedSongsStats.collectAsState()
     val mostPlayedArtists by viewModel.mostPlayedArtists.collectAsState()
     val mostPlayedAlbums by viewModel.mostPlayedAlbums.collectAsState()
     val firstEvent by viewModel.firstEvent.collectAsState()
-    val currentDate = LocalDateTime.now()
 
     val coroutineScope = rememberCoroutineScope()
     val lazyListState = rememberLazyListState()
-    val selectedOption by viewModel.selectedOption.collectAsState()
 
-    val weeklyDates =
-        if (currentDate != null && firstEvent != null) {
-            generateSequence(currentDate) { it.minusWeeks(1) }
-                .takeWhile { it.isAfter(firstEvent?.event?.timestamp?.minusWeeks(1)) }
-                .mapIndexed { index, date ->
-                    val endDate = date.plusWeeks(1).minusDays(1).coerceAtMost(currentDate)
-                    val formatter = DateTimeFormatter.ofPattern("dd MMM")
-
-                    val startDateFormatted = formatter.format(date)
-                    val endDateFormatted = formatter.format(endDate)
-
-                    val startMonth = date.month
-                    val endMonth = endDate.month
-                    val startYear = date.year
-                    val endYear = endDate.year
-
-                    val text =
-                        when {
-                            startYear != currentDate.year -> "$startDateFormatted, $startYear - $endDateFormatted, $endYear"
-                            startMonth != endMonth -> "$startDateFormatted - $endDateFormatted"
-                            else -> "${date.dayOfMonth} - $endDateFormatted"
-                        }
-                    Pair(index, text)
-                }.toList()
+    // Every month from the current one back to the month of the first thing ever played. Index 0
+    // is this month, which is exactly the offset `statToPeriod(MONTHS, n)` expects, so the index
+    // doubles as the query parameter with no translation.
+    val currentMonth = remember { LocalDateTime.now().withDayOfMonth(1) }
+    val months: List<LocalDateTime> = remember(firstEvent, currentMonth) {
+        val oldest = firstEvent?.event?.timestamp?.withDayOfMonth(1)
+        if (oldest == null) {
+            listOf(currentMonth)
         } else {
-            emptyList()
+            generateSequence(currentMonth) { it.minusMonths(1) }
+                .takeWhile { !it.isBefore(oldest) }
+                .toList()
         }
+    }
+    val selectedMonth = months.getOrNull(monthIndex) ?: currentMonth
+    val monthName = remember(selectedMonth) {
+        DateTimeFormatter.ofPattern("LLLL", Locale.getDefault()).format(selectedMonth)
+    }
+    val yearName = remember(selectedMonth) { selectedMonth.year.toString() }
+    val periodText = "$monthName $yearName"
 
-    val monthlyDates =
-        if (currentDate != null && firstEvent != null) {
-            generateSequence(
-                currentDate.plusMonths(1).withDayOfMonth(1).minusDays(1)
-            ) { it.minusMonths(1) }
-                .takeWhile {
-                    it.isAfter(
-                        firstEvent
-                            ?.event
-                            ?.timestamp
-                            ?.withDayOfMonth(1),
-                    )
-                }.mapIndexed { index, date ->
-                    val formatter = DateTimeFormatter.ofPattern("MMM")
-                    val formattedDate = formatter.format(date)
-                    val text =
-                        if (date.year != currentDate.year) {
-                            "$formattedDate ${date.year}"
-                        } else {
-                            formattedDate
-                        }
-                    Pair(index, text)
-                }.toList()
-        } else {
-            emptyList()
+    // ── The capsule numbers ───────────────────────────────────────────────────
+    val totalMillis = remember(mostPlayedSongsStats) {
+        mostPlayedSongsStats.sumOf { it.timeListened ?: 0L }
+    }
+    val totalMinutes = totalMillis / 60_000L
+    val totalPlays = remember(mostPlayedSongsStats) {
+        mostPlayedSongsStats.sumOf { it.songCountListened }
+    }
+    val topArtist = mostPlayedArtists.firstOrNull()
+    val topSong = mostPlayedSongsStats.firstOrNull()
+    val topArtistMillis = topArtist?.timeListened?.toLong() ?: 0L
+    // Artist and song totals come from two separate queries, so the ratio is not guaranteed to sit
+    // inside 0..100 — clamp rather than print an impossible share.
+    val artistSharePercent = if (totalMillis > 0L) {
+        ((topArtistMillis * 100.0) / totalMillis).toInt().coerceIn(0, 100)
+    } else {
+        0
+    }
+    val hasData = mostPlayedSongsStats.isNotEmpty() || mostPlayedArtists.isNotEmpty()
+
+    fun shareCapsule() {
+        val summary = buildString {
+            appendLine(context.getString(R.string.sound_chem))
+            appendLine(periodText)
+            appendLine()
+            append(context.getString(R.string.sound_chem_time_listened))
+            append(": ")
+            appendLine(
+                context.getString(
+                    R.string.sound_chem_minutes_value,
+                    formatCount(totalMinutes),
+                ),
+            )
+            topArtist?.let {
+                append(context.getString(R.string.sound_chem_top_artist))
+                append(": ")
+                appendLine(it.artist.name)
+            }
+            topSong?.let {
+                append(context.getString(R.string.sound_chem_top_song))
+                append(": ")
+                appendLine(it.title)
+            }
         }
-
-    val yearlyDates =
-        if (currentDate != null && firstEvent != null) {
-            generateSequence(
-                currentDate
-                    .plusYears(1)
-                    .withDayOfYear(1)
-                    .minusDays(1),
-            ) { it.minusYears(1) }
-                .takeWhile {
-                    it.isAfter(
-                        firstEvent
-                            ?.event
-                            ?.timestamp,
-                    )
-                }.mapIndexed { index, date ->
-                    Pair(index, "${date.year}")
-                }.toList()
-        } else {
-            emptyList()
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_TEXT, summary)
         }
-
-    val (disableBlur) = rememberPreference(DisableBlurKey, false)
-    val color1 = MaterialTheme.colorScheme.primary
-    val color2 = MaterialTheme.colorScheme.secondary
-    val color3 = MaterialTheme.colorScheme.tertiary
-    val color4 = MaterialTheme.colorScheme.primaryContainer
-    val color5 = MaterialTheme.colorScheme.secondaryContainer
-    val surfaceColor = MaterialTheme.colorScheme.surface
-
-    Box(modifier = Modifier.fillMaxSize()) {
-        if (!disableBlur) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .fillMaxSize(0.7f)
-                    .align(Alignment.TopCenter)
-                    .zIndex(-1f)
-                    .drawWithCache {
-                        val width = this.size.width
-                        val height = this.size.height
-
-                        val brush1 = Brush.radialGradient(
-                            colors = listOf(
-                                color1.copy(alpha = 0.38f),
-                                color1.copy(alpha = 0.24f),
-                                color1.copy(alpha = 0.14f),
-                                color1.copy(alpha = 0.06f),
-                                Color.Transparent
-                            ),
-                            center = Offset(width * 0.15f, height * 0.1f),
-                            radius = width * 0.55f
-                        )
-
-                        val brush2 = Brush.radialGradient(
-                            colors = listOf(
-                                color2.copy(alpha = 0.34f),
-                                color2.copy(alpha = 0.2f),
-                                color2.copy(alpha = 0.11f),
-                                color2.copy(alpha = 0.05f),
-                                Color.Transparent
-                            ),
-                            center = Offset(width * 0.85f, height * 0.2f),
-                            radius = width * 0.65f
-                        )
-
-                        val brush3 = Brush.radialGradient(
-                            colors = listOf(
-                                color3.copy(alpha = 0.3f),
-                                color3.copy(alpha = 0.17f),
-                                color3.copy(alpha = 0.09f),
-                                color3.copy(alpha = 0.04f),
-                                Color.Transparent
-                            ),
-                            center = Offset(width * 0.3f, height * 0.45f),
-                            radius = width * 0.6f
-                        )
-
-                        val brush4 = Brush.radialGradient(
-                            colors = listOf(
-                                color4.copy(alpha = 0.26f),
-                                color4.copy(alpha = 0.14f),
-                                color4.copy(alpha = 0.08f),
-                                color4.copy(alpha = 0.03f),
-                                Color.Transparent
-                            ),
-                            center = Offset(width * 0.7f, height * 0.5f),
-                            radius = width * 0.7f
-                        )
-
-                        val brush5 = Brush.radialGradient(
-                            colors = listOf(
-                                color5.copy(alpha = 0.22f),
-                                color5.copy(alpha = 0.12f),
-                                color5.copy(alpha = 0.06f),
-                                color5.copy(alpha = 0.02f),
-                                Color.Transparent
-                            ),
-                            center = Offset(width * 0.5f, height * 0.75f),
-                            radius = width * 0.8f
-                        )
-
-                        val overlayBrush = Brush.verticalGradient(
-                            colors = listOf(
-                                Color.Transparent,
-                                Color.Transparent,
-                                surfaceColor.copy(alpha = 0.22f),
-                                surfaceColor.copy(alpha = 0.55f),
-                                surfaceColor
-                            ),
-                            startY = height * 0.4f,
-                            endY = height
-                        )
-
-                        onDrawBehind {
-                            drawRect(brush = brush1)
-                            drawRect(brush = brush2)
-                            drawRect(brush = brush3)
-                            drawRect(brush = brush4)
-                            drawRect(brush = brush5)
-                            drawRect(brush = overlayBrush)
-                        }
-                    }
+        runCatching {
+            context.startActivity(
+                Intent.createChooser(
+                    intent,
+                    context.getString(R.string.sound_chem_share_action),
+                ),
             )
         }
+    }
+
+    val (disableBlur) = rememberPreference(DisableBlurKey, false)
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        AuroraBackdrop(
+            animated = !disableBlur,
+            modifier = Modifier.zIndex(-1f),
+        )
+
         LazyColumn(
             state = lazyListState,
             contentPadding = LocalPlayerAwareWindowInsets.current
@@ -313,89 +222,162 @@ fun StatsScreen(
                 LocalPlayerAwareWindowInsets.current.only(WindowInsetsSides.Top)
             )
         ) {
-            item {
-                ChoiceChipsRow(
-                    chips =
-                    when (selectedOption) {
-                        OptionStats.WEEKS -> weeklyDates
-                        OptionStats.MONTHS -> monthlyDates
-                        OptionStats.YEARS -> yearlyDates
-                        OptionStats.CONTINUOUS -> {
-                            listOf(
-                                StatPeriod.WEEK_1.ordinal to pluralStringResource(
-                                    R.plurals.n_week,
-                                    1,
-                                    1
-                                ),
-                                StatPeriod.MONTH_1.ordinal to pluralStringResource(
-                                    R.plurals.n_month,
-                                    1,
-                                    1
-                                ),
-                                StatPeriod.MONTH_3.ordinal to pluralStringResource(
-                                    R.plurals.n_month,
-                                    3,
-                                    3
-                                ),
-                                StatPeriod.MONTH_6.ordinal to pluralStringResource(
-                                    R.plurals.n_month,
-                                    6,
-                                    6
-                                ),
-                                StatPeriod.YEAR_1.ordinal to pluralStringResource(
-                                    R.plurals.n_year,
-                                    1,
-                                    1
-                                ),
-                                StatPeriod.ALL.ordinal to stringResource(R.string.filter_all),
-                            )
-                        }
-                    },
-                    options =
-                    listOf(
-                        OptionStats.CONTINUOUS to stringResource(id = R.string.continuous),
-                        OptionStats.WEEKS to stringResource(R.string.weeks),
-                        OptionStats.MONTHS to stringResource(R.string.months),
-                        OptionStats.YEARS to stringResource(R.string.years),
-                    ),
-                    selectedOption = selectedOption,
-                    onSelectionChange = {
-                        viewModel.selectedOption.value = it
-                        viewModel.indexChips.value = 0
-                    },
-                    currentValue = indexChips,
-                    onValueUpdate = { viewModel.indexChips.value = it },
+            item(key = "monthHeader") {
+                SoundChemMonthHeader(
+                    month = monthName,
+                    year = yearName,
+                    // "Older" walks up the list (higher index = further back); "newer" walks down.
+                    canGoOlder = monthIndex < months.lastIndex,
+                    canGoNewer = monthIndex > 0,
+                    onOlder = { viewModel.indexChips.value = monthIndex + 1 },
+                    onNewer = { viewModel.indexChips.value = monthIndex - 1 },
                 )
+                Spacer(Modifier.height(18.dp))
             }
 
-            // HighLights Section
-            item {
-                StatsHighlightsSection(
-                    topArtist = mostPlayedArtists.firstOrNull(),
-                    topSong = mostPlayedSongsStats.firstOrNull(),
-                    topSongEntity = mostPlayedSongs.firstOrNull(),
-                    navController = navController,
-                )
+            if (!hasData) {
+                item(key = "empty") { SoundChemEmptyState() }
+                return@LazyColumn
             }
 
-            item(key = "artistPieChart") {
-                if (mostPlayedArtists.isNotEmpty()) {
-                    Spacer(modifier = Modifier.size(16.dp))
-                    ArtistPieChart(
-                        artists = mostPlayedArtists.take(5), // Top 5 artists for the chart
+            // ── The deck ──────────────────────────────────────────────────────
+            item(key = "timeCard") {
+                SoundChemTimeCard(
+                    minutes = totalMinutes,
+                    modifier = Modifier
+                        .padding(horizontal = CapsuleGutter)
+                        .capsuleEntrance(),
+                )
+                Spacer(Modifier.height(CapsuleGap))
+            }
+
+            if (topArtist != null || topSong != null) {
+                item(key = "spotlightRow") {
+                    // No intrinsic-height plumbing needed to keep the pair level: both cards pin
+                    // their title to exactly two lines and both artworks are squares of the same
+                    // width, so the heights already match by construction.
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(16.dp)
-                            .animateItem()
-                    )
-                    Spacer(modifier = Modifier.size(16.dp))
+                            .padding(horizontal = CapsuleGutter),
+                        horizontalArrangement = Arrangement.spacedBy(CapsuleGap),
+                    ) {
+                        topArtist?.let { artist ->
+                            SoundChemSpotlightCard(
+                                label = stringResource(R.string.sound_chem_top_artist),
+                                title = artist.artist.name,
+                                accent = MaterialTheme.colorScheme.secondary,
+                                imageUrl = artist.artist.thumbnailUrl,
+                                circular = true,
+                                onClick = { navController.navigate("artist/${artist.id}") },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .capsuleEntrance(delayMillis = 60),
+                            )
+                        }
+                        topSong?.let { song ->
+                            SoundChemSpotlightCard(
+                                label = stringResource(R.string.sound_chem_top_song),
+                                title = song.title,
+                                accent = MaterialTheme.colorScheme.tertiary,
+                                imageUrl = song.thumbnailUrl,
+                                circular = false,
+                                onClick = {
+                                    val preload = mostPlayedSongs.firstOrNull { it.id == song.id }
+                                    playerConnection.playQueue(
+                                        YouTubeQueue(
+                                            endpoint = WatchEndpoint(song.id),
+                                            preloadItem = preload?.toMediaMetadata(),
+                                        ),
+                                    )
+                                },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .capsuleEntrance(delayMillis = 60),
+                            )
+                        }
+                        // Keeps a lone card at half width instead of letting it stretch across the
+                        // row and break the grid.
+                        if (topArtist == null || topSong == null) {
+                            Spacer(Modifier.weight(1f))
+                        }
+                    }
+                    Spacer(Modifier.height(CapsuleGap))
                 }
             }
 
-            item(key = "mostPlayedSongsHeader") {
-                NavigationTitle(
-                    title = "${mostPlayedSongsStats.size} ${stringResource(id = R.string.songs)}",
-                    modifier = Modifier.animateItem(),
+            // The share card only earns its size when one artist actually dominates the month —
+            // "3% of your listening" is not an insight, it is noise.
+            if (topArtist != null && artistSharePercent >= 5) {
+                item(key = "shareCard") {
+                    SoundChemShareCard(
+                        artistName = topArtist.artist.name,
+                        imageUrl = topArtist.artist.thumbnailUrl,
+                        percent = artistSharePercent,
+                        timeText = makeTimeString(topArtistMillis),
+                        periodText = periodText,
+                        onShare = ::shareCapsule,
+                        onClick = { navController.navigate("artist/${topArtist.id}") },
+                        modifier = Modifier
+                            .padding(horizontal = CapsuleGutter)
+                            .capsuleEntrance(delayMillis = 120),
+                    )
+                    Spacer(Modifier.height(CapsuleGap))
+                }
+            }
+
+            item(key = "tallies") {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = CapsuleGutter),
+                    horizontalArrangement = Arrangement.spacedBy(CapsuleGap),
+                ) {
+                    SoundChemTallyCard(
+                        value = totalPlays,
+                        label = stringResource(R.string.sound_chem_plays),
+                        accent = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier
+                            .weight(1f)
+                            .capsuleEntrance(delayMillis = 180),
+                    )
+                    SoundChemTallyCard(
+                        value = mostPlayedArtists.size,
+                        label = stringResource(R.string.artists),
+                        accent = MaterialTheme.colorScheme.secondary,
+                        modifier = Modifier
+                            .weight(1f)
+                            .capsuleEntrance(delayMillis = 180),
+                    )
+                    SoundChemTallyCard(
+                        value = mostPlayedAlbums.size,
+                        label = stringResource(R.string.albums),
+                        accent = MaterialTheme.colorScheme.tertiary,
+                        modifier = Modifier
+                            .weight(1f)
+                            .capsuleEntrance(delayMillis = 180),
+                    )
+                }
+                Spacer(Modifier.height(CapsuleGap))
+            }
+
+            if (mostPlayedArtists.size >= 2) {
+                item(key = "breakdown") {
+                    SoundChemBreakdownCard(
+                        artists = mostPlayedArtists.take(5),
+                        onArtistClick = { navController.navigate("artist/${it.id}") },
+                        modifier = Modifier
+                            .padding(horizontal = CapsuleGutter)
+                            .capsuleEntrance(delayMillis = 240),
+                    )
+                }
+            }
+
+            // ── The detail, below the fold ────────────────────────────────────
+            item(key = "songsHeader") {
+                Spacer(Modifier.height(12.dp))
+                SoundChemSectionTitle(
+                    text = "${mostPlayedSongsStats.size} ${stringResource(id = R.string.songs)}",
                 )
             }
 
@@ -418,8 +400,8 @@ fun StatsScreen(
                             thumbnailUrl = song.thumbnailUrl,
                             isActive = song.id == mediaMetadata?.id,
                             isPlaying = isPlaying,
-                            shape = RoundedCornerShape(8.dp), // Using a constant or the one from Items.kt
-                            modifier = Modifier.size(56.dp) // ListThumbnailSize
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.size(56.dp)
                         )
                     },
                     modifier = Modifier
@@ -452,10 +434,9 @@ fun StatsScreen(
                 )
             }
 
-            item(key = "mostPlayedArtists") {
-                NavigationTitle(
-                    title = "${mostPlayedArtists.size} ${stringResource(id = R.string.artists)}",
-                    modifier = Modifier.animateItem(),
+            item(key = "artistsHeader") {
+                SoundChemSectionTitle(
+                    text = "${mostPlayedArtists.size} ${stringResource(id = R.string.artists)}",
                 )
             }
 
@@ -499,17 +480,15 @@ fun StatsScreen(
                                 .animateItem(),
                         )
                     }
-                    // Add spacers for incomplete rows if needed to maintain grid alignment
                     repeat(2 - rowArtists.size) {
                         Spacer(modifier = Modifier.weight(1f))
                     }
                 }
             }
 
-            item(key = "mostPlayedAlbums") {
-                NavigationTitle(
-                    title = "${mostPlayedAlbums.size} ${stringResource(id = R.string.albums)}",
-                    modifier = Modifier.animateItem(),
+            item(key = "albums") {
+                SoundChemSectionTitle(
+                    text = "${mostPlayedAlbums.size} ${stringResource(id = R.string.albums)}",
                 )
 
                 if (mostPlayedAlbums.isNotEmpty()) {
@@ -558,8 +537,6 @@ fun StatsScreen(
                     }
                 }
             }
-
-
         }
 
         // FAB to shuffle most played songs
@@ -580,7 +557,12 @@ fun StatsScreen(
         }
 
         TopAppBar(
-            title = { Text(stringResource(R.string.stats)) },
+            title = {
+                Text(
+                    text = stringResource(R.string.sound_chem),
+                    fontWeight = FontWeight.Bold,
+                )
+            },
             navigationIcon = {
                 IconButton(
                     onClick = navController::navigateUp,
@@ -602,6 +584,15 @@ fun StatsScreen(
                         contentDescription = stringResource(R.string.year_in_music),
                     )
                 }
+                IconButton(
+                    onClick = ::shareCapsule,
+                    onLongClick = { }
+                ) {
+                    Icon(
+                        painterResource(R.drawable.share),
+                        contentDescription = stringResource(R.string.sound_chem_share_action),
+                    )
+                }
             },
             colors = TopAppBarDefaults.topAppBarColors(
                 containerColor = Color.Transparent,
@@ -611,187 +602,82 @@ fun StatsScreen(
     }
 }
 
+/**
+ * The capsule's title: the month in full, heavy weight, with the year trailing it in a quieter ink
+ * — and the only two controls on the page.
+ */
 @Composable
-fun ArtistPieChart(
-    artists: List<Artist>,
-    modifier: Modifier = Modifier
+private fun SoundChemMonthHeader(
+    month: String,
+    year: String,
+    canGoOlder: Boolean,
+    canGoNewer: Boolean,
+    onOlder: () -> Unit,
+    onNewer: () -> Unit,
 ) {
-    val totalTime = artists.sumOf { it.timeListened?.toLong() ?: 0L }
-    if (totalTime == 0L) return
-
     Row(
-        modifier = modifier,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = CapsuleGutter + 4.dp, end = CapsuleGutter),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(24.dp)
-    ) {
-        // Pie Chart
-        Box(
-            modifier = Modifier.size(160.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            var startAngle = -90f
-
-            artists.forEach { artist ->
-                val time = artist.timeListened?.toLong() ?: 0L
-                val sweepAngle = (time.toFloat() / totalTime) * 360f
-                
-                // Only draw significant slices
-                if (sweepAngle > 1f) {
-                    AsyncImage(
-                        model = artist.artist.thumbnailUrl,
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .clip(PieSliceShape(startAngle, sweepAngle))
-                    )
-                    startAngle += sweepAngle
-                }
-            }
-            
-            // Optional: Inner circle for donut effect or just overlay style
-            // For now, keeping it as a full pie chart of images as requested
-        }
-
-        // Text Info
-        Column {
-            Text(
-                text = "Total Time Listened",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.secondary
-            )
-            Text(
-                text = makeTimeString(totalTime),
-                style = MaterialTheme.typography.displayMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary
-            )
-        }
-    }
-}
-
-fun PieSliceShape(startAngle: Float, sweepAngle: Float): GenericShape {
-    return GenericShape { size, _ ->
-        val center = Offset(size.width / 2, size.height / 2)
-        val radius = size.width / 2
-        
-        moveTo(center.x, center.y)
-        
-        // Arc start
-        val startRad = Math.toRadians(startAngle.toDouble())
-        val endRad = Math.toRadians((startAngle + sweepAngle).toDouble())
-        
-        lineTo(
-            (center.x + radius * cos(startRad)).toFloat(),
-            (center.y + radius * sin(startRad)).toFloat()
-        )
-        
-        // Add arc
-        arcTo(
-            rect = androidx.compose.ui.geometry.Rect(
-                center = center,
-                radius = radius
-            ),
-            startAngleDegrees = startAngle,
-            sweepAngleDegrees = sweepAngle,
-            forceMoveTo = false
-        )
-        
-        lineTo(center.x, center.y)
-        close()
-    }
-}
-
-@Composable
-fun StatsHighlightsSection(
-    topArtist: Artist?,
-    topSong: SongWithStats?,
-    topSongEntity: Song?,
-    navController: NavController
-) {
-    if (topArtist == null && topSong == null) return
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        if (topArtist != null) {
-            StatsHighlightCard(
-                title = "Your Favourite Artist",
-                mainText = topArtist.artist.name,
-                subText = "${topArtist.songCount} songs played • ${makeTimeString(topArtist.timeListened?.toLong())}",
-                imageUrl = topArtist.artist.thumbnailUrl,
-                onClick = { navController.navigate("artist/${topArtist.id}") }
-            )
-        }
-
-        if (topSong != null && topSongEntity != null) {
-            StatsHighlightCard(
-                title = "Your Favourite Song",
-                mainText = topSong.title,
-                subText = "${topSong.songCountListened} plays • ${makeTimeString(topSong.timeListened)}",
-                imageUrl = topSong.thumbnailUrl,
-                onClick = { /* Navigate to player or something? For now just no-op or maybe play? */ }
-            )
-        }
-    }
-}
-
-@Composable
-fun StatsHighlightCard(
-    title: String,
-    mainText: String,
-    subText: String,
-    imageUrl: String?,
-    onClick: () -> Unit
-) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-        )
     ) {
         Row(
-            modifier = Modifier
-                .padding(16.dp)
-                .fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
+            modifier = Modifier.weight(1f),
+            verticalAlignment = Alignment.Bottom,
         ) {
-            AsyncImage(
-                model = imageUrl,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .size(80.dp)
-                    .clip(CircleShape)
+            Text(
+                text = month,
+                style = MaterialTheme.typography.displaySmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
-
-            Column {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary
-                )
-                Text(
-                    text = mainText,
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = subText,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
+            Spacer(Modifier.size(8.dp))
+            Text(
+                text = year,
+                style = MaterialTheme.typography.displaySmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
+                maxLines = 1,
+            )
         }
+
+        MonthStepButton(enabled = canGoOlder, flipped = true, onClick = onOlder)
+        Spacer(Modifier.size(8.dp))
+        MonthStepButton(enabled = canGoNewer, flipped = false, onClick = onNewer)
+    }
+}
+
+/**
+ * One glass chevron. [flipped] rotates the single chevron asset 180° rather than shipping a mirror
+ * of it, and a disabled button stays visible at low opacity so the pair never reflows when you
+ * reach either end of your history.
+ */
+@Composable
+private fun MonthStepButton(
+    enabled: Boolean,
+    flipped: Boolean,
+    onClick: () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .size(38.dp)
+            .liquidGlassSurface(CircleShape)
+            .clickable(enabled = enabled, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            painter = painterResource(R.drawable.chevron_right),
+            contentDescription = null,
+            modifier = Modifier
+                .size(20.dp)
+                .graphicsLayer {
+                    rotationZ = if (flipped) 180f else 0f
+                    alpha = if (enabled) 1f else 0.25f
+                },
+            tint = MaterialTheme.colorScheme.onSurface,
+        )
     }
 }
 
