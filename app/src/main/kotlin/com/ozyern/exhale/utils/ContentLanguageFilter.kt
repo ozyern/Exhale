@@ -111,6 +111,53 @@ object ContentLanguageFilter {
     )
 
     /**
+     * Distinctive words that mark a title as being in a language even when it is spelled in the
+     * Latin alphabet.
+     *
+     * This is the hole the script check cannot cover, and it is the common case rather than an
+     * edge one: the Hindi and Punjabi songs that dominate an Indian chart shelf are titled
+     * "Kesariya", "Tum Hi Ho", "Laung Laachi" — Latin letters throughout, by artists whose names
+     * are also Latin. Every one of them scores 100% Latin and sails past a script test.
+     *
+     * Chosen for distinctiveness, not coverage. Only words that would be bizarre in an English
+     * title are listed, and they are matched as **whole words** — the substring test used for
+     * region names would fire "dil" inside "dilemma". A title with no listed word still passes,
+     * so this narrows the leak rather than closing it: a one-word title that is simply a name
+     * remains unclassifiable from the client, and nothing here pretends otherwise.
+     */
+    private val romanizedMarkers: Map<String, List<String>> = mapOf(
+        "hi" to listOf(
+            "ishq", "pyaar", "pyar", "mohabbat", "dil", "dilbar", "deewana", "deewani", "bewafa",
+            "zindagi", "sanam", "saathiya", "jaanam", "tere", "tera", "teri", "mera", "meri",
+            "mere", "tum", "tumhe", "tujhe", "mujhe", "humko", "tumko", "yaad", "raat", "chaand",
+            "sapna", "aashiqui", "kabhi", "dhadkan", "jaan", "aankhen", "aankhon", "baarish",
+            "chaleya", "kesariya", "judaai", "intezaar", "khuda", "maahi", "mahiya", "piya",
+            "sajna", "sajni", "bulleya", "naina", "saiyaan", "banna", "rangisari",
+        ),
+        "pa" to listOf(
+            "yaara", "kudi", "munda", "sohna", "sohni", "laung", "gallan", "nachde", "jatt",
+            "jatti", "pind", "gabru", "chann", "ranjha", "heer", "satrangi", "laachi", "sardaar",
+        ),
+        "ur" to listOf("aashiq", "dilruba", "bekhayali", "qarar", "tanha", "wafa"),
+    )
+
+    /** Splits on anything that is not a letter or digit, so markers match as whole words. */
+    private val wordBoundary = Regex("[^\\p{L}\\p{N}]+")
+
+    /**
+     * True when [text] contains a whole word that belongs to a language the user did not choose.
+     */
+    private fun mentionsForeignLanguageWord(text: String, languages: Set<String>): Boolean {
+        val words = text.lowercase().split(wordBoundary).filterTo(HashSet()) { it.isNotEmpty() }
+        if (words.isEmpty()) return false
+        for ((lang, markers) in romanizedMarkers) {
+            if (lang in languages) continue
+            if (markers.any { it in words }) return true
+        }
+        return false
+    }
+
+    /**
      * True when [text] names a regional market whose language is NOT in the user's allowed
      * set — e.g. "India's biggest hits" for an English-only user.
      */
@@ -132,6 +179,9 @@ object ContentLanguageFilter {
         // Aggressive geo-leak guard: even a perfectly-English title is dropped when it
         // advertises a regional market the user did not opt into.
         if (mentionsForeignRegion(text, languages)) return false
+        // Romanized titles are Latin-script by definition, so this has to run before the script
+        // test rather than as a tiebreak inside it.
+        if (mentionsForeignLanguageWord(text, languages)) return false
         val allowed = languages.flatMapTo(HashSet()) { scriptsFor(it) }
 
         var matched = 0

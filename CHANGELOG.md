@@ -30,14 +30,27 @@ First public release.
 
 - Timed lyrics are published to the active media session under the OPlus `lyricInfo` key, so the
   lock screen's music focus mode shows real lyrics instead of "No lyrics".
-- Published exactly once per track, off the collector that resolves lyrics, with the single delayed
-  re-check the OPlus protocol prescribes for its metadata debounce. Position updates, pause/resume
-  and notification refreshes never rewrite the payload.
+- Lyrics already in the cache are attached to the next few queue items *before* they start, so the
+  track's very first metadata push already carries them. This is what the OPlus spec asks for, and
+  it avoids the debounce that eats a payload patched on a few milliseconds late.
+- When lyrics only resolve after playback has started there is nowhere to hide, so the payload is
+  forced through — at most twice, with the retry window the spec allows. Position updates,
+  pause/resume and notification refreshes never rewrite it.
+- Forcing works by also changing `requestMetadata.mediaUri`, the one field Media3's session layer
+  compares that this app does not use. Both `ExoPlayerImpl` and `MediaSessionLegacyStub` decide
+  whether metadata changed with `MediaMetadata.equals`, which compares `extras` only by whether it
+  is null — so a change that lives *only* in a lyric payload is invisible to both, and every item
+  here already carries extras. Without this the payload was written into a void.
+- TTML lyrics are flattened to LRC rather than dropped. The word-synced providers return TTML, so
+  the format the lyrics screen looks best with was the one the lock screen never saw.
+- Word timings, where a provider supplies them, are published as `rawLyric` for ROMs that
+  highlight per syllable.
 - Unsynced lyrics are deliberately never published — the lock screen cannot scroll them, and a
   payload it cannot use displaces the fallback it would otherwise show.
 - Manifest opt-in for the OPlus media-history stack, so the ColorOS media card survives the app
   being fully stopped.
 - Toggle under **Settings → Content → Lock screen lyrics**. Inert on every other ROM.
+  `adb logcat -s LiveLyrics` reports which path each track took.
 
 **In-app updates**
 
@@ -58,8 +71,31 @@ First public release.
 
 **About**
 
-- Hidden breathing pacer behind seven taps on the app mark: an orb that swells over four seconds and
-  empties over six. The app mark visibly winds up from the fourth tap onward.
+- Hidden breathing pacer behind seven taps on the app mark: an orb that swells over four seconds
+  and empties over six, inside a field of a hundred and fifty motes that the inhale draws in and
+  the exhale throws back out. Three counter-rotating sweeps cross the field, a ring closes once per
+  half-breath, and touching anywhere pushes a ripple out from your finger. The whole thing is one
+  canvas driven by one clock read inside the draw pass, so a frame costs a draw and nothing else.
+  The app mark visibly winds up from the fourth tap onward.
+
+**Recommendations**
+
+- `Accept-Language` is now sent on every Innertube request. The `hl`/`gl` in the JSON context were
+  the only statement of language we made, and the surrounding Google frontend does not read them —
+  which is how a request that said "English" could still be answered out of the caller's IP region.
+- The cached visitor id is re-minted when the content language or country changes. It used to be
+  minted once on first launch and kept forever, so a user who installed in one region and *then*
+  chose a language kept introducing themselves with the identity from before the choice. Skipped
+  when a cookie or poToken is present, since a poToken is bound to the visitor id it was made for.
+- Picking a language during onboarding now always takes effect. Two different "unset" sentinels had
+  been written to the content-language preference over the app's history, and onboarding only
+  recognised one of them, so anyone who had ever chosen "System default" in Settings could pick a
+  language in onboarding and have it silently ignored.
+- The feed filter now recognises romanized titles. It could only judge a title by its script, which
+  passes "Kesariya" and "Laung Laachi" at 100% Latin — the actual shape of the leak on an Indian
+  connection, rather than an edge case. A deliberately small vocabulary of distinctive whole words
+  now marks those. It narrows the leak; a one-word title that is simply a name stays
+  unclassifiable from the client.
 
 ### Changed
 
@@ -97,7 +133,7 @@ stack of elevated cards with shadows, shimmer sweeps and fake hover states.
 
 - Maintainer credited as Aditya Jha, avatar served from the GitHub profile.
 - Social links reduced to GitHub, Telegram and Instagram.
-- App information group: version, build, package.
+- App information group: version and build.
 
 **Home**
 

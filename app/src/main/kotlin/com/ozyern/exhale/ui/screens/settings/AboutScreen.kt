@@ -6,17 +6,13 @@
 
 package com.ozyern.exhale.ui.screens.settings
 
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -66,8 +62,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.navigation.NavController
 import coil3.compose.AsyncImage
 import com.ozyern.exhale.BuildConfig
@@ -75,9 +69,8 @@ import com.ozyern.exhale.LocalPlayerAwareWindowInsets
 import com.ozyern.exhale.R
 import com.ozyern.exhale.constants.AquamorphicDampingRatio
 import com.ozyern.exhale.constants.AquamorphicStiffness
-import com.ozyern.exhale.ui.component.AuroraBackdrop
+import com.ozyern.exhale.ui.component.ExhaleBreathingEgg
 import com.ozyern.exhale.ui.component.IconButton
-import com.ozyern.exhale.ui.component.liquidGlassSurface
 import com.ozyern.exhale.ui.utils.backToMain
 
 // ─── People and links ─────────────────────────────────────────────────────────
@@ -239,12 +232,6 @@ fun AboutScreen(
                             title = stringResource(R.string.about_build),
                             value = BuildConfig.VERSION_CODE.toString(),
                         )
-                        AboutDivider()
-                        AboutValueRow(
-                            icon = R.drawable.exhale,
-                            title = stringResource(R.string.about_package),
-                            value = BuildConfig.APPLICATION_ID,
-                        )
                     }
                 }
             }
@@ -405,127 +392,6 @@ private fun AboutHero(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
         )
-    }
-}
-
-// ─── Easter egg ───────────────────────────────────────────────────────────────
-
-private const val InhaleMillis = 4_000
-private const val ExhaleMillis = 6_000
-
-/**
- * The hidden thing behind seven taps on the About hero.
- *
- * The app is called Exhale, so the egg is a breathing pacer: an orb that swells over four seconds
- * and empties over six — the 4-6 rhythm that actually slows a heart rate rather than a decorative
- * loop that merely looks calm. It runs over the app's own aurora, and it is the one screen in the
- * app with no controls on it at all: tap anywhere to leave.
- *
- * The orb is driven by a single `Animatable` read inside `graphicsLayer`, so the whole thing is
- * two scaling layers on the render thread and nothing else.
- */
-@Composable
-private fun ExhaleBreathingEgg(onDismiss: () -> Unit) {
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false),
-    ) {
-        val breath = remember { Animatable(0f) }
-        var inhaling by remember { mutableStateOf(true) }
-        var breaths by remember { mutableIntStateOf(0) }
-
-        LaunchedEffect(Unit) {
-            while (true) {
-                inhaling = true
-                breath.animateTo(1f, tween(InhaleMillis, easing = FastOutSlowInEasing))
-                inhaling = false
-                breath.animateTo(0f, tween(ExhaleMillis, easing = FastOutSlowInEasing))
-                breaths++
-            }
-        }
-
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .clickable(
-                    indication = null,
-                    interactionSource = remember { MutableInteractionSource() },
-                    onClick = onDismiss,
-                ),
-            contentAlignment = Alignment.Center,
-        ) {
-            AuroraBackdrop()
-
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
-            ) {
-                Box(
-                    modifier = Modifier.size(300.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    // Outer bloom, lagging slightly behind the core so the orb has depth rather
-                    // than reading as one flat disc changing size.
-                    Box(
-                        modifier = Modifier
-                            .size(300.dp)
-                            .graphicsLayer {
-                                val scale = 0.55f + 0.45f * breath.value
-                                scaleX = scale
-                                scaleY = scale
-                                alpha = 0.30f + 0.35f * breath.value
-                            }
-                            .background(
-                                Brush.radialGradient(
-                                    colors = listOf(
-                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.55f),
-                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
-                                        Color.Transparent,
-                                    ),
-                                )
-                            )
-                    )
-
-                    Box(
-                        modifier = Modifier
-                            .size(180.dp)
-                            .graphicsLayer {
-                                val scale = 0.62f + 0.38f * breath.value
-                                scaleX = scale
-                                scaleY = scale
-                            }
-                            .liquidGlassSurface(
-                                shape = CircleShape,
-                                tint = MaterialTheme.colorScheme.primary,
-                            ),
-                    )
-                }
-
-                Spacer(Modifier.height(36.dp))
-
-                Text(
-                    text = stringResource(
-                        if (inhaling) R.string.egg_breathe_in else R.string.egg_breathe_out
-                    ),
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-
-                Spacer(Modifier.height(10.dp))
-
-                Text(
-                    text = if (breaths == 0) {
-                        stringResource(R.string.egg_hint)
-                    } else {
-                        stringResource(R.string.egg_breath_count, breaths.toString())
-                    },
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
-                )
-            }
-        }
     }
 }
 

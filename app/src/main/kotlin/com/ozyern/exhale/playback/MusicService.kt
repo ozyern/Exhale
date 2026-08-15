@@ -33,6 +33,7 @@ import android.net.ConnectivityManager
 import android.net.Uri
 import android.os.Binder
 import android.os.PowerManager
+import android.util.Log
 import android.widget.Toast
 import androidx.core.content.getSystemService
 import androidx.core.net.toUri
@@ -441,6 +442,9 @@ class MusicService :
     val autoAddedMediaIds: MutableSet<String> = java.util.Collections.synchronizedSet(mutableSetOf())
 
     private var consecutivePlaybackErr = 0
+
+    /** Makes each forced Live Space publication distinguishable. See [publishLiveLyrics]. */
+    private var liveLyricsRevision = 0
 
     val maxSafeGainFactor = 1.414f // +3 dB
     @Volatile
@@ -1502,20 +1506,36 @@ class MusicService :
     /**
      * Hands the current track's timed lyrics to OxygenOS / ColorOS Live Space.
      *
-     * The ROM reads them off the current media item's metadata, so "publishing" means replacing
-     * that item with a copy carrying one extra extras string. `replaceMediaItem` is the right
-     * lever: when only metadata differs, ExoPlayer patches it in place rather than re-preparing
-     * the source, so nothing about playback is disturbed.
+     * The ROM's reader hooks `MediaSession#setMetadata`, so it is not enough to hang the payload
+     * on our [MediaItem] — a metadata push carrying it has to actually reach the platform session.
+     * Under Media3 that is the whole difficulty, because two separate layers drop a change that
+     * exists only in `mediaMetadata.extras`:
      *
-     * Two rules from the OPlus protocol shape the code:
+     *  - `MediaMetadata.equals` compares `extras` by null-ness alone — a `Bundle` has no useful
+     *    equality — so two metadata objects differing only in a lyric payload are "equal".
+     *    `ExoPlayerImpl` gates `onMediaMetadataChanged` on exactly that comparison. Every one of
+     *    our items already carries extras (`ExtraIsMusicVideo`), so the event never fired and the
+     *    first version of this code published into a void.
+     *  - `MediaSessionLegacyStub` gates its `setMetadata` call on the same comparison, plus the
+     *    media id, the request URI and the duration.
      *
-     *  - **One publication per track.** Position updates, pause/resume and notification refreshes
-     *    must never rewrite the payload, so this hangs off the same collector that resolves lyrics
-     *    — which fires exactly once per media id — and not off any ticking state.
-     *  - **Beware the debounce.** OPlus drops a metadata update that lands too soon after the
-     *    track change, which leaves the first song of a session stuck at "no lyrics" until the
-     *    next transition. The protocol's remedy is a single delayed re-check, not a retry loop;
-     *    [OplusLiveLyrics.lyricInfo] makes the second pass a no-op whenever the first one stuck.
+     * `requestMetadata.mediaUri` is the one field both layers compare that means nothing to this
+     * app — we route playback off `mediaId` and never read it — so [OplusLiveLyrics.signalUri]
+     * puts a per-publication value there. The item's timeline entry then genuinely differs, the
+     * timeline change reaches the stub, the stub's own guard sees a new URI, and it pushes the
+     * live metadata, extras and all.
+     *
+     * Two rules from the OPlus protocol shape the rest:
+     *
+     *  - **Attach before publishing where possible.** The spec is explicit that patching extras
+     *    onto a track that has already been announced risks the ROM debouncing the second update,
+     *    so [preAttachQueueLyrics] fills in the payload for upcoming items while they are still
+     *    off screen. When the transition happens the very first push already carries the lyrics
+     *    and nothing has to be forced.
+     *  - **At most two publications per track.** Forcing is the fallback for lyrics that resolve
+     *    after playback started. Position updates, pause/resume and notification refreshes must
+     *    never rewrite the payload, so this hangs off the collector that resolves lyrics — which
+     *    fires once per media id — and never off ticking state.
      */
     private suspend fun publishLiveLyrics(
         metadata: com.ozyern.exhale.models.MediaMetadata,
@@ -1529,20 +1549,84 @@ class MusicService :
             songName = metadata.title,
             artist = metadata.artists.joinToString { it.name },
             lyrics = lyrics?.takeIf { it != LyricsEntity.LYRICS_NOT_FOUND },
-        ) ?: return
+        )
 
-        withContext(Dispatchers.Main) { applyLyricInfo(metadata.id, payload) }
-        delay(800)
-        withContext(Dispatchers.Main) { applyLyricInfo(metadata.id, payload) }
+        if (payload == null) {
+            Log.i(
+                LiveLyricsTag,
+                "${metadata.id}: no timed lyrics, leaving the lock screen on its own fallback",
+            )
+        } else if (withContext(Dispatchers.Main) { currentItemCarries(metadata.id, payload) }) {
+            Log.i(LiveLyricsTag, "${metadata.id}: published with the track, nothing to force")
+        } else {
+            withContext(Dispatchers.Main) { forceLyricInfo(metadata.id, payload) }
+            delay(LiveLyricsRepublishDelayMs)
+            withContext(Dispatchers.Main) { forceLyricInfo(metadata.id, payload) }
+        }
+
+        preAttachQueueLyrics()
     }
 
-    /** Main-thread half of [publishLiveLyrics]. No-ops unless the track is still the current one. */
-    private fun applyLyricInfo(songId: String, payload: String) {
+    /** Whether the current item is [songId] and already carries [payload]. Main thread. */
+    private fun currentItemCarries(songId: String, payload: String): Boolean =
+        with(OplusLiveLyrics) {
+            val item = player.currentMediaItem ?: return false
+            item.mediaId == songId && item.lyricInfo() == payload
+        }
+
+    /**
+     * Republishes the current item with [payload] and a fresh signal URI. No-ops unless the track
+     * is still the current one. Main thread.
+     */
+    private fun forceLyricInfo(songId: String, payload: String) {
         with(OplusLiveLyrics) {
             val item = player.currentMediaItem ?: return
             if (item.mediaId != songId) return
-            if (item.lyricInfo() == payload) return
-            player.replaceMediaItem(player.currentMediaItemIndex, item.withLyricInfo(payload))
+            liveLyricsRevision++
+            player.replaceMediaItem(
+                player.currentMediaItemIndex,
+                item.withLyricInfo(payload, signalUri(songId, liveLyricsRevision)),
+            )
+            Log.i(LiveLyricsTag, "$songId: forced publication #$liveLyricsRevision")
+        }
+    }
+
+    /**
+     * Attaches already-cached lyrics to the next few queue items, so their first metadata push
+     * carries the payload instead of needing one forced after the fact.
+     *
+     * Only the database is consulted — [com.ozyern.exhale.lyrics.LyricsPreloadManager] is what
+     * puts lyrics there ahead of time, and this must not turn into a second fetcher racing it.
+     * No signal URI is needed: these items are not current, so nothing is being deduplicated yet.
+     */
+    private suspend fun preAttachQueueLyrics() {
+        val pending = withContext(Dispatchers.Main) {
+            val start = player.currentMediaItemIndex + 1
+            val end = minOf(start + LiveLyricsPreAttachCount, player.mediaItemCount)
+            (start until end).mapNotNull { index ->
+                val item = player.getMediaItemAt(index)
+                val song = item.metadata ?: return@mapNotNull null
+                if (with(OplusLiveLyrics) { item.lyricInfo() } != null) null else index to song
+            }
+        }
+
+        for ((index, song) in pending) {
+            val cached = database.lyrics(song.id).first()?.lyrics ?: continue
+            val payload = OplusLiveLyrics.buildPayload(
+                songId = song.id,
+                songName = song.title,
+                artist = song.artists.joinToString { it.name },
+                lyrics = cached.takeIf { it != LyricsEntity.LYRICS_NOT_FOUND },
+            ) ?: continue
+
+            withContext(Dispatchers.Main) {
+                // The queue can be reordered while we are off the main thread.
+                if (index >= player.mediaItemCount) return@withContext
+                val item = player.getMediaItemAt(index)
+                if (item.mediaId != song.id) return@withContext
+                player.replaceMediaItem(index, with(OplusLiveLyrics) { item.withLyricInfo(payload) })
+                Log.i(LiveLyricsTag, "${song.id}: attached ahead of playback at $index")
+            }
         }
     }
 
@@ -5157,6 +5241,15 @@ class MusicService :
             isHostSessionActive: Boolean,
             isPlaybackInactive: Boolean,
         ): Boolean = (isHostSessionActive && isPlaybackInactive) || stopMusicOnTaskClearEnabled
+
+        /** `adb logcat -s LiveLyrics` tells you which branch each track took. */
+        private const val LiveLyricsTag = "LiveLyrics"
+
+        /** The retry window the OPlus spec allows when a first publication is swallowed. */
+        private const val LiveLyricsRepublishDelayMs = 800L
+
+        /** How far ahead to attach cached lyrics, so transitions publish them from the start. */
+        private const val LiveLyricsPreAttachCount = 3
 
         const val ROOT = "root"
         const val SONG = "song"

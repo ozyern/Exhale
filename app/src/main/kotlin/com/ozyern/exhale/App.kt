@@ -167,6 +167,34 @@ class App : Application(), SingletonImageLoader.Factory {
         YouTube.locale = locale
     }
 
+    /**
+     * Drops the cached visitor id when the user's locale no longer matches the one it was minted
+     * under, so the next request mints a fresh one.
+     *
+     * A visitor id is not a random string — YouTube issues it against the session it first saw,
+     * and it is presented on every later request. Minting one on first launch and then keeping it
+     * forever means a user who installs in one region and *then* picks a language keeps
+     * introducing themselves with the identity from before the choice.
+     *
+     * Skipped when a cookie or a poToken is present: a poToken is cryptographically bound to the
+     * visitor id it was generated for, so re-minting underneath one trades a localization
+     * annoyance for broken playback.
+     */
+    private suspend fun remintVisitorDataIfLocaleChanged() {
+        val signature = "${YouTube.locale.hl}|${YouTube.locale.gl}"
+        val prefs = dataStore.data.first()
+        if (prefs[VisitorDataLocaleKey] == signature) return
+
+        val boundToCredentials = !prefs[InnerTubeCookieKey].isNullOrBlank() ||
+            !prefs[PoTokenKey].isNullOrBlank() ||
+            !prefs[PoTokenPlayerKey].isNullOrBlank()
+
+        dataStore.edit { settings ->
+            settings[VisitorDataLocaleKey] = signature
+            if (!boundToCredentials) settings.remove(VisitorDataKey)
+        }
+    }
+
     /** Canonical `gl` anchor region per language — overrides the IP-derived region. */
     private fun anchorRegionFor(lang: String): String = when (lang.lowercase().substringBefore("-")) {
         "en" -> "US"
@@ -276,6 +304,7 @@ class App : Application(), SingletonImageLoader.Factory {
                 .distinctUntilChanged()
                 .collect { (lang, country, preferredCsv) ->
                     applyStrictLocale(lang, country, preferredCsv)
+                    remintVisitorDataIfLocaleChanged()
                 }
         }
 

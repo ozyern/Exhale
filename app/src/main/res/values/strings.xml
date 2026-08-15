@@ -930,7 +930,8 @@ Exhale will only extract your token, and everything else is stored locally.</str
     <string name="about_no_contributors">No contributors listed yet</string>
     <string name="egg_breathe_in">Breathe in</string>
     <string name="egg_breathe_out">Breathe out</string>
-    <string name="egg_hint">Four seconds in, six seconds out. Tap anywhere to leave.</string>
+    <string name="egg_hint">Four seconds in, six seconds out.</string>
+    <string name="egg_close_hint">Tap to ripple &#183; Swipe down to close</string>
     <string name="egg_breath_count">%1$s breaths</string>
     <string name="lock_screen_lyrics">Lock screen lyrics</string>
     <string name="lock_screen_lyrics_desc">Publish timed lyrics to Live Space on OxygenOS and ColorOS. Ignored on other systems.</string>
@@ -940,6 +941,5 @@ Exhale will only extract your token, and everything else is stored locally.</str
     <string name="account_signed_in_subtitle">Manage your account</string>
     <string name="about_information">Information</string>
     <string name="about_build">Build</string>
-    <string name="about_package">Package</string>
     <string name="settings_search_hint">Search settings</string>
 </resources>

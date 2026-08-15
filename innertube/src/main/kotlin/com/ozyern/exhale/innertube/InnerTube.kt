@@ -187,6 +187,20 @@ class InnerTube {
         }
     }
 
+    /**
+     * The `Accept-Language` we send alongside the context's `hl`/`gl`.
+     *
+     * Innertube reads the JSON context, but the surrounding Google frontend reads the header, and
+     * the two are consulted by different parts of the stack — notably whatever mints a visitor id
+     * on a bare page fetch, which never sees our context at all. Sending only the context is how a
+     * request that says "English" still gets answered out of the caller's IP region.
+     */
+    private fun acceptLanguage(): String {
+        val language = locale.hl.substringBefore('-').takeIf { it.isNotBlank() } ?: "en"
+        val region = locale.gl.takeIf { it.isNotBlank() } ?: "US"
+        return "$language-$region,$language;q=0.9"
+    }
+
     private fun HttpRequestBuilder.ytClient(
         client: YouTubeClient,
         setLogin: Boolean = false,
@@ -202,6 +216,7 @@ class InnerTube {
             append("X-YouTube-Client-Version", client.clientVersion)
             append("X-Origin", requestOrigin)
             append("Referer", requestReferer)
+            append("Accept-Language", acceptLanguage())
             authState.visitorData?.let { append("X-Goog-Visitor-Id", it) }
             if (setLogin && client.loginSupported) {
                 authState.cookie?.let { cookie ->

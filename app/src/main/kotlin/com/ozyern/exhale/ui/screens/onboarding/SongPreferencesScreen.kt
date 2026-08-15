@@ -84,6 +84,7 @@ import kotlinx.coroutines.withContext
 import com.ozyern.exhale.constants.ContentLanguageKey
 import com.ozyern.exhale.constants.PreferredArtistsKey
 import com.ozyern.exhale.constants.PreferredAudioLanguagesKey
+import com.ozyern.exhale.constants.SYSTEM_DEFAULT
 import com.ozyern.exhale.constants.SongPreferencesCompletedKey
 import com.ozyern.exhale.utils.rememberPreference
 
@@ -106,7 +107,7 @@ fun SongPreferencesScreen(
     val (_, setCompleted) = rememberPreference(SongPreferencesCompletedKey, defaultValue = false)
     val (_, setLanguagesCsv) = rememberPreference(PreferredAudioLanguagesKey, defaultValue = "")
     val (_, setArtistsCsv) = rememberPreference(PreferredArtistsKey, defaultValue = "")
-    val (contentLanguage, setContentLanguage) = rememberPreference(ContentLanguageKey, defaultValue = "system")
+    val (contentLanguage, setContentLanguage) = rememberPreference(ContentLanguageKey, defaultValue = SYSTEM_DEFAULT)
 
     var step by rememberSaveable { mutableStateOf(0) }
     val selectedLanguages = remember { mutableStateListOf<String>() }
@@ -168,8 +169,14 @@ fun SongPreferencesScreen(
                         setLanguagesCsv(selectedLanguages.joinToString(","))
                         setArtistsCsv(committedArtists.joinToString(","))
                         // Seed content language from the first pick if the user hasn't set one.
+                        // Both sentinels have been written to this key over time — the rest of
+                        // the app uses SYSTEM_DEFAULT, this screen used to use "system". Matching
+                        // only one of them meant a user who had ever chosen "System default" in
+                        // Settings could pick a language here and never have it take effect.
                         selectedLanguages.firstOrNull()?.let { first ->
-                            if (contentLanguage == "system") setContentLanguage(first)
+                            if (contentLanguage == SYSTEM_DEFAULT || contentLanguage == "system") {
+                                setContentLanguage(first)
+                            }
                         }
                         setCompleted(true)
                         onFinished()

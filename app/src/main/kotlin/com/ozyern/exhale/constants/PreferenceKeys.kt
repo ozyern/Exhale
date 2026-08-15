@@ -490,6 +490,9 @@ enum class SearchSource {
 }
 
 val VisitorDataKey = stringPreferencesKey("visitorData")
+
+/** `hl|gl` the cached visitor id was minted under, so a locale change can invalidate it. */
+val VisitorDataLocaleKey = stringPreferencesKey("visitorDataLocale")
 val DataSyncIdKey = stringPreferencesKey("dataSyncId")
 val InnerTubeCookieKey = stringPreferencesKey("innerTubeCookie")
 val PoTokenKey = stringPreferencesKey("poToken")
