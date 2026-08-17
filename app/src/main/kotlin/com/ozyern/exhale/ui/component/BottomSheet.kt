@@ -56,7 +56,6 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import com.ozyern.exhale.constants.BottomSheetAnimationSpec
-import com.ozyern.exhale.constants.BottomSheetExpandAnimationSpec
 import com.ozyern.exhale.constants.BottomSheetSoftAnimationSpec
 import com.ozyern.exhale.constants.EnableHapticFeedbackKey
 import com.ozyern.exhale.constants.MiniPlayerHeight
@@ -69,24 +68,14 @@ import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.launch
 
 // At p=0 (fully collapsed) the content layer is squashed to this fraction of its natural height.
-//
-// Raised from 0.18. At that value the player's whole control stack — artwork, title, slider,
-// transport — was crushed into 18% of its height while still at full opacity for most of the
-// gesture, and a squash that extreme stops reading as a morph and starts reading as an accordion
-// being folded. 0.34 still visibly compresses the content into the pill's band (the thing that
-// makes it a morph rather than a fade) without deforming the artwork past recognition.
-private const val PILL_VERTICAL_SQUASH = 0.34f
+// 0.18 is aggressive enough that the controls visibly compress into the pill band; anything above
+// ~0.30 reads as a shrink rather than a morph.
+private const val PILL_VERTICAL_SQUASH = 0.18f
 
-// The crossover point: the fraction of travel at which the shrinking player and the growing pill
-// swap which one is carrying the image.
-//
-// This has to be ONE number shared by both layers or they cannot dissolve into each other. It used
-// to be two, and they disagreed: the player was fully opaque by p=0.12 while the pill did not
-// vanish until p=0.25, so for an eighth of every transition you saw both at once — a player
-// squashed to a sliver with a mini player drawn straight through it. Now the player fades up
-// across [0, CROSSOVER] and the pill fades down across exactly the same span, so their alphas sum
-// to 1 at every frame and there is never a double image.
-private const val MORPH_CROSSOVER_FRACTION = 0.22f
+// The content fades from transparent to opaque over this fraction of the progress range (0→1).
+// Keeping it tiny (0.12) means geometry carries the whole gesture and the fade is just the
+// hand-off at the very start of the drag, not a crossfade that hides the transformation.
+private const val MORPH_HANDOFF_FRACTION = 0.12f
 
 /**
  * Bottom Sheet
@@ -240,14 +229,14 @@ fun BottomSheet(
 
                             // ---- The opacity half ----
                             //
-                            // Held solid across almost the entire travel and released only in the
-                            // sliver before the pill takes over, so the geometry above is what the
-                            // eye tracks for the whole gesture. Squared so the hand-off is gentle
-                            // at the start of the fade and decisive at the end — a linear ramp
-                            // against the pill's linear ramp leaves a flat grey middle where both
-                            // layers are at half opacity and neither is legible.
-                            val handoff = (p / MORPH_CROSSOVER_FRACTION).coerceIn(0f, 1f)
-                            alpha = handoff * handoff * (3f - 2f * handoff)
+                            // Held near-solid across almost the entire travel and released only in
+                            // the last sliver before the pill takes over. The old ramp
+                            // (`(p - 0.08) / 0.30`) had the content fully transparent below p=0.08
+                            // and fully opaque by p=0.38 — so two thirds of the drag showed no
+                            // transformation at all, which is exactly why it read as a snap. Now
+                            // the geometry above is visible for the whole gesture and the fade is
+                            // just the hand-off, meeting the pill's own fade-out at the crossover.
+                            alpha = (p / MORPH_HANDOFF_FRACTION).coerceIn(0f, 1f)
                         },
                     content = content,
                 )
@@ -268,12 +257,6 @@ fun BottomSheet(
                             scaleX = grow
                             scaleY = grow
                             transformOrigin = TransformOrigin(0.5f, 0f)
-
-                            // The exact complement of the player's ramp above, over the same
-                            // span. Sums to 1 at every p, so one image is always fully formed.
-                            val handoff = (p / MORPH_CROSSOVER_FRACTION).coerceIn(0f, 1f)
-                            alpha = 1f - handoff * handoff * (3f - 2f * handoff)
-                            return@graphicsLayer
                         }
                         alpha = 1f - (p * 4).coerceAtMost(1f)
                     }.clickable(
@@ -339,7 +322,7 @@ class BottomSheetState(
     }
 
     private fun expand() {
-        expand(BottomSheetExpandAnimationSpec)
+        expand(BottomSheetAnimationSpec)
     }
 
     fun collapseSoft() {
@@ -347,9 +330,7 @@ class BottomSheetState(
     }
 
     fun expandSoft() {
-        // Tapping the mini player is the app's most-used gesture. It gets the arriving spring,
-        // not the settling one — see [BottomSheetExpandAnimationSpec].
-        expand(BottomSheetExpandAnimationSpec)
+        expand(BottomSheetSoftAnimationSpec)
     }
 
     fun dismiss() {

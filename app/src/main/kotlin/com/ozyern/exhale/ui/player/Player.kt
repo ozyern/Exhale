@@ -181,8 +181,6 @@ import kotlinx.coroutines.withContext
 import kotlin.math.abs
 import kotlin.math.roundToInt
 import kotlin.math.roundToLong
-import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.hazeSource
 
 
 
@@ -365,11 +363,6 @@ fun BottomSheetPlayer(
 
     // Cache for gradient colors to prevent re-extraction for same songs
     val gradientColorsCache = remember { mutableMapOf<String, List<Color>>() }
-
-    // The player's OWN blur source. Deliberately not the app-wide LocalHazeState: that one's
-    // source is the NavHost, a layer this sheet is drawn on top of, so a control shelf reading
-    // it would blur the home screen through the album art instead of the art itself.
-    val playerHazeState = remember { HazeState() }
 
 
 
@@ -1072,25 +1065,14 @@ fun BottomSheetPlayer(
                             disableBlur = disableBlur,
                             label = "v8BackdropLandscape",
                             meshColors = gradientColors,
-                            // Registers the artwork as what the control shelf below blurs.
-                            modifier = Modifier.hazeSource(playerHazeState),
                         )
 
-                        PlayerGlassShelf(
-                            hazeState = playerHazeState,
-                            modifier = Modifier
-                                .align(Alignment.BottomCenter)
-                                .padding(
-                                    start = 10.dp,
-                                    end = 10.dp,
-                                    bottom = queueSheetState.collapsedBound + 10.dp,
-                                )
-                                .windowInsetsPadding(WindowInsets.systemBars.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom)),
-                        ) {
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
                             modifier = Modifier
-                                .padding(vertical = 6.dp)
+                                .align(Alignment.BottomCenter)
+                                .padding(bottom = queueSheetState.collapsedBound)
+                                .windowInsetsPadding(WindowInsets.systemBars.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom))
                                 .nestedScroll(state.preUpPostDownNestedScrollConnection),
                         ) {
                             enrichedMetadata?.let {
@@ -1132,7 +1114,6 @@ fun BottomSheetPlayer(
                             }
 
                             Spacer(Modifier.height(16.dp))
-                        }
                         }
                     }
                 } else {
@@ -1293,25 +1274,14 @@ fun BottomSheetPlayer(
                             disableBlur = disableBlur,
                             label = "v8BackdropPortrait",
                             meshColors = gradientColors,
-                            // Registers the artwork as what the control shelf below blurs.
-                            modifier = Modifier.hazeSource(playerHazeState),
                         )
 
-                        PlayerGlassShelf(
-                            hazeState = playerHazeState,
-                            modifier = Modifier
-                                .align(Alignment.BottomCenter)
-                                .padding(
-                                    start = 10.dp,
-                                    end = 10.dp,
-                                    bottom = queueSheetState.collapsedBound + 10.dp,
-                                )
-                                .windowInsetsPadding(WindowInsets.systemBars.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom)),
-                        ) {
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
                             modifier = Modifier
-                                .padding(vertical = 6.dp)
+                                .align(Alignment.BottomCenter)
+                                .padding(bottom = queueSheetState.collapsedBound)
+                                .windowInsetsPadding(WindowInsets.systemBars.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom))
                                 .nestedScroll(state.preUpPostDownNestedScrollConnection),
                         ) {
                             enrichedMetadata?.let {
@@ -1353,7 +1323,6 @@ fun BottomSheetPlayer(
                             }
 
                             Spacer(Modifier.height(24.dp))
-                        }
                         }
                     }
                 } else {
