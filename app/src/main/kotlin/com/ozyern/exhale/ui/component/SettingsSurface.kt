@@ -6,9 +6,16 @@
 
 package com.ozyern.exhale.ui.component
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.dp
 
 /**
@@ -59,3 +66,33 @@ fun settingsGroupSurfaceColor(): Color =
 @Composable
 fun settingsDividerColor(): Color =
     if (isSystemInDarkTheme()) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.07f)
+
+/**
+ * The rounded-square plate every settings glyph sits on.
+ *
+ * One definition for what used to be seven copies of `background(accent.copy(alpha = 0.12f))`
+ * scattered across the settings screens — which is how a "design system" quietly becomes seven
+ * things that happen to look similar today.
+ *
+ * A flat 12% wash is what made the rows look generic: a real puck catches light. This is a
+ * vertical gradient from a brighter top to a dimmer bottom with a hairline rim, so the glyph
+ * plate reads as a small physical object rather than a tinted rectangle. The values are low
+ * enough that a row of four different accents still reads as one family.
+ */
+fun Modifier.settingsIconPuck(
+    accent: Color,
+    shape: Shape = RoundedCornerShape(12.dp),
+): Modifier = this
+    .clip(shape)
+    .background(
+        Brush.verticalGradient(
+            listOf(accent.copy(alpha = 0.26f), accent.copy(alpha = 0.11f))
+        )
+    )
+    .border(
+        width = 0.7.dp,
+        brush = Brush.verticalGradient(
+            listOf(accent.copy(alpha = 0.38f), accent.copy(alpha = 0.06f))
+        ),
+        shape = shape,
+    )

@@ -9,6 +9,7 @@ package com.ozyern.exhale.ui.screens
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -39,6 +40,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
@@ -138,7 +140,27 @@ private fun ShortcutTile(
                 scaleY = scale
             }
             .clip(RoundedCornerShape(ShortcutCorner))
-            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.07f))
+            // A gradient plate with a hairline rim rather than a flat 7% ink wash. On a black
+            // page that wash is just a slightly-lighter black — the tiles read as smudges, not
+            // as objects, which is the difference the "doesn't feel premium" complaint is about.
+            .background(
+                Brush.verticalGradient(
+                    listOf(
+                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
+                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f),
+                    )
+                )
+            )
+            .border(
+                width = 0.7.dp,
+                brush = Brush.verticalGradient(
+                    listOf(
+                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.14f),
+                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.02f),
+                    )
+                ),
+                shape = RoundedCornerShape(ShortcutCorner),
+            )
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,

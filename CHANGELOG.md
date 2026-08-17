@@ -97,6 +97,13 @@ First public release.
   now marks those. It narrows the leak; a one-word title that is simply a name stays
   unclassifiable from the client.
 
+**Output picker** — rebuilt on the app's own frosted sheet, following the Connect-panel shape: the
+device you are on is a hero card carrying its live bitrate, the track it is playing and its own
+volume slider; the devices you are not on are a quiet list underneath. It replaces a plain Material
+dialog, the last surface in the app that did not look like the app. It also stops pretending to be
+able to switch outputs — Android routes audio system-wide, so the other-device rows open the system
+picker rather than doing nothing convincingly.
+
 ### Changed
 
 **Design system**
@@ -139,6 +146,70 @@ stack of elevated cards with shadows, shimmer sweeps and fake hover states.
 
 - Section headers end in a small grey chevron rather than a full-size filled forward arrow.
 - Keep Listening became the shortcut grid and moved to the top of the page.
+
+### Fixed
+
+**The bottom dock was never actually glass.**
+
+- It refracted `LocalAppBackdrop`, which is `rememberDefaultBackdrop()` — an *empty* passthrough
+  canvas. Blurring nothing produces nothing, so the only pixels the dock ever painted were its own
+  34%-opacity tint film. That is the transparency people were seeing. The dock, the search capsule
+  and the new player shelf now blur the real content layer, at half resolution so a blur running
+  under a scrolling list stays cheap.
+
+**Search stopped stuttering.**
+
+- Suggestion requests are debounced. Every keystroke used to fire its own network round trip:
+  `flatMapLatest` cancelled the previous collector but the request had already gone out, so typing
+  a seven-letter query opened seven connections to discard six.
+- The results list no longer blanks and reappears while you type. Two collectors were both writing
+  the whole view state, and the history one rebuilt it from scratch — silently resetting
+  suggestions and results to empty on every database emission.
+- Opening the search overlay no longer re-lays-out the entire result list on every frame. The
+  surface animates from the collapsed bar to full screen, and the list was measured against that
+  animating height 60 times a second, starting from one pixel tall. It is now measured once at its
+  final size and revealed by the growing window.
+- The expansion runs on a critically-damped spring instead of a fixed 300ms tween.
+
+**Max audio quality now means the best stream available, not the first one that answered.**
+
+- The stream loop stopped at the first client that validated, so fidelity was decided by which
+  client won the race. They genuinely differ: ANDROID_VR typically tops out at Opus itag 251
+  (~160 kbps) while TVHTML5 and IOS are the ones that surface AAC itag 141 (~256 kbps). MAX now
+  keeps probing and takes the best of everything it saw.
+- Stated plainly: the stopping bar is set at 500 kbps and YouTube's music catalogue has nothing
+  that high, so in practice this means "probe every client, keep the best". No client flag can
+  conjure a bitrate the server does not hold. `adb logcat` reports the winning client and bitrate.
+
+**Player transitions.**
+
+- Expanding and collapsing no longer share one spring. Opening answers a tap and now arrives on a
+  critically-damped 520-stiffness spring instead of taking ~600ms; collapsing keeps the softer
+  curve, which is the direction the liquid tail is actually visible in.
+- The shrinking player and the growing pill now cross-dissolve at a single shared point. Their
+  fades used to disagree — the player was solid by 12% of travel while the pill lingered to 25% —
+  so an eighth of every transition showed both at once, one drawn through the other.
+- The vertical squash is gentler. At 18% the controls were folded like an accordion rather than
+  compressed into the pill's band.
+
+**The expanded player has liquid glass for the first time.**
+
+- Every control surface on it was a flat alpha box over the cover, with a gradient scrim doing all
+  the legibility work — it was the one screen not built out of the app's own material. The
+  transport now sits on a real frosted shelf that blurs the artwork behind it, with a hairline rim
+  and an interior sheen. The bottom scrim drops from 0.62 to 0.44 as a result, so the lower third
+  of a cover is no longer crushed to near-black.
+
+**Smaller.**
+
+- Settings glyph plates are one shared definition instead of seven copies of the same flat 12%
+  wash, and they now catch light: a vertical gradient with a hairline rim.
+- The Updates page's pulsing hero no longer recomposes the whole header 60 times a second forever;
+  the phase is read in the draw phase, and the loading glyph only spins while something is loading.
+- The Updates notification switch is the app's glass toggle, not the last stock Material `Switch`.
+- Grid artwork carries a soft drop shadow, so shelves read as covers lifted off the page.
+- Home shortcut tiles and the account sheet's tiles are gradient plates with rims and the app's tap
+  physics, rather than flat ink washes with a Material ripple washing across the glass.
 
 ### Removed
 

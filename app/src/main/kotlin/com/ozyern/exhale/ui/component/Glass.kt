@@ -31,8 +31,12 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import com.ozyern.exhale.ui.theme.LocalGlass
+import dev.chrisbanes.haze.HazeInputScale
 import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.HazeTint
 import dev.chrisbanes.haze.hazeEffect
 import kotlin.math.PI
 import kotlin.math.cos
@@ -51,6 +55,61 @@ val LocalHazeState = staticCompositionLocalOf<HazeState?> { null }
  */
 val supportsLiveBlur: Boolean
     get() = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+
+/**
+ * The app's one real backdrop-blur modifier for **floating chrome** — the bottom dock, the
+ * search capsule, the device sheet. Blurs whatever the [LocalHazeState] source is drawing
+ * (the NavHost content) and lays a translucent film over it so text stays legible.
+ *
+ * Why this exists rather than Kyant's `drawBackdrop`: the app-wide `LocalAppBackdrop` is
+ * `rememberDefaultBackdrop()`, an **empty** passthrough canvas that draws nothing. Blurring
+ * and refracting it produces exactly nothing, which is why the dock read as fully
+ * transparent — the only pixels it ever painted were its own tint film. Haze's source layer
+ * is the real one, already registered on the NavHost via `hazeSource`.
+ *
+ * @param tintAlpha opacity of the film laid over the blur. Higher = milkier, more legible.
+ * @param blurRadius blur strength. Apple's chrome sits around 40–60dp at this scale.
+ * @param quality fraction of full resolution the blur is computed at. Below 1 the GPU
+ *   samples a smaller layer and upscales — invisible under a heavy blur, and the single
+ *   biggest lever on blur cost, which matters because this runs under a scrolling list.
+ */
+@OptIn(dev.chrisbanes.haze.ExperimentalHazeApi::class)
+@Composable
+fun rememberChromeGlassModifier(
+    shape: Shape,
+    dark: Boolean,
+    tintAlpha: Float = 0.32f,
+    blurRadius: Dp = 48.dp,
+    quality: Float = 0.5f,
+): Modifier {
+    val hazeState = LocalHazeState.current
+    val tint = if (dark) Color.Black.copy(alpha = tintAlpha) else Color.White.copy(alpha = tintAlpha)
+    // Memoised on everything it depends on: rebuilding the chain replaces the haze node,
+    // which re-registers the blur area and re-reads the source layer. Doing that mid-morph
+    // is what turns a cheap GPU blur into dropped frames.
+    return remember(hazeState, shape, tint, blurRadius, quality) {
+        Modifier
+            .clip(shape)
+            .then(
+                if (hazeState != null && supportsLiveBlur) {
+                    Modifier.hazeEffect(state = hazeState) {
+                        this.blurRadius = blurRadius
+                        backgroundColor = Color.Transparent
+                        noiseFactor = 0.04f
+                        inputScale = HazeInputScale.Fixed(quality)
+                        tints = listOf(HazeTint(tint))
+                    }
+                } else {
+                    // No hardware blur: a solid-enough scrim is the only honest fallback.
+                    // A near-transparent film here is what "invisible dock" looks like.
+                    Modifier.background(
+                        if (dark) Color.Black.copy(alpha = 0.72f)
+                        else Color.White.copy(alpha = 0.80f)
+                    )
+                }
+            )
+    }
+}
 
 /**
  * Decorative "frosted glass" surface treatment that works on *every* device: soft shadow,

@@ -60,6 +60,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.ozyern.exhale.BuildConfig
 import com.ozyern.exhale.R
+import com.ozyern.exhale.ui.component.settingsIconPuck
 
 /**
  * Wraps a settings destination in the Apple-Music grouped-table look.
@@ -259,8 +260,7 @@ fun SettingsPermissionBanner(
             Box(
                 modifier = Modifier
                     .size(SettingsDimensions.BannerIconSize)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
+                    .settingsIconPuck(MaterialTheme.colorScheme.primary, CircleShape),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
@@ -348,8 +348,7 @@ fun SettingsUpdateBanner(
             Box(
                 modifier = Modifier
                     .size(SettingsDimensions.BannerIconSize)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
+                    .settingsIconPuck(MaterialTheme.colorScheme.primary, CircleShape),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
@@ -568,8 +567,10 @@ fun SettingsRow(
             Box(
                 modifier = Modifier
                     .size(SettingsDimensions.RowIconSize)
-                    .clip(RoundedCornerShape(SettingsDimensions.RowIconCornerRadius))
-                    .background(effectiveAccent.copy(alpha = 0.12f)),
+                    .settingsIconPuck(
+                        effectiveAccent,
+                        RoundedCornerShape(SettingsDimensions.RowIconCornerRadius),
+                    ),
                 contentAlignment = Alignment.Center,
             ) {
                 if (item.showUpdateIndicator) {

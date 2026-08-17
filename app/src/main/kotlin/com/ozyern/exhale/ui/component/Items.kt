@@ -68,6 +68,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
@@ -906,7 +907,8 @@ fun SongGridItem(
             isActive = isActive,
             isPlaying = isPlaying,
             shape = RoundedCornerShape(GridThumbnailCornerRadius),
-            modifier = Modifier.size(GridThumbnailHeight)
+            modifier = Modifier.size(GridThumbnailHeight),
+            shadowElevation = 10.dp,
         )
         if (!isActive) {
             OverlayPlayButton(
@@ -1608,7 +1610,9 @@ fun YouTubeGridItem(
             isActive = isActive,
             isPlaying = isPlaying,
             shape = shape,
-            thumbnailRatio = thumbnailRatio
+            thumbnailRatio = thumbnailRatio,
+            // Grid cards lift off the page. See [ItemThumbnail.shadowElevation].
+            shadowElevation = 10.dp,
         )
 
         if (item is SongItem && !isActive) {
@@ -1740,7 +1744,14 @@ fun ItemThumbnail(
     isSelected: Boolean = false,
     shouldLoadImage: Boolean = true,
     @DrawableRes placeholderIconRes: Int? = null,
-    thumbnailRatio: Float = 1f
+    thumbnailRatio: Float = 1f,
+    /**
+     * Soft drop shadow under the artwork. Off by default — a shadow behind a 48dp list-row
+     * thumbnail is noise. Grid cards opt in, because a shelf of covers floating a millimetre
+     * off the page is the difference between Apple Music's Home and a wall of flat squares,
+     * and it is a shadow, not a border, that does it.
+     */
+    shadowElevation: Dp = 0.dp,
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current
@@ -1750,6 +1761,20 @@ fun ItemThumbnail(
         modifier = modifier
             .fillMaxSize()
             .aspectRatio(thumbnailRatio)
+            .then(
+                if (shadowElevation > 0.dp) {
+                    // clip = false: the shadow must fall OUTSIDE the artwork's own bounds.
+                    Modifier.shadow(
+                        elevation = shadowElevation,
+                        shape = shape,
+                        clip = false,
+                        ambientColor = Color.Black.copy(alpha = 0.55f),
+                        spotColor = Color.Black.copy(alpha = 0.55f),
+                    )
+                } else {
+                    Modifier
+                }
+            )
             .clip(shape)
     ) {
         val (cropThumbnailToSquare, _) = rememberPreference(CropThumbnailToSquareKey, false)

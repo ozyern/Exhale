@@ -83,16 +83,11 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
-import com.kyant.backdrop.drawBackdrop
-import com.kyant.backdrop.effects.blur
-import com.kyant.backdrop.effects.lens
-import com.kyant.backdrop.effects.vibrancy
 import com.ozyern.exhale.LocalPlayerConnection
 import com.ozyern.exhale.R
 import com.ozyern.exhale.constants.AquamorphicDampingRatio
 import com.ozyern.exhale.constants.AquamorphicStiffness
 import com.ozyern.exhale.extensions.togglePlayPause
-import com.ozyern.exhale.ui.component.liquid.LocalAppBackdrop
 import com.ozyern.exhale.ui.screens.Screens
 
 /**
@@ -269,37 +264,26 @@ fun LiquidGlassBottomBar(
 
 @Composable
 private fun frostedGlassModifier(shape: androidx.compose.ui.graphics.Shape): Modifier {
-    // GENUINE Kyant AndroidLiquidGlass backdrop: the nav bar lives in the Scaffold's
-    // bottomBar slot (a sibling of the NavHost content layer, drawn OVER it), so consuming
-    // LocalAppBackdrop here is safe — it is NOT a re-entrant draw of the layer it lives in.
-    // This gives true lens refraction of the content scrolling beneath the bar, not a flat
-    // Haze blur. A translucent film is drawn on top so the glass stays legible even on the
-    // first frame before the backdrop layer is captured.
-    val backdrop = LocalAppBackdrop.current
+    // Real backdrop blur of the app content scrolling underneath. The bar lives in the
+    // Scaffold's bottomBar slot — a sibling of the NavHost, drawn over it — so reading the
+    // NavHost's haze source here is safe and not a re-entrant layer draw.
+    //
+    // This used to reach for Kyant's `drawBackdrop(LocalAppBackdrop.current, …)`. That local
+    // is `rememberDefaultBackdrop()`, an EMPTY passthrough canvas: blurring and refracting it
+    // yields no pixels at all, so the only thing the bar ever painted was its own 0.34-alpha
+    // film. That is the "dock is fully transparent" bug — the glass was never glass.
     val isDark = isSystemInDarkTheme()
-    // Apple Music's bar reads as a milky, heavily-frosted capsule — push the film opacity up a
-    // touch and the blur/lens radii wider than the old subtle setting to match that reference.
-    val film = if (isDark) Color.Black.copy(alpha = 0.34f) else Color.White.copy(alpha = 0.30f)
-    // PERF: memoised on everything it actually depends on. The A/B morph recomposes this bar's
-    // subtree, and rebuilding the chain each time hands Compose a structurally *new* modifier —
-    // which tears down and re-creates the backdrop node, re-capturing the (expensive) blur/lens
-    // layer mid-animation. None of these inputs change during a morph, so the node is now
-    // created once and simply re-drawn, and the glass keeps refracting live content for free.
-    return remember(backdrop, shape, film) {
-        Modifier
-            .drawBackdrop(
-                backdrop = backdrop,
-                shape = { shape },
-                effects = {
-                    vibrancy()
-                    blur(8f.dp.toPx())
-                    lens(14f.dp.toPx(), 26f.dp.toPx())
-                },
-                onDrawSurface = { drawRect(film) },
-            )
-            // Clip the bar's own children (tabs/icons/mini-player) to the glass shape.
-            .clip(shape)
-    }
+    return rememberChromeGlassModifier(
+        shape = shape,
+        dark = isDark,
+        // Apple Music's dock is milky enough to read white-on-glass labels at any scroll
+        // position. Under a real blur this is a tint, not a substitute for one.
+        tintAlpha = if (isDark) 0.30f else 0.26f,
+        blurRadius = 52.dp,
+        // The dock sits over a scrolling list, so its blur is recomputed every frame the
+        // user scrolls. Half-resolution is invisible at this radius and halves that cost.
+        quality = 0.5f,
+    )
 }
 
 @Composable

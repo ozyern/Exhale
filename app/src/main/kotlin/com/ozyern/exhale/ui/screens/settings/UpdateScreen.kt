@@ -56,8 +56,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -98,6 +96,7 @@ import com.ozyern.exhale.ui.component.SettingsDividerThickness
 import com.ozyern.exhale.ui.component.SettingsGroupCornerRadius
 import com.ozyern.exhale.ui.component.liquidGlassSurface
 import com.ozyern.exhale.ui.component.liquid.LiquidButton
+import com.ozyern.exhale.ui.component.liquid.LiquidToggle
 import com.ozyern.exhale.ui.component.settingsDividerColor
 import com.ozyern.exhale.ui.utils.backToMain
 import com.ozyern.exhale.utils.BundledChangelog
@@ -311,39 +310,44 @@ fun UpdateScreen(
                 // ── Notifications ─────────────────────────────────────────────
                 UpdateGroupTitle(stringResource(R.string.notification_settings))
                 UpdateGlassGroup {
+                    // One shared handler: the row and the toggle must do exactly the same
+                    // thing, including the notification-permission detour.
+                    val toggleUpdateNotification = {
+                        val enabled = !enableUpdateNotification
+                        when {
+                            !enabled -> {
+                                onEnableUpdateNotificationChange(false)
+                                UpdateNotificationManager.cancelPeriodicUpdateCheck(context)
+                            }
+
+                            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                                    !hasNotificationPermission ->
+                                permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+
+                            else -> {
+                                onEnableUpdateNotificationChange(true)
+                                UpdateNotificationManager.schedulePeriodicUpdateCheck(context)
+                            }
+                        }
+                    }
+
                     UpdateRow(
                         icon = painterResource(R.drawable.notifications),
                         title = stringResource(R.string.enable_update_notification),
                         subtitle = stringResource(R.string.enable_update_notification_desc),
                         trailing = {
-                            Switch(
+                            // The app's own glass switch, matching every other toggle in
+                            // Settings. This was the one stock Material `Switch` left on the
+                            // page, so the single control here was also the only thing on it
+                            // that did not belong to the design system.
+                            LiquidToggle(
                                 checked = enableUpdateNotification,
-                                onCheckedChange = null,
-                                colors = SwitchDefaults.colors(
-                                    checkedTrackColor = MaterialTheme.colorScheme.primary,
-                                ),
+                                onCheckedChange = { toggleUpdateNotification() },
                             )
                         },
-                        // Handled on the whole row rather than on the switch so the hit target is
-                        // the row, which is how an iOS grouped list behaves.
-                        onClick = {
-                            val enabled = !enableUpdateNotification
-                            when {
-                                !enabled -> {
-                                    onEnableUpdateNotificationChange(false)
-                                    UpdateNotificationManager.cancelPeriodicUpdateCheck(context)
-                                }
-
-                                Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-                                        !hasNotificationPermission ->
-                                    permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-
-                                else -> {
-                                    onEnableUpdateNotificationChange(true)
-                                    UpdateNotificationManager.schedulePeriodicUpdateCheck(context)
-                                }
-                            }
-                        },
+                        // Also on the whole row so the hit target is the row, which is how an
+                        // iOS grouped list behaves.
+                        onClick = toggleUpdateNotification,
                     )
                 }
 
@@ -455,15 +459,23 @@ private fun UpdateHero(
         label = "haloPhase",
     )
 
-    val spin by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1400, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart,
-        ),
-        label = "glyphSpin",
-    )
+    // Only spun while a check is actually running. It used to run permanently and was simply
+    // multiplied by zero when idle — an animation nobody could see, costing a frame callback
+    // for the entire time the page was on screen.
+    val spinTransition = rememberInfiniteTransition(label = "updateGlyph")
+    val spin by if (state == UpdateCheckState.Loading) {
+        spinTransition.animateFloat(
+            initialValue = 0f,
+            targetValue = 360f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 1400, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart,
+            ),
+            label = "glyphSpin",
+        )
+    } else {
+        remember { mutableStateOf(0f) }
+    }
 
     val accent = when (state) {
         is UpdateCheckState.Error -> MaterialTheme.colorScheme.error
@@ -484,8 +496,8 @@ private fun UpdateHero(
             modifier = Modifier.size(148.dp),
             contentAlignment = Alignment.Center,
         ) {
-            Halo(phase = phase, color = accentColor)
-            Halo(phase = (phase + 0.5f) % 1f, color = accentColor)
+            Halo(phase = { phase }, color = accentColor)
+            Halo(phase = { (phase + 0.5f) % 1f }, color = accentColor)
 
             Box(
                 modifier = Modifier
@@ -563,17 +575,23 @@ private fun UpdateHero(
 /** One expanding, fading ring. [phase] runs 0→1 and restarts. */
 @Composable
 private fun Halo(
-    phase: Float,
+    // A lambda, not a Float. The phase ticks every frame forever; taking it by value meant
+    // reading it in the CALLER's composition, so the whole hero — glass circle, halos, title,
+    // status line — recomposed 60 times a second for as long as the page was open, whether or
+    // not anything was happening. Read inside graphicsLayer it is a draw-phase read, and the
+    // pulse costs one GPU transform per frame and nothing else.
+    phase: () -> Float,
     color: Color,
 ) {
     Box(
         modifier = Modifier
             .size(96.dp)
             .graphicsLayer {
-                val scale = 1f + phase * 0.52f
+                val p = phase()
+                val scale = 1f + p * 0.52f
                 scaleX = scale
                 scaleY = scale
-                alpha = (1f - phase) * 0.28f
+                alpha = (1f - p) * 0.28f
             }
             .clip(CircleShape)
             .background(color),

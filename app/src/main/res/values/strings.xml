@@ -612,6 +612,11 @@ Exhale will only extract your token, and everything else is stored locally.</str
     <string name="device_bluetooth_sco">Bluetooth SCO</string>
     <string name="device_ble_headset">BLE headset</string>
     <string name="device_generic">Device</string>
+    <string name="device_sheet_title">Output</string>
+    <string name="device_sheet_other_outputs">OTHER OUTPUTS</string>
+    <string name="device_sheet_nothing_playing">Nothing playing</string>
+    <string name="device_sheet_bluetooth_settings">Bluetooth settings</string>
+    <string name="device_sheet_routing_note">Android routes audio system-wide, so switching output opens the system picker.</string>
     <string name="support_github">Star Exhale!</string>
     <!-- Update dialog -->
     <string name="new_update_available">New update available</string>

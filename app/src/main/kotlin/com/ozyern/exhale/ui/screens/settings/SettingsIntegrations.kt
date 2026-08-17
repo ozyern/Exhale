@@ -36,6 +36,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.ozyern.exhale.R
+import com.ozyern.exhale.ui.component.settingsIconPuck
 
 /**
  * Integrations rendered as a true Apple Music inset grouped list — full-width rows
@@ -102,8 +103,10 @@ private fun IntegrationRow(
             Box(
                 modifier = Modifier
                     .size(SettingsDimensions.RowIconSize)
-                    .clip(RoundedCornerShape(SettingsDimensions.RowIconCornerRadius))
-                    .background(action.accentColor.copy(alpha = 0.12f)),
+                    .settingsIconPuck(
+                        action.accentColor,
+                        RoundedCornerShape(SettingsDimensions.RowIconCornerRadius),
+                    ),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(

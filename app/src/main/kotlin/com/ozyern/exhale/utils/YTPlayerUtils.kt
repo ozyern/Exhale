@@ -151,6 +151,34 @@ object YTPlayerUtils {
         return "$videoId:${normalizeStreamClientKey(clientKey)}"
     }
 
+    /**
+     * The bitrate at which MAX mode stops shopping around.
+     *
+     * MAX used to mean "the highest bitrate the **first client that answered** happened to
+     * offer" — the loop broke on the first validated stream. That is not the same thing as
+     * the highest available: the clients genuinely differ in which itags they are served.
+     * ANDROID_VR typically tops out at Opus itag 251 (~160 kbps); TVHTML5 and IOS are the
+     * ones that surface AAC itag 141 (~256 kbps) on a Premium account. Which client won the
+     * race decided your fidelity.
+     *
+     * Now MAX keeps probing until a client clears this bar, then takes the best of
+     * everything it saw. The bar is set deliberately above anything YouTube is known to
+     * serve for music, which makes the practical behaviour "probe every client, keep the
+     * best" — with an early exit already in place for the day a higher tier appears. It is a
+     * stopping rule, not a promise: no client flag can conjure a bitrate the server does not
+     * hold, and YouTube's music catalogue has no 500 kbps rendition today.
+     */
+    private const val MAX_MODE_TARGET_BITRATE_BPS = 500_000
+
+    /** A stream that passed [validateStatus], kept so MAX mode can compare clients. */
+    private data class ValidatedStream(
+        val format: PlayerResponse.StreamingData.Format,
+        val url: String,
+        val expiresInSeconds: Int,
+        val response: PlayerResponse,
+        val clientName: String,
+    )
+
     data class PlaybackData(
         val audioConfig: PlayerResponse.PlayerConfig.AudioConfig?,
         val videoDetails: PlayerResponse.VideoDetails?,
@@ -270,6 +298,12 @@ object YTPlayerUtils {
         val botDetectedClients = mutableSetOf<String>()
         var gateFailure: PlaybackGateFailure? = null
 
+        // In MAX mode we do not accept the first client that merely works — see
+        // [MAX_MODE_TARGET_BITRATE_BPS]. This holds the best validated result seen so far
+        // across every client probed, so the loop can keep looking for a better one.
+        val probeForBest = audioQuality == AudioQuality.HIGHEST || audioQuality == AudioQuality.AUTO
+        var best: ValidatedStream? = null
+
         for ((index, client) in streamClients.withIndex()) {
             format = null
             streamUrl = null
@@ -357,8 +391,43 @@ object YTPlayerUtils {
 
             val valid = validateStatus(streamUrl, client.userAgent)
             if (valid) {
-                Timber.tag(logTag).i("Stream validated successfully with client: ${client.clientName}")
-                break
+                val validated = ValidatedStream(
+                    format = selectedFormat,
+                    url = selectedUrl,
+                    expiresInSeconds = streamExpiresInSeconds,
+                    response = streamPlayerResponse,
+                    clientName = client.clientName,
+                )
+                Timber.tag(logTag).i(
+                    "Stream validated successfully with client: ${client.clientName} @ ${validated.format.bitrate}bps"
+                )
+
+                if (!probeForBest) break
+
+                // MAX mode: keep the better of what we had and what this client offered.
+                val incumbent = best
+                if (incumbent == null || validated.format.bitrate > incumbent.format.bitrate) {
+                    best = validated
+                }
+
+                val bestSoFar = best!!
+                if (bestSoFar.format.bitrate >= MAX_MODE_TARGET_BITRATE_BPS) {
+                    Timber.tag(logTag).i(
+                        "Reached the MAX-mode bitrate target with ${bestSoFar.clientName} " +
+                            "(${bestSoFar.format.bitrate}bps); stopping the probe"
+                    )
+                    break
+                }
+
+                Timber.tag(logTag).i(
+                    "${client.clientName} tops out at ${validated.format.bitrate}bps, below the " +
+                        "${MAX_MODE_TARGET_BITRATE_BPS}bps target — probing the next client for a better stream"
+                )
+                format = null
+                streamUrl = null
+                streamExpiresInSeconds = null
+                streamPlayerResponse = null
+                continue
             }
 
             Timber.tag(logTag).w("Stream validation failed with client: ${client.clientName}, trying next fallback")
@@ -366,6 +435,21 @@ object YTPlayerUtils {
             streamUrl = null
             streamExpiresInSeconds = null
             streamPlayerResponse = null
+        }
+
+        // Fall back to the best stream the probe found. Non-null only in MAX mode, and only
+        // when no single client cleared the target on its own.
+        best?.let { winner ->
+            val current = format
+            if (current == null || winner.format.bitrate > current.bitrate) {
+                Timber.tag(logTag).i(
+                    "Best available across all clients: ${winner.clientName} @ ${winner.format.bitrate}bps"
+                )
+                format = winner.format
+                streamUrl = winner.url
+                streamExpiresInSeconds = winner.expiresInSeconds
+                streamPlayerResponse = winner.response
+            }
         }
 
         if (streamPlayerResponse == null) {

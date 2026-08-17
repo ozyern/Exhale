@@ -109,6 +109,7 @@ import com.ozyern.exhale.innertube.YouTube
 import com.ozyern.exhale.innertube.utils.completed
 import com.ozyern.exhale.innertube.utils.parseCookieString
 import com.ozyern.exhale.ui.component.InfoLabel
+import com.ozyern.exhale.ui.component.bounceClick
 import com.ozyern.exhale.ui.component.SettingsDividerThickness
 import com.ozyern.exhale.ui.component.SettingsGroupCornerRadius
 import com.ozyern.exhale.ui.component.TextFieldDialog
@@ -408,8 +409,12 @@ private fun AccountIdentityCard(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            // The app's tap physics rather than a bare `clickable`. A Material ripple washing
+            // across a translucent glass plate is the single cheapest-looking interaction in
+            // any glass UI — it paints an opaque grey circle over the thing that is supposed
+            // to be a pane of glass.
+            .bounceClick(onClick = onClick)
             .liquidGlassSurface(RoundedCornerShape(20.dp))
-            .clickable(onClick = onClick)
             .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -573,28 +578,44 @@ private fun AccountTile(
 ) {
     Column(
         modifier = modifier
+            .bounceClick(onClick = onClick)
             .liquidGlassSurface(RoundedCornerShape(18.dp), tint = accent)
-            .clickable(onClick = onClick)
             .padding(vertical = 14.dp, horizontal = 6.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
+        // The glyph sits in its own tinted puck rather than floating loose on the tile.
+        // A bare icon on a card reads as a list row that lost its text; a puck gives the
+        // tile a focal object and is what makes a grid of them scan as controls.
         Box(contentAlignment = Alignment.TopEnd) {
-            Icon(
-                painter = icon,
-                contentDescription = null,
-                tint = accent,
-                modifier = Modifier.size(24.dp),
-            )
+            Box(
+                modifier = Modifier
+                    .size(38.dp)
+                    .clip(RoundedCornerShape(13.dp))
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(accent.copy(alpha = 0.30f), accent.copy(alpha = 0.14f))
+                        )
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    painter = icon,
+                    contentDescription = null,
+                    tint = accent,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
             if (showBadge) {
                 Box(
                     modifier = Modifier
-                        .size(7.dp)
+                        .size(9.dp)
                         .clip(CircleShape)
                         .background(MaterialTheme.colorScheme.error)
+                        .border(1.5.dp, MaterialTheme.colorScheme.surface, CircleShape)
                 )
             }
         }
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(9.dp))
         Text(
             text = label,
             style = MaterialTheme.typography.labelSmall,

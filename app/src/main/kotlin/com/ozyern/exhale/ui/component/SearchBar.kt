@@ -8,6 +8,7 @@ package com.ozyern.exhale.ui.component
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -42,6 +43,7 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredHeight
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
@@ -73,12 +75,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.takeOrElse
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.key
@@ -102,13 +106,8 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.lerp
 import androidx.compose.ui.util.lerp
-import com.kyant.backdrop.drawBackdrop
-import com.kyant.backdrop.effects.blur
-import com.kyant.backdrop.effects.lens
-import com.kyant.backdrop.effects.vibrancy
 import com.ozyern.exhale.R
 import com.ozyern.exhale.constants.AppBarHeight
-import com.ozyern.exhale.ui.component.liquid.LocalAppBackdrop
 import kotlin.math.max
 
 @ExperimentalMaterial3Api
@@ -143,9 +142,18 @@ fun TopSearch(
     bottomBarPadding: Dp = 0.dp,
     content: @Composable ColumnScope.() -> Unit,
 ) {
+    // A critically-damped spring rather than a fixed-duration linear-ish tween: it leaves
+    // fast on the first frames (where the gesture's intent is legible) and settles without
+    // overshoot, which is what makes the expansion read as physical instead of timed.
+    // Damping is exactly 1, so the value still lands on 1f/0f precisely and the `== 1f`
+    // shape check below stays exact.
     val animationProgress: Float by animateFloatAsState(
         targetValue = if (active) 1f else 0f,
-        animationSpec = tween(durationMillis = AnimationDurationMillis),
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioNoBouncy,
+            stiffness = 420f,
+            visibilityThreshold = 0.001f,
+        ),
         label = "SearchBarAnimation",
     )
 
@@ -189,6 +197,9 @@ fun TopSearch(
         val width: Dp
         val startPadding: Dp
         val endPadding: Dp
+        // The height the result list is measured at, ONCE, regardless of how tall the
+        // surface currently is. See the `requiredHeight` note in the docked branch below.
+        val contentTargetHeight: Dp
         with(LocalDensity.current) {
             val startWidth = constraints.maxWidth.toFloat()
             val startHeight = max(constraints.minHeight, InputFieldHeight.roundToPx())
@@ -197,6 +208,10 @@ fun TopSearch(
             val endWidth = constraints.maxWidth.toFloat()
             val endHeight = constraints.maxHeight.toFloat()
 
+            contentTargetHeight =
+                (endHeight - InputFieldHeight.roundToPx() - bottomBarPadding.roundToPx())
+                    .coerceAtLeast(0f)
+                    .toDp()
             height = lerp(startHeight, endHeight, animationProgress).toDp()
             width = lerp(startWidth, endWidth, animationProgress).toDp()
             startPadding = lerp(
@@ -283,20 +298,44 @@ fun TopSearch(
                 // field floats as a frosted pill docked at the bottom of the screen.
                 Column(Modifier.fillMaxSize()) {
                     if (animationProgress > 0) {
-                        Column(
+                        // PERF: the surface's height animates from the collapsed bar to the
+                        // full screen, and this used to be `weight(1f)` — so the entire
+                        // result list (two LazyColumns behind a Crossfade, plus the browse
+                        // grid) was re-measured and re-laid-out on EVERY frame of the
+                        // expansion, from one pixel tall upward. That is the search-page
+                        // stutter: not the blur, not the network, a full layout pass 60×/s
+                        // over the heaviest subtree in the app.
+                        //
+                        // `requiredHeight` overrides the incoming constraint, so the list is
+                        // measured once at its final height and the growing surface simply
+                        // clips it. Anchoring to the bottom means the window opens upward
+                        // from the field — the list is revealed rather than stretched, which
+                        // also happens to be the motion Apple Music uses.
+                        Box(
                             modifier = Modifier
                                 .weight(1f)
-                                // The docked layout bypasses the classic top-anchored inset
-                                // handling, so the safe-area inset must be applied here —
-                                // without it "Search history" rams into the status bar and
-                                // camera cutout. 12dp of extra breathing room below the inset.
-                                .windowInsetsPadding(
-                                    WindowInsets.safeDrawing.only(WindowInsetsSides.Top)
-                                )
-                                .padding(top = 12.dp)
-                                .alpha(animationProgress),
+                                .clipToBounds(),
+                            contentAlignment = Alignment.BottomCenter,
                         ) {
-                            content()
+                            Column(
+                                modifier = Modifier
+                                    .requiredHeight(contentTargetHeight)
+                                    .fillMaxWidth()
+                                    // The docked layout bypasses the classic top-anchored inset
+                                    // handling, so the safe-area inset must be applied here —
+                                    // without it "Search history" rams into the status bar and
+                                    // camera cutout. 12dp of extra breathing room below the inset.
+                                    .windowInsetsPadding(
+                                        WindowInsets.safeDrawing.only(WindowInsetsSides.Top)
+                                    )
+                                    .padding(top = 12.dp)
+                                    // Read inside graphicsLayer, not as a composition-phase
+                                    // `alpha()` — this keeps the fade in the draw phase and off
+                                    // the recomposition path entirely.
+                                    .graphicsLayer { alpha = animationProgress },
+                            ) {
+                                content()
+                            }
                         }
                     }
 
@@ -389,28 +428,21 @@ private fun SearchFrostedPill(
     content: @Composable () -> Unit,
 ) {
     val shape = RoundedCornerShape(percent = 50)
-    val backdrop = LocalAppBackdrop.current
     val isDark = isSystemInDarkTheme()
-    // Thick, milky frost — noticeably heavier than the nav bar capsule so the field reads
-    // as a solid place to type, while content behind still glows through the blur.
-    val film = if (isDark) Color.Black.copy(alpha = 0.45f) else Color.White.copy(alpha = 0.42f)
+    // Thicker frost than the nav dock: this is a place to type, so it has to read as a solid
+    // surface. Same correction as the dock — the old Kyant path refracted an empty backdrop
+    // and painted nothing but its own film.
+    val glass = rememberChromeGlassModifier(
+        shape = shape,
+        dark = isDark,
+        tintAlpha = if (isDark) 0.42f else 0.38f,
+        blurRadius = 56.dp,
+        quality = 0.5f,
+    )
     androidx.compose.runtime.CompositionLocalProvider(
         androidx.compose.material3.LocalContentColor provides contentColor,
     ) {
-        Box(
-            modifier = modifier
-                .drawBackdrop(
-                    backdrop = backdrop,
-                    shape = { shape },
-                    effects = {
-                        vibrancy()
-                        blur(16f.dp.toPx())
-                        lens(14f.dp.toPx(), 26f.dp.toPx())
-                    },
-                    onDrawSurface = { drawRect(film) },
-                )
-                .clip(shape),
-        ) { content() }
+        Box(modifier = modifier.then(glass)) { content() }
     }
 }
 

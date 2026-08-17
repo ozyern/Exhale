@@ -244,7 +244,9 @@ fun OnlineSearchScreen(
             }
         }
 
-        items(viewState.items.distinctBy { it.id }, key = { "item_${it.id}" }) { item ->
+        // Already de-duplicated in the view model. Doing it here re-allocated the entire
+        // list inside the LazyColumn's content lambda on every recomposition.
+        items(viewState.items, key = { "item_${it.id}" }) { item ->
             YouTubeListItem(
                 item = item,
                 isActive = when (item) {

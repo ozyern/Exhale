@@ -35,6 +35,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.ozyern.exhale.R
+import com.ozyern.exhale.ui.component.settingsIconPuck
 
 /**
  * Primary settings destinations (Appearance, Player, Storage, Privacy) rendered as a true
@@ -104,8 +105,10 @@ private fun QuickActionRow(
             Box(
                 modifier = Modifier
                     .size(SettingsDimensions.RowIconSize)
-                    .clip(RoundedCornerShape(SettingsDimensions.RowIconCornerRadius))
-                    .background(action.accentColor.copy(alpha = 0.12f)),
+                    .settingsIconPuck(
+                        action.accentColor,
+                        RoundedCornerShape(SettingsDimensions.RowIconCornerRadius),
+                    ),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(

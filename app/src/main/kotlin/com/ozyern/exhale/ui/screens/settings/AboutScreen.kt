@@ -67,6 +67,7 @@ import coil3.compose.AsyncImage
 import com.ozyern.exhale.BuildConfig
 import com.ozyern.exhale.LocalPlayerAwareWindowInsets
 import com.ozyern.exhale.R
+import com.ozyern.exhale.ui.component.settingsIconPuck
 import com.ozyern.exhale.constants.AquamorphicDampingRatio
 import com.ozyern.exhale.constants.AquamorphicStiffness
 import com.ozyern.exhale.ui.component.ExhaleBreathingEgg
@@ -476,8 +477,10 @@ private fun AboutRow(
         Box(
             modifier = Modifier
                 .size(SettingsDimensions.RowIconSize)
-                .clip(RoundedCornerShape(SettingsDimensions.RowIconCornerRadius))
-                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
+                .settingsIconPuck(
+                    MaterialTheme.colorScheme.primary,
+                    RoundedCornerShape(SettingsDimensions.RowIconCornerRadius),
+                ),
             contentAlignment = Alignment.Center,
         ) {
             Icon(
@@ -532,8 +535,10 @@ private fun AboutValueRow(
         Box(
             modifier = Modifier
                 .size(SettingsDimensions.RowIconSize)
-                .clip(RoundedCornerShape(SettingsDimensions.RowIconCornerRadius))
-                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
+                .settingsIconPuck(
+                    MaterialTheme.colorScheme.primary,
+                    RoundedCornerShape(SettingsDimensions.RowIconCornerRadius),
+                ),
             contentAlignment = Alignment.Center,
         ) {
             Icon(

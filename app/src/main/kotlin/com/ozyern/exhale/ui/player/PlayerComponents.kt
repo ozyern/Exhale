@@ -2729,9 +2729,11 @@ fun V8PlayerBackdrop(
         disableBlur = disableBlur,
         label = label,
         modifier = modifier,
-        // Softer than the blurred plate's 0.88: over sharp art the scrim only has to buy
-        // contrast for the controls, not hide detail — the cover must stay visible to the edge.
-        bottomScrimAlpha = 0.62f,
+        // Softer still now that the controls sit on a real frosted shelf (PlayerGlassShelf)
+        // that carries its own contrast. The scrim only has to seat the shelf against the
+        // bottom edge; at 0.62 it was doing legibility work the glass now does, and paying
+        // for it by crushing the bottom third of every cover to near-black.
+        bottomScrimAlpha = 0.44f,
         sharpArtwork = true,
     )
 }

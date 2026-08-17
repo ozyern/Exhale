@@ -116,6 +116,25 @@ val BottomSheetAnimationSpec = spring<Dp>(
 )
 
 /**
+ * The spring the player **rises** on. Deliberately different from the one it settles down on.
+ *
+ * Opening and closing are not the same event. Opening answers a tap and should arrive: the user
+ * asked for the player and every millisecond before it is there is latency they can feel. Closing
+ * is a dismissal, and a dismissal that leaves quickly reads as the app snatching the screen back.
+ * Both directions previously shared [BottomSheetAnimationSpec], which meant one of them was always
+ * wrong — and at stiffness 250 the one that was wrong was the opening, at roughly 600ms to settle.
+ *
+ * Critically damped rather than under-damped, for a reason specific to this direction: expansion is
+ * clamped by `Animatable`'s `expandedBound`, so an under-damped spring's overshoot cannot render.
+ * All it does is spend time being clipped against the top of the screen. Damping it exactly kills
+ * that dead travel; the liquid tail stays where it is actually visible, on the way down.
+ */
+val BottomSheetExpandAnimationSpec = spring<Dp>(
+	dampingRatio = Spring.DampingRatioNoBouncy,
+	stiffness = 520f
+)
+
+/**
  * Used for programmatic (tapped, not flung) transitions — `expandSoft` / `collapseSoft`. The same
  * curve as [BottomSheetAnimationSpec] on purpose: minimising by tapping the chevron and minimising
  * by flinging the sheet are the same gesture as far as the user is concerned, and they used to
