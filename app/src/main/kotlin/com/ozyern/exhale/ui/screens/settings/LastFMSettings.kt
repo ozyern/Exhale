@@ -28,7 +28,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Slider
+import com.ozyern.exhale.ui.component.liquid.LiquidSlider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -360,7 +360,7 @@ fun LastFMSettings(
                             modifier = Modifier.padding(bottom = 16.dp)
                         )
 
-                        Slider(
+                        LiquidSlider(
                             value = tempMinTrackDuration.toFloat(),
                             onValueChange = { tempMinTrackDuration = it.toInt() },
                             valueRange = 10f..60f,
@@ -419,7 +419,7 @@ fun LastFMSettings(
                             modifier = Modifier.padding(bottom = 16.dp)
                         )
 
-                        Slider(
+                        LiquidSlider(
                             value = tempScrobbleDelayPercent,
                             onValueChange = { tempScrobbleDelayPercent = it },
                             valueRange = 0.3f..0.95f,
@@ -478,7 +478,7 @@ fun LastFMSettings(
                             modifier = Modifier.padding(bottom = 16.dp)
                         )
 
-                        Slider(
+                        LiquidSlider(
                             value = tempScrobbleDelaySeconds.toFloat(),
                             onValueChange = { tempScrobbleDelaySeconds = it.toInt() },
                             valueRange = 30f..360f,

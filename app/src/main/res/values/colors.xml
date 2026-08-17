@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- Vibrant Exhale brand red — matches DefaultThemeColor (Theme.kt). -->
-    <color name="splash_brand">#ED5564</color>
+    <!-- The mark's own gold (mean of every opaque pixel in splash_logo.png). Was #ED5564, a red
+         that appears nowhere in the artwork. -->
+    <color name="splash_brand">#BE851A</color>
     <!-- Pure black splash canvas — matches BootSplash.SplashCanvasColor so window bg,
          system splash and Compose splash read as one continuous boot screen. -->
     <color name="splash_background">#000000</color>

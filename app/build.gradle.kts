@@ -84,7 +84,7 @@ android {
         applicationId = "com.ozyern.exhale"
         minSdk = 33
         targetSdk = 36
-        versionCode = 131
+        versionCode = 102
         versionName = "1.0.102"
 //        versionName = "3.0.2-$gitCommit"
 
@@ -161,7 +161,9 @@ android {
             )
         }
         debug {
-            applicationIdSuffix = ".debug"
+            // No `.debug` suffix: debug and release share one applicationId, so the package is
+            // `com.ozyern.exhale` in every build. Side-by-side installs are gone as a result —
+            // installing a debug build now replaces a release build and vice versa.
             isDebuggable = true
         }
     }

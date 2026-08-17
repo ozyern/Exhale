@@ -11,11 +11,13 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -30,45 +32,115 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.ozyern.exhale.R
 import com.ozyern.exhale.ui.component.settingsIconPuck
 
 /**
- * Primary settings destinations (Appearance, Player, Storage, Privacy) rendered as a true
- * Apple Music-style grouped inset list: full-width rows stacked vertically inside a single
- * block clipped to 16dp over a frosted surface. Thin 1dp-scale dividers separate the rows,
- * NEVER at the very top or bottom of the group. The old side-by-side square-card grid is gone.
+ * The primary settings destinations (Appearance, Player, Storage, Privacy), as a grid of tiles.
  *
- * The [columns] parameter is retained for source compatibility with the adaptive layouts but
- * is intentionally ignored — the list is always a single full-width column.
+ * These were full-width rows in a grouped card, identical to every other section on the page. That
+ * is the thing that made Settings tiring to look at: hero, then five consecutive blocks of the same
+ * icon-title-chevron row, with nothing but a caption to tell you which block you were in and no
+ * visual anchor anywhere below the top of the page.
+ *
+ * Tiles here give the page a rhythm — hero, then a grid, then the lists — and it is the same rhythm
+ * About uses (statement card, stat pair, table), so the two screens now read as one design rather
+ * than two. It also earns the "essentials" label: these four are meant to be the shortcuts, and a
+ * shortcut that looks exactly like everything else is not one.
  */
 @Composable
 fun SettingsQuickActionsSection(
     actions: List<SettingsQuickAction>,
-    @Suppress("UNUSED_PARAMETER") columns: Int = SettingsDimensions.CompactColumns,
+    columns: Int = SettingsDimensions.CompactColumns,
     modifier: Modifier = Modifier,
 ) {
     if (actions.isEmpty()) return
 
+    val perRow = columns.coerceAtLeast(1)
+
     Column(modifier = modifier) {
         SettingsSectionHeader(stringResource(R.string.settings_group_essentials))
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(SettingsDimensions.GroupCardCornerRadius))
-                .background(SettingsDimensions.groupSurfaceColor()),
-        ) {
-            actions.forEachIndexed { index, action ->
-                QuickActionRow(
-                    action = action,
-                    showDivider = index < actions.size - 1,
-                )
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            // Chunked Rows rather than a LazyVerticalGrid: this whole section is a single item
+            // inside the settings LazyColumn, and nesting a lazy scrollable in a lazy scrollable
+            // along the same axis throws at measure time.
+            actions.chunked(perRow).forEach { rowActions ->
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    rowActions.forEach { action ->
+                        QuickActionTile(
+                            action = action,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                    // Keeps a short final row's tiles the same width as a full one instead of
+                    // letting a lone tile stretch across the screen.
+                    repeat(perRow - rowActions.size) {
+                        Spacer(Modifier.weight(1f))
+                    }
+                }
             }
         }
+    }
+}
+
+@Composable
+private fun QuickActionTile(
+    action: SettingsQuickAction,
+    modifier: Modifier = Modifier,
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) SettingsAnimations.TilePressScale else 1f,
+        animationSpec = SettingsAnimations.pressSpring(),
+        label = "quickActionTileScale",
+    )
+
+    Column(
+        modifier = modifier
+            .scale(scale)
+            .clip(RoundedCornerShape(SettingsDimensions.QuickActionCardCornerRadius))
+            .background(SettingsDimensions.groupSurfaceColor())
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = action.onClick,
+            )
+            .padding(horizontal = 16.dp, vertical = 16.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .size(SettingsDimensions.QuickActionIconSize)
+                .settingsIconPuck(
+                    action.accentColor,
+                    RoundedCornerShape(SettingsDimensions.RowIconCornerRadius),
+                ),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                painter = action.icon,
+                contentDescription = action.label,
+                tint = action.accentColor,
+                modifier = Modifier.size(SettingsDimensions.QuickActionIconInnerSize),
+            )
+        }
+
+        Spacer(modifier = Modifier.height(28.dp))
+
+        Text(
+            text = action.label,
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 

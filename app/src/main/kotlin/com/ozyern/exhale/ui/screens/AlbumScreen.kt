@@ -144,12 +144,13 @@ import com.ozyern.exhale.viewmodels.AlbumViewModel
 import com.valentinilk.shimmer.shimmer
 
 // ============================================================================
-// FUNCIONES DE DESCARGA
+// COVER ARTWORK DOWNLOAD
 // ============================================================================
 
 /**
- * Descarga la carátula del álbum en la calidad especificada
- * @param quality Calidad: 512 (baja), 768 (media), 1024 (alta)
+ * Saves the album's cover art to the gallery at the requested resolution.
+ *
+ * @param quality edge length in pixels: 512 (small), 768 (medium), 1024 (large).
  */
 suspend fun downloadAlbumCover(
     context: android.content.Context,
@@ -170,9 +171,9 @@ suspend fun downloadAlbumCover(
         val bitmap = result.image?.toBitmap() ?: return false
 
         val qualityLabel = when (quality) {
-            512 -> "baja"
-            768 -> "media"
-            1024 -> "alta"
+            512 -> "small"
+            768 -> "medium"
+            1024 -> "large"
             else -> "custom"
         }
 
@@ -209,9 +210,30 @@ suspend fun downloadAlbumCover(
 }
 
 // ============================================================================
-// COMPOSABLE DIALOG DE CALIDAD
+// COVER QUALITY PICKER
 // ============================================================================
 
+/** One selectable resolution, so the three rows cannot drift apart. */
+private data class CoverQuality(
+    val pixels: Int,
+    val label: String,
+    val approxSize: String,
+)
+
+private val CoverQualities = listOf(
+    CoverQuality(512, "Small", "~50 KB"),
+    CoverQuality(768, "Medium", "~100 KB"),
+    CoverQuality(1024, "Large", "~200 KB"),
+)
+
+/**
+ * Resolution picker for "save cover art".
+ *
+ * Three near-identical `RadioButton` rows was the wrong control for this: the choice is really
+ * *how big*, and a radio dot communicates none of that. Each option is now a card that leads with
+ * its own pixel dimensions, so the thing being chosen is legible at a glance and the selected state
+ * is the card itself lighting up rather than a 20dp dot changing colour.
+ */
 @Composable
 private fun QualitySelectionDialog(
     onDismiss: () -> Unit,
@@ -221,10 +243,12 @@ private fun QualitySelectionDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(28.dp),
         title = {
             Text(
-                text = "Selecciona la calidad",
-                style = MaterialTheme.typography.headlineSmall
+                text = "Save cover art",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.SemiBold,
             )
         },
         text = {
@@ -232,120 +256,116 @@ private fun QualitySelectionDialog(
                 modifier = Modifier
                     .fillMaxWidth()
                     .selectableGroup(),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                // Opción Baja Calidad
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(8.dp))
-                        .selectable(
-                            selected = selectedQuality == 512,
-                            onClick = { selectedQuality = 512 },
-                            role = Role.RadioButton
-                        )
-                        .padding(8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    RadioButton(
-                        selected = selectedQuality == 512,
-                        onClick = { selectedQuality = 512 }
-                    )
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Baja (512x512)",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Medium
-                        )
-                        Text(
-                            text = "~50 KB",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
+                Text(
+                    text = "Pick a resolution. The image is saved to Pictures/Exhale.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 2.dp),
+                )
 
-                // Opción Media Calidad
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(8.dp))
-                        .selectable(
-                            selected = selectedQuality == 768,
-                            onClick = { selectedQuality = 768 },
-                            role = Role.RadioButton
-                        )
-                        .padding(8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    RadioButton(
-                        selected = selectedQuality == 768,
-                        onClick = { selectedQuality = 768 }
-                    )
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Media (768x768)",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Medium
-                        )
-                        Text(
-                            text = "~100 KB",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
+                CoverQualities.forEach { option ->
+                    val selected = selectedQuality == option.pixels
+                    val shape = RoundedCornerShape(18.dp)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(shape)
+                            .background(
+                                if (selected) {
+                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                                } else {
+                                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f)
+                                }
+                            )
+                            .border(
+                                width = if (selected) 1.5.dp else 1.dp,
+                                color = if (selected) {
+                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)
+                                } else {
+                                    Color.Transparent
+                                },
+                                shape = shape,
+                            )
+                            .selectable(
+                                selected = selected,
+                                onClick = { selectedQuality = option.pixels },
+                                role = Role.RadioButton,
+                            )
+                            .padding(horizontal = 12.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        // The dimensions ARE the choice, so they lead the row instead of
+                        // hiding in a parenthetical after the adjective.
+                        Box(
+                            modifier = Modifier
+                                .size(44.dp)
+                                .clip(RoundedCornerShape(13.dp))
+                                .background(
+                                    if (selected) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
+                                    }
+                                ),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                text = option.pixels.toString(),
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = if (selected) {
+                                    MaterialTheme.colorScheme.onPrimary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                },
+                            )
+                        }
 
-                // Opción Alta Calidad
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(8.dp))
-                        .selectable(
-                            selected = selectedQuality == 1024,
-                            onClick = { selectedQuality = 1024 },
-                            role = Role.RadioButton
-                        )
-                        .padding(8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    RadioButton(
-                        selected = selectedQuality == 1024,
-                        onClick = { selectedQuality = 1024 }
-                    )
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Alta (1024x1024)",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Medium
-                        )
-                        Text(
-                            text = "~200 KB",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = option.label,
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
+                            Text(
+                                text = "${option.pixels} × ${option.pixels} · ${option.approxSize}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+
+                        if (selected) {
+                            Icon(
+                                painter = painterResource(R.drawable.check),
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
                     }
                 }
             }
         },
         confirmButton = {
             Button(
+                shape = RoundedCornerShape(percent = 50),
                 onClick = {
                     onQualitySelected(selectedQuality)
                     onDismiss()
-                }
+                },
             ) {
-                Text("Download")
+                Text("Save")
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
                 Text("Cancel")
             }
-        }
+        },
     )
 }
 
@@ -383,7 +403,7 @@ fun AlbumScreen(
     val fallbackColor = MaterialTheme.colorScheme.surface.toArgb()
     val surfaceColor = MaterialTheme.colorScheme.surface
 
-    // Estados para descarga de carátula
+    // Cover-art download state
     var downloadingCover by remember { mutableStateOf(false) }
     var showQualityDialog by remember { mutableStateOf(false) }
 
@@ -1339,7 +1359,7 @@ fun AlbumScreen(
             }
         )
 
-        // Dialog para seleccionar calidad
+        // Cover-art resolution picker
         if (showQualityDialog) {
             QualitySelectionDialog(
                 onDismiss = { showQualityDialog = false },
@@ -1347,23 +1367,12 @@ fun AlbumScreen(
                     downloadingCover = true
                     scope.launch {
                         try {
-                            val success = downloadAlbumCover(
+                            downloadAlbumCover(
                                 context = context,
                                 imageUrl = albumWithSongs?.album?.thumbnailUrl,
                                 albumTitle = albumWithSongs?.album?.title ?: "album",
                                 quality = quality
                             )
-
-                            val qualityLabel = when (quality) {
-                                512 -> "Baja (512x512)"
-                                768 -> "Media (768x768)"
-                                1024 -> "Alta (1024x1024)"
-                                else -> "Custom"
-                            }
-
-                            if (success) {
-                                // Aquí puedes agregar un SnackBar si lo deseas
-                            }
                         } finally {
                             downloadingCover = false
                         }

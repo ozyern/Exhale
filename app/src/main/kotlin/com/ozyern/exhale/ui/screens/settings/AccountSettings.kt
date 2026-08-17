@@ -154,6 +154,7 @@ fun AccountSettings(
     var showToken by remember { mutableStateOf(false) }
     var showTokenEditor by remember { mutableStateOf(false) }
     var showPlaylistDialog by remember { mutableStateOf(false) }
+    var showSignOutConfirm by remember { mutableStateOf(false) }
 
     val hasUpdate = Updater.hasUpdate(latestVersionName, BuildConfig.VERSION_NAME)
 
@@ -188,24 +189,71 @@ fun AccountSettings(
                 },
             )
 
-            // The four things people actually open this sheet for, as tiles rather than as rows
+            // The three things people actually open this sheet for, as tiles rather than as rows
             // buried in three separate captioned groups further down.
             AccountQuickTiles(
-                isLoggedIn = isLoggedIn,
                 hasUpdate = hasUpdate,
                 onSoundChem = { onClose(); navController.navigate("stats") },
                 onHistory = { onClose(); navController.navigate("history") },
                 onSettings = { onClose(); navController.navigate("settings") },
-                onSignInOut = {
-                    if (isLoggedIn) {
-                        onInnerTubeCookieChange("")
-                        forgetAccount(context)
-                    } else {
-                        onClose()
-                        navController.navigate(buildLoginRoute())
-                    }
-                },
             )
+
+            // Sign in / out is NOT a fourth tile.
+            //
+            // Two reasons it had to come out of that row. Four tiles across a phone left each one
+            // about 80dp wide, which is not enough for "Sound Chem" to fit on the single line the
+            // tile allows — and a destructive, irreversible action was sitting at identical weight
+            // to "History", one stray thumb away from ending the session with no confirmation and
+            // no undo. It is now a full-width row of its own, and signing out asks first.
+            AccountSignInOutRow(
+                isLoggedIn = isLoggedIn,
+                onSignIn = {
+                    onClose()
+                    navController.navigate(buildLoginRoute())
+                },
+                onSignOut = { showSignOutConfirm = true },
+            )
+
+            if (showSignOutConfirm) {
+                AlertDialog(
+                    onDismissRequest = { showSignOutConfirm = false },
+                    shape = RoundedCornerShape(28.dp),
+                    title = {
+                        Text(
+                            text = stringResource(R.string.account_signout_title),
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    },
+                    text = {
+                        Text(
+                            text = stringResource(R.string.account_signout_message),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                showSignOutConfirm = false
+                                onInnerTubeCookieChange("")
+                                forgetAccount(context)
+                            },
+                        ) {
+                            Text(
+                                text = stringResource(R.string.logout),
+                                color = MaterialTheme.colorScheme.error,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showSignOutConfirm = false }) {
+                            Text(stringResource(android.R.string.cancel))
+                        }
+                    },
+                )
+            }
 
             if (hasUpdate) {
                 SettingsSection {
@@ -366,26 +414,31 @@ private fun AccountSheetTopBar(onClose: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 16.dp, end = 12.dp, top = 4.dp, bottom = 12.dp),
+            .padding(start = 20.dp, end = 16.dp, top = 6.dp, bottom = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
             text = stringResource(R.string.account),
-            style = MaterialTheme.typography.headlineSmall,
+            style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.weight(1f),
         )
-        IconButton(
-            onClick = onClose,
-            colors = IconButtonDefaults.iconButtonColors(
-                containerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
-            )
+        // A glass disc, not a Material IconButton on a flat 8% grey circle. On a translucent
+        // sheet that grey puck is the one element that reads as painted-on rather than as part
+        // of the same pane of glass as everything under it.
+        Box(
+            modifier = Modifier
+                .size(34.dp)
+                .bounceClick(onClick = onClose)
+                .liquidGlassSurface(CircleShape),
+            contentAlignment = Alignment.Center,
         ) {
             Icon(
                 painter = painterResource(R.drawable.close),
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(17.dp),
             )
         }
     }
@@ -418,33 +471,30 @@ private fun AccountIdentityCard(
             .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        // The portrait sits in a gradient ring rather than behind a radial haze. The old halo was
+        // a soft primary-coloured cloud bleeding out to transparent — on a translucent sheet that
+        // reads as a smudge behind the avatar, not as a deliberate frame.
         Box(
-            modifier = Modifier.size(76.dp),
+            modifier = Modifier.size(64.dp),
             contentAlignment = Alignment.Center,
         ) {
+            val ringColor = if (isLoggedIn) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            }
             Box(
                 modifier = Modifier
                     .fillMaxSize()
+                    .clip(CircleShape)
                     .background(
-                        Brush.radialGradient(
-                            colors = listOf(
-                                MaterialTheme.colorScheme.primary.copy(alpha = 0.35f),
-                                MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                                Color.Transparent,
-                            ),
+                        Brush.linearGradient(
+                            listOf(ringColor.copy(alpha = 0.75f), ringColor.copy(alpha = 0.18f)),
                         )
                     )
-            )
-            Box(
-                modifier = Modifier
-                    .size(60.dp)
+                    .padding(2.dp)
                     .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f))
-                    .border(
-                        width = 1.5.dp,
-                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.35f),
-                        shape = CircleShape,
-                    ),
+                    .background(MaterialTheme.colorScheme.surface),
                 contentAlignment = Alignment.Center,
             ) {
                 if (isLoggedIn && accountImageUrl != null) {
@@ -453,16 +503,24 @@ private fun AccountIdentityCard(
                         contentDescription = null,
                         contentScale = ContentScale.Crop,
                         modifier = Modifier
-                            .size(60.dp)
+                            .fillMaxSize()
                             .clip(CircleShape)
                     )
                 } else {
-                    Icon(
-                        painter = painterResource(R.drawable.account),
-                        contentDescription = null,
-                        modifier = Modifier.size(30.dp),
-                        tint = MaterialTheme.colorScheme.primary
-                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(CircleShape)
+                            .background(ringColor.copy(alpha = 0.12f)),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.account),
+                            contentDescription = null,
+                            modifier = Modifier.size(28.dp),
+                            tint = ringColor,
+                        )
+                    }
                 }
             }
         }
@@ -482,7 +540,7 @@ private fun AccountIdentityCard(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            Spacer(Modifier.height(2.dp))
+            Spacer(Modifier.height(3.dp))
             Text(
                 text = when {
                     isLoggedIn && accountEmail.isNotEmpty() -> accountEmail
@@ -496,32 +554,44 @@ private fun AccountIdentityCard(
             )
         }
 
-        Spacer(Modifier.width(8.dp))
+        Spacer(Modifier.width(10.dp))
 
-        Icon(
-            painter = painterResource(R.drawable.navigate_next),
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
-            modifier = Modifier.size(20.dp),
-        )
+        // The chevron gets its own disc so it reads as a target. A bare 40%-alpha glyph floating
+        // at the edge of a card is the detail that makes a row look unfinished.
+        Box(
+            modifier = Modifier
+                .size(28.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.07f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.navigate_next),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(16.dp),
+            )
+        }
     }
 }
 
 /**
- * Four square tiles under the identity card.
+ * Three square tiles under the identity card.
  *
- * These four destinations used to be scattered across three separate captioned groups, each one a
+ * These destinations used to be scattered across three separate captioned groups, each one a
  * full-width row indistinguishable from a preference toggle. As tiles they are the sheet's answer
  * to "why did I open this" — glanceable, reachable with a thumb, and done in one tap.
+ *
+ * Three, not four: at four across a phone each tile was about 80dp wide, and a 42dp puck plus a
+ * one-line label does not fit "Sound Chem" in 80dp. Sign in/out — the tile that was dropped — was
+ * also the one that did not belong in a row of navigation shortcuts. See [AccountSignInOutRow].
  */
 @Composable
 private fun AccountQuickTiles(
-    isLoggedIn: Boolean,
     hasUpdate: Boolean,
     onSoundChem: () -> Unit,
     onHistory: () -> Unit,
     onSettings: () -> Unit,
-    onSignInOut: () -> Unit,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -549,21 +619,75 @@ private fun AccountQuickTiles(
             onClick = onSettings,
             modifier = Modifier.weight(1f),
         )
-        AccountTile(
-            icon = painterResource(
-                if (isLoggedIn) R.drawable.logout else R.drawable.login
-            ),
-            label = stringResource(
-                if (isLoggedIn) R.string.logout else R.string.login
-            ),
-            accent = if (isLoggedIn) {
-                MaterialTheme.colorScheme.error
-            } else {
-                MaterialTheme.colorScheme.primary
-            },
-            onClick = onSignInOut,
+    }
+}
+
+/**
+ * The session action, as its own full-width row.
+ *
+ * Signing out is destructive and irreversible from this sheet's point of view; signing in is the
+ * single most important thing a signed-out user can do here. Neither is a peer of "History", which
+ * is what being a fourth tile made them.
+ */
+@Composable
+private fun AccountSignInOutRow(
+    isLoggedIn: Boolean,
+    onSignIn: () -> Unit,
+    onSignOut: () -> Unit,
+) {
+    val accent = if (isLoggedIn) {
+        MaterialTheme.colorScheme.error
+    } else {
+        MaterialTheme.colorScheme.primary
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .bounceClick(onClick = if (isLoggedIn) onSignOut else onSignIn)
+            .liquidGlassSurface(RoundedCornerShape(20.dp))
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(38.dp)
+                .clip(CircleShape)
+                .background(
+                    Brush.linearGradient(
+                        listOf(accent.copy(alpha = 0.34f), accent.copy(alpha = 0.16f))
+                    )
+                ),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                painter = painterResource(
+                    if (isLoggedIn) R.drawable.logout else R.drawable.login
+                ),
+                contentDescription = null,
+                tint = accent,
+                modifier = Modifier.size(19.dp),
+            )
+        }
+
+        Spacer(Modifier.width(14.dp))
+
+        Text(
+            text = stringResource(if (isLoggedIn) R.string.logout else R.string.login),
+            style = MaterialTheme.typography.bodyLarge,
+            fontWeight = FontWeight.SemiBold,
+            color = if (isLoggedIn) accent else MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.weight(1f),
         )
+
+        if (!isLoggedIn) {
+            Icon(
+                painter = painterResource(R.drawable.navigate_next),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(16.dp),
+            )
+        }
     }
 }
 
@@ -579,8 +703,13 @@ private fun AccountTile(
     Column(
         modifier = modifier
             .bounceClick(onClick = onClick)
-            .liquidGlassSurface(RoundedCornerShape(18.dp), tint = accent)
-            .padding(vertical = 14.dp, horizontal = 6.dp),
+            // Neutral glass, coloured glyph. The tiles used to tint the ENTIRE plate with their
+            // accent, which put four differently-coloured cards in a row — a 2010s dashboard,
+            // and the single most dated thing on the sheet. The colour belongs on the glyph,
+            // where it identifies the destination; the plate is the same material as every
+            // other surface here.
+            .liquidGlassSurface(RoundedCornerShape(20.dp))
+            .padding(vertical = 15.dp, horizontal = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         // The glyph sits in its own tinted puck rather than floating loose on the tile.
@@ -589,11 +718,11 @@ private fun AccountTile(
         Box(contentAlignment = Alignment.TopEnd) {
             Box(
                 modifier = Modifier
-                    .size(38.dp)
-                    .clip(RoundedCornerShape(13.dp))
+                    .size(42.dp)
+                    .clip(CircleShape)
                     .background(
-                        Brush.verticalGradient(
-                            listOf(accent.copy(alpha = 0.30f), accent.copy(alpha = 0.14f))
+                        Brush.linearGradient(
+                            listOf(accent.copy(alpha = 0.34f), accent.copy(alpha = 0.16f))
                         )
                     ),
                 contentAlignment = Alignment.Center,
@@ -602,26 +731,28 @@ private fun AccountTile(
                     painter = icon,
                     contentDescription = null,
                     tint = accent,
-                    modifier = Modifier.size(20.dp),
+                    modifier = Modifier.size(21.dp),
                 )
             }
             if (showBadge) {
                 Box(
                     modifier = Modifier
-                        .size(9.dp)
+                        .size(10.dp)
                         .clip(CircleShape)
                         .background(MaterialTheme.colorScheme.error)
                         .border(1.5.dp, MaterialTheme.colorScheme.surface, CircleShape)
                 )
             }
         }
-        Spacer(Modifier.height(9.dp))
+        Spacer(Modifier.height(10.dp))
         Text(
             text = label,
-            style = MaterialTheme.typography.labelSmall,
+            // labelSmall at 6dp of horizontal padding was cramped enough that three of the four
+            // labels wrapped to two lines. One line, readable, with the room to stay that way.
+            style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onSurface,
-            maxLines = 2,
+            maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             textAlign = TextAlign.Center,
         )
@@ -635,13 +766,16 @@ private fun SettingsSection(
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
         if (title != null) {
-            // Apple Music-style large, bold section header above the grouped block.
+            // iOS grouped-list caption: small, tracked, muted. It used to be `titleLarge` bold,
+            // which inside a sheet competed with the sheet's OWN title — three or four headings
+            // all shouting at the same weight, so nothing read as the top of the hierarchy.
             Text(
                 text = title,
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.onSurface,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(start = 4.dp, top = 8.dp, bottom = 10.dp)
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontWeight = FontWeight.SemiBold,
+                letterSpacing = 0.4.sp,
+                modifier = Modifier.padding(start = 8.dp, top = 10.dp, bottom = 8.dp)
             )
         }
 

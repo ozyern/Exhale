@@ -28,26 +28,60 @@ import androidx.compose.ui.util.fastFirstOrNull
 import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.RuntimeShader
 import com.kyant.backdrop.asComposeShader
+import com.kyant.backdrop.backdrops.LayerBackdrop
 import com.kyant.backdrop.backdrops.rememberCanvasBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.kyant.backdrop.isRuntimeShaderSupported
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.android.awaitFrame
 import kotlinx.coroutines.launch
 
 /**
- * Provides the app-wide backdrop layer for lens refraction.
- * All Liquid components read from this backdrop by default.
+ * The app-wide backdrop layer every liquid-glass surface refracts.
+ *
+ * This is a [LayerBackdrop]: a real off-screen recording of the app content, published by
+ * whichever composable carries `Modifier.layerBackdrop(...)` (the NavHost — see MainActivity).
+ * Glass surfaces then sample *those pixels*, which is what makes blur and lens refraction show
+ * anything at all.
+ *
+ * It used to be `rememberCanvasBackdrop { }` — an empty passthrough canvas. Blurring and
+ * refracting nothing produces nothing, so every liquid surface in the app (dock, buttons,
+ * toggles, sliders, top bar) painted only its own tint film. That is the "the dock is fully
+ * transparent" bug, and it was never a dock bug: it was this line.
  */
-val LocalAppBackdrop = staticCompositionLocalOf<Backdrop> {
+val LocalAppBackdrop = staticCompositionLocalOf<LayerBackdrop> {
     error("LocalAppBackdrop not provided")
 }
 
+/**
+ * Creates the app's backdrop recording. Must be paired with `Modifier.layerBackdrop(backdrop)`
+ * on the content to be refracted, and that content must be a *sibling drawn underneath* the
+ * glass — never an ancestor of it, or the layer would have to draw itself.
+ */
 @Composable
-fun rememberDefaultBackdrop(): Backdrop {
-    return rememberCanvasBackdrop {
-        // Empty backdrop - just passes through the content layer
-    }
-}
+fun rememberAppBackdrop(): LayerBackdrop = rememberLayerBackdrop()
+
+/**
+ * The backdrop for glass that lives **inside** the app content — buttons in a settings list, a
+ * control in a dialog, anything drawn within the NavHost.
+ *
+ * It deliberately records nothing. [LocalAppBackdrop] is a `GraphicsLayer` recording of the
+ * NavHost, so a component *inside* that recording which then samples it is a re-entrant layer
+ * draw: the layer would have to draw itself, and Compose throws `IllegalStateException` on the
+ * very first frame. That is not a theoretical risk — it is the "Settings crashes on click" bug,
+ * and it came back as "the Updates page crashes on open" the moment [LocalAppBackdrop] stopped
+ * being an empty canvas and started being a real recording.
+ *
+ * In-content glass therefore has two legitimate options:
+ *  - record its own local layer from a sibling drawn beneath it, the way `LiquidToggle` and
+ *    `LiquidSlider` do with their tracks, or
+ *  - use this, and render as a tinted capsule with highlight/shadow but no live refraction.
+ *
+ * Only chrome drawn *outside* the NavHost — the dock, the floating top bar — may consume
+ * [LocalAppBackdrop].
+ */
+@Composable
+fun rememberInContentBackdrop(): Backdrop = rememberCanvasBackdrop { /* Nothing to refract. */ }
 
 // Gesture inspector for interactive highlights and drag animations
 internal suspend fun PointerInputScope.inspectDragGestures(

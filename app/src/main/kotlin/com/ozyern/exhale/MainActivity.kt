@@ -234,6 +234,8 @@ import com.ozyern.exhale.playback.queues.YouTubeAlbumRadio
 import com.ozyern.exhale.playback.queues.YouTubeQueue
 import com.ozyern.exhale.ui.component.AccountSettingsDialog
 import com.ozyern.exhale.ui.component.BootSplash
+import com.ozyern.exhale.ui.component.bounceClick
+import com.ozyern.exhale.ui.component.liquidGlassSurface
 import com.ozyern.exhale.ui.component.BottomSheetMenu
 import com.ozyern.exhale.ui.component.BottomSheetPage
 import com.ozyern.exhale.ui.component.COLLAPSED_ANCHOR
@@ -244,7 +246,8 @@ import com.ozyern.exhale.ui.component.LiquidGlassBottomBar
 import com.ozyern.exhale.ui.component.SearchBottomBar
 import com.ozyern.exhale.ui.component.LiquidBackground
 import com.ozyern.exhale.ui.component.liquid.LocalAppBackdrop
-import com.ozyern.exhale.ui.component.liquid.rememberDefaultBackdrop
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.ozyern.exhale.ui.component.liquid.rememberAppBackdrop
 import com.ozyern.exhale.ui.component.LocalHazeState
 import com.ozyern.exhale.ui.component.IconButton
 import com.ozyern.exhale.ui.component.LocalBottomSheetPageState
@@ -1241,10 +1244,10 @@ class MainActivity : ComponentActivity() {
 
                     var showAccountDialog by remember { mutableStateOf(false) }
 
-                    // App-wide backdrop for the liquid-glass nav bar. rememberDefaultBackdrop()
-                    // is an empty passthrough canvas backdrop (defined in LiquidUtils.kt) so the
-                    // frosted surfaces never crash on the "LocalAppBackdrop not provided" error.
-                    val appBackdrop = rememberDefaultBackdrop()
+                    // App-wide backdrop every liquid-glass surface refracts. This is a real
+                    // off-screen recording of the NavHost (published below via
+                    // `Modifier.layerBackdrop`), NOT the empty canvas it used to be.
+                    val appBackdrop = rememberAppBackdrop()
                     // Drives the State-B mini-player pill in the bottom bar.
                     val nowPlayingMetadata by remember(playerConnection) {
                         playerConnection?.mediaMetadata ?: MutableStateFlow(null)
@@ -1437,39 +1440,81 @@ class MainActivity : ComponentActivity() {
                                                     // Header is intentionally minimal: brand logo (left) + account (right).
                                                     // The notification bell was removed — new releases remain reachable
                                                     // from the Account area, so it no longer clutters the top bar.
-                                                    IconButton(
-                                                        modifier = Modifier.size(40.dp),
-                                                        onClick = { showAccountDialog = true }
+                                                    // A glass disc, not a bare glyph. An IconButton's
+                                                    // icon floats in the bar with nothing under it and
+                                                    // no relationship to the sheet it opens; giving it
+                                                    // the same plate every other control in the app
+                                                    // sits on makes it read as a target and matches the
+                                                    // logo disc on the opposite side of the bar. The
+                                                    // Material `Badge` (a filled error-red pill hanging
+                                                    // off the corner) becomes an accent dot punched out
+                                                    // of the bar's own colour — the same update
+                                                    // affordance, in this app's language.
+                                                    val hasUpdate = !Updater.isSameVersion(
+                                                        latestVersionName,
+                                                        BuildConfig.VERSION_NAME,
+                                                    )
+                                                    val signedIn = accountImageUrl != null
+                                                    val accountRing = if (signedIn) {
+                                                        MaterialTheme.colorScheme.primary
+                                                    } else {
+                                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                                    }
+                                                    Box(
+                                                        modifier = Modifier.padding(end = 4.dp),
+                                                        contentAlignment = Alignment.Center,
                                                     ) {
-                                                        BadgedBox(
-                                                            badge = {
-                                                                if (!Updater.isSameVersion(
-                                                                        latestVersionName,
-                                                                        BuildConfig.VERSION_NAME
-                                                                    )
-                                                                ) {
-                                                                    Badge()
-                                                                }
-                                                            }
+                                                        Box(
+                                                            modifier = Modifier
+                                                                .size(38.dp)
+                                                                .bounceClick(onClick = { showAccountDialog = true })
+                                                                .liquidGlassSurface(CircleShape),
+                                                            contentAlignment = Alignment.Center,
                                                         ) {
-                                                            if (accountImageUrl != null) {
+                                                            if (signedIn) {
                                                                 AsyncImage(
                                                                     model = accountImageUrl,
                                                                     contentDescription = stringResource(R.string.account),
+                                                                    contentScale = ContentScale.Crop,
                                                                     modifier = Modifier
-                                                                        .size(30.dp)
+                                                                        .size(28.dp)
                                                                         .clip(CircleShape)
+                                                                        .border(
+                                                                            width = 1.5.dp,
+                                                                            brush = Brush.linearGradient(
+                                                                                listOf(
+                                                                                    accountRing.copy(alpha = 0.85f),
+                                                                                    accountRing.copy(alpha = 0.20f),
+                                                                                ),
+                                                                            ),
+                                                                            shape = CircleShape,
+                                                                        ),
                                                                 )
                                                             } else {
-                                                                // Modern, minimalist SF-Symbols-style user
-                                                                // outline (person.crop.circle) replaces the
-                                                                // outdated filled account glyph.
                                                                 Icon(
                                                                     painter = painterResource(R.drawable.account_outline),
                                                                     contentDescription = stringResource(R.string.account),
-                                                                    modifier = Modifier.size(24.dp)
+                                                                    tint = MaterialTheme.colorScheme.onSurface,
+                                                                    modifier = Modifier.size(21.dp),
                                                                 )
                                                             }
+                                                        }
+
+                                                        if (hasUpdate) {
+                                                            // Offset onto the disc's rim rather than
+                                                            // outside it, so the badge belongs to the
+                                                            // button instead of hanging off it.
+                                                            Box(
+                                                                modifier = Modifier
+                                                                    .align(Alignment.TopEnd)
+                                                                    .offset(x = (-2).dp, y = 2.dp)
+                                                                    .size(11.dp)
+                                                                    .clip(CircleShape)
+                                                                    .background(MaterialTheme.colorScheme.surface)
+                                                                    .padding(2.dp)
+                                                                    .clip(CircleShape)
+                                                                    .background(MaterialTheme.colorScheme.primary),
+                                                            )
                                                         }
                                                     }
                                                 },
@@ -1716,9 +1761,34 @@ class MainActivity : ComponentActivity() {
                                         // it raw in composition recomposed this whole bottom-bar Box ~60×/s while
                                         // scrolling. Deriving the boolean means recomposition only happens on the
                                         // actual 0.5 threshold crossing.
-                                        val bottomBarCollapsed by remember(isSettingsScreen, isSearchScreen, active) {
+                                        //
+                                        // `shouldShowNavigationBar` is load-bearing, not defensive.
+                                        // State B does not hide the player — it MOVES it, out of the
+                                        // standalone pill and into the nav bar's centre capsule. So
+                                        // it is only a legal state when there is a nav bar on screen
+                                        // to move it into.
+                                        //
+                                        // On every non-tab destination — an album, an artist, a
+                                        // playlist — `shouldShowNavigationBar` is false and the bar
+                                        // is slid off the bottom of the screen. Without this term
+                                        // the scroll threshold still flipped State B on there, so
+                                        // `hideMiniPlayer` removed the standalone player while its
+                                        // replacement was parked off-screen: scroll an album far
+                                        // enough and the player was simply gone, with nothing to tap
+                                        // to get it back. That is the "player disappears everywhere
+                                        // except Home" bug, and it is a genuine disappearance rather
+                                        // than an overlap.
+                                        val bottomBarCollapsed by remember(
+                                            isSettingsScreen,
+                                            isSearchScreen,
+                                            active,
+                                            shouldShowNavigationBar,
+                                            useRail,
+                                        ) {
                                             derivedStateOf {
-                                                !isSettingsScreen &&
+                                                shouldShowNavigationBar &&
+                                                        !useRail &&
+                                                        !isSettingsScreen &&
                                                         !isSearchScreen &&
                                                         !active &&
                                                         searchBarScrollBehavior.state.collapsedFraction > 0.5f
@@ -2036,8 +2106,29 @@ class MainActivity : ComponentActivity() {
                                         }
                                     },
                                     modifier = Modifier
-                                        // Mark the scrollable app content as the blur source so
-                                        // frosted surfaces (mini player, nav bar) can blur it.
+                                        // The app content is the blur/refraction source for every
+                                        // piece of floating chrome. Two systems read it:
+                                        //  - hazeSource: Haze's frosted surfaces.
+                                        //  - layerBackdrop: Kyant's liquid glass, which records
+                                        //    these pixels off-screen so `drawBackdrop` can blur
+                                        //    AND lens-refract them.
+                                        // The opaque fill matters: screens are mostly transparent
+                                        // over the root Surface, and refracting transparent pixels
+                                        // is what made the glass read as a dark film instead of
+                                        // glass. The dock lives in the Scaffold's bottomBar slot —
+                                        // a sibling drawn over this — so neither layer is
+                                        // re-entrant.
+                                        .then(
+                                            // Skipped when the ambient liquid background is on:
+                                            // those drifting blobs are painted BEHIND this, so an
+                                            // opaque fill here would erase them.
+                                            if (liquidGlassNavBar) Modifier
+                                            else Modifier.background(
+                                                if (pureBlack) Color.Black
+                                                else MaterialTheme.colorScheme.surface
+                                            )
+                                        )
+                                        .layerBackdrop(appBackdrop)
                                         .hazeSource(hazeState)
                                         .nestedScroll(
                                             if (

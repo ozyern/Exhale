@@ -10,11 +10,13 @@ package com.ozyern.exhale.ui.component
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColor
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.updateTransition
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -54,6 +56,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
@@ -65,11 +68,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalDensity
@@ -79,16 +84,29 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.util.fastRoundToInt
 import coil3.compose.AsyncImage
+import com.kyant.backdrop.drawBackdrop
+import com.kyant.backdrop.effects.blur
+import com.kyant.backdrop.effects.lens
+import com.kyant.backdrop.effects.vibrancy
+import com.kyant.backdrop.highlight.Highlight
+import com.kyant.backdrop.shadow.Shadow
 import com.ozyern.exhale.LocalPlayerConnection
 import com.ozyern.exhale.R
 import com.ozyern.exhale.constants.AquamorphicDampingRatio
 import com.ozyern.exhale.constants.AquamorphicStiffness
 import com.ozyern.exhale.extensions.togglePlayPause
+import com.ozyern.exhale.ui.component.liquid.LocalAppBackdrop
 import com.ozyern.exhale.ui.screens.Screens
+import kotlin.math.abs
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /**
  * The app's floating "liquid glass" bottom bar. Presentation-only: it reads live playback
@@ -353,6 +371,63 @@ private fun NavGlyph(iconRes: Int, contentDescription: String?, tint: Color) {
 /* State A tab row with sliding accent indicator                            */
 /* ----------------------------------------------------------------------- */
 
+/**
+ * Glass selection capsule that slides between tabs — the AndroidLiquidGlass demo's tab bar.
+ *
+ * It is a second pane of glass floating *inside* the dock pill: it refracts the same app
+ * content the dock does, so as it travels the icons and artwork underneath visibly bend
+ * through it. Safe to consume [LocalAppBackdrop] here for the same reason the dock itself is
+ * (see `rememberChromeGlassModifier`): the bar is a Scaffold slot drawn over the NavHost, not
+ * a descendant of the recorded layer.
+ */
+@Composable
+private fun indicatorGlassModifier(shape: androidx.compose.ui.graphics.Shape): Modifier {
+    val backdrop = LocalAppBackdrop.current
+    val isDark = isSystemInDarkTheme()
+
+    // The capsule has to end up BRIGHTER than the dock it sits on, and that is not automatic here.
+    // The dock paints a 0.30 milky tint over its own blur; the capsule samples the raw backdrop
+    // underneath, which at the bottom of the screen is dark album art and darker page. At the old
+    // 0.16 the result was a lozenge *darker* than its surroundings — it read as a hole punched in
+    // the dock rather than a pane lifted off it, which is exactly the flat grey blob in the
+    // recording. It needs to clear the dock's own tint, not sit under it.
+    val fill = if (isDark) Color.White.copy(alpha = 0.38f) else Color.White.copy(alpha = 0.58f)
+    return Modifier.drawBackdrop(
+        backdrop = backdrop,
+        shape = { shape },
+        effects = {
+            vibrancy()
+            blur(3f.dp.toPx())
+            // Short, punchy refraction. A small pane with a wide lens looks like a magnifier;
+            // this reads as a thin sheet of glass with bent edges.
+            lens(9f.dp.toPx(), 18f.dp.toPx(), true)
+        },
+        // Ambient rather than Default: a directional highlight on a pill that slides sideways
+        // keeps catching the light from a fixed angle, which betrays that it is a flat sprite.
+        highlight = { Highlight.Ambient },
+        // No drop shadow. A dark halo around a light pill sitting on light glass reads as a dent
+        // pressed into the dock, and it was fighting the fill above for the same few pixels.
+        onDrawSurface = { drawRect(fill) },
+    )
+}
+
+/**
+ * The tab row, with the reference's **swipe-to-switch** gesture.
+ *
+ * At rest there is deliberately no capsule: the active tab is a filled icon in the accent
+ * colour, nothing more. The glass capsule is a *touch* affordance, not a permanent indicator —
+ * it materialises under your finger the moment you press, and dissolves once the gesture ends.
+ *
+ * Press and drag sideways and the capsule does not slide as a rigid pill; it **stretches**, because
+ * its leading edge is sprung stiff and its trailing edge soft, so the pill elongates while moving
+ * and snaps back to tab width the moment it settles. Each tab it crosses
+ * lights up as you pass it, so the selection previews live under your thumb and only commits on
+ * release. A plain tap is the degenerate case of the same gesture and still goes through
+ * [TabButton]'s own `clickable`, which is what keeps the tab semantics and accessibility intact.
+ *
+ * The gesture observes on [PointerEventPass.Initial] and consumes nothing, so it can watch the
+ * drag without stealing taps from the buttons underneath it.
+ */
 @Composable
 private fun TabRow(
     tabs: List<Screens>,
@@ -360,23 +435,201 @@ private fun TabRow(
     isSelected: (Screens) -> Boolean,
     onItemClick: (Screens, Boolean) -> Unit,
 ) {
-    // Apple-Music indicates the active tab purely by a filled icon + accent tint (handled in
-    // [TabButton]) — NO background pill. Keep the row a simple evenly-spaced set of tabs so the
-    // labels sit centered under their icons with breathing room and never collide.
-    Row(
+    val haptic = LocalHapticFeedback.current
+
+    // Measured bounds of each tab in the row's own coordinate space: route -> (x, width, height).
+    val bounds = remember { mutableStateMapOf<String, Triple<Float, Float, Float>>() }
+
+    // `anchor` is the tab the gesture began on — kept only to decide whether a release counts as
+    // a swipe (and to gate the capsule into existence). `hover` is the tab under the finger and
+    // is the capsule's only geometric target.
+    var anchorRoute by remember { mutableStateOf<String?>(null) }
+    var hoverRoute by remember { mutableStateOf<String?>(null) }
+    var pressed by remember { mutableStateOf(false) }
+
+    val capsuleLeft = remember { Animatable(0f) }
+    val capsuleRight = remember { Animatable(0f) }
+    val capsuleAlpha = remember { Animatable(0f) }
+    val capsuleHeight = remember { mutableStateOf(0f) }
+
+    // The stretch comes from the two edges arriving at DIFFERENT times, not from the capsule
+    // spanning both tabs. The edge in front runs stiff and lands first; the edge behind runs soft
+    // and is still catching up, so the pill elongates while it travels and snaps back to tab width
+    // once the trailing edge arrives. Both edges always target the hovered tab alone.
+    //
+    // Spanning the union of anchor+hover — the previous model — meant a Home→Library drag grew one
+    // blob across all three tabs and held it there for the rest of the gesture, because the
+    // trailing edge was pinned to the anchor and never released. That is not a stretch, it is an
+    // accumulation.
+    // At 900 the leading edge crossed a whole tab in about 90ms — faster than the trailing edge
+    // could visibly lag behind it, so the capsule appeared to teleport between tabs with the
+    // stretch happening inside two or three frames. Slow enough to watch is the entire point.
+    val leadingSpec = remember { spring<Float>(dampingRatio = 1f, stiffness = 480f) }
+    val trailingSpec = remember { spring<Float>(dampingRatio = 0.85f, stiffness = 165f) }
+    val settleSpec = remember {
+        spring<Float>(dampingRatio = AquamorphicDampingRatio, stiffness = AquamorphicStiffness)
+    }
+
+    // Extra width the capsule carries beyond the tab's own measured content.
+    val capsuleSidePadding = with(LocalDensity.current) { 10.dp.toPx() }
+
+    LaunchedEffect(pressed, hoverRoute) {
+        val hover = hoverRoute?.let { bounds[it] } ?: return@LaunchedEffect
+        capsuleHeight.value = hover.third
+
+        // One width for every tab, not each tab's own.
+        //
+        // The tabs measure to their labels, so "Home" is barely wider than its icon while
+        // "Mood & Genres" is nearly three times that. A capsule tracking those bounds is a small
+        // oval on one tab and a long pill on the next, and changes size as it travels for reasons
+        // that have nothing to do with the gesture. A segmented control has one slot width; this
+        // takes the widest tab and centres that on whichever tab is hovered.
+        val slotWidth = (bounds.values.maxOfOrNull { it.second } ?: hover.second) + capsuleSidePadding
+        val center = hover.first + hover.second / 2f
+        val targetLeft = center - slotWidth / 2f
+        val targetRight = center + slotWidth / 2f
+
+        if (pressed) {
+            if (capsuleAlpha.value == 0f) {
+                // Materialise at the tab actually being touched, never sliding in from 0.
+                capsuleLeft.snapTo(targetLeft)
+                capsuleRight.snapTo(targetRight)
+            }
+            // Which edge leads depends on travel direction: moving right, the right edge is out
+            // front; moving left, the left edge is.
+            val movingRight = targetLeft > capsuleLeft.value
+            coroutineScope {
+                launch { capsuleAlpha.animateTo(1f, tween(durationMillis = 110)) }
+                launch {
+                    capsuleLeft.animateTo(targetLeft, if (movingRight) trailingSpec else leadingSpec)
+                }
+                launch {
+                    capsuleRight.animateTo(targetRight, if (movingRight) leadingSpec else trailingSpec)
+                }
+            }
+        } else {
+            // Released: settle both edges onto the landed tab together, hold a beat so the landing
+            // is legible, then dissolve.
+            coroutineScope {
+                launch { capsuleLeft.animateTo(targetLeft, settleSpec) }
+                launch { capsuleRight.animateTo(targetRight, settleSpec) }
+            }
+            delay(60)
+            capsuleAlpha.animateTo(0f, tween(durationMillis = 180))
+        }
+    }
+
+    val indicatorGlass = indicatorGlassModifier(RoundedCornerShape(percent = 50))
+
+    /** The tab whose measured slot contains [x], else the nearest one. Never null once measured. */
+    fun routeAt(x: Float): String? {
+        var nearest: String? = null
+        var nearestDistance = Float.MAX_VALUE
+        tabs.forEach { screen ->
+            val b = bounds[screen.route] ?: return@forEach
+            if (x >= b.first && x <= b.first + b.second) return screen.route
+            val distance = abs(x - (b.first + b.second / 2f))
+            if (distance < nearestDistance) {
+                nearestDistance = distance
+                nearest = screen.route
+            }
+        }
+        return nearest
+    }
+
+    Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceEvenly,
+            .padding(horizontal = 6.dp)
+            .pointerInput(tabs) {
+                awaitEachGesture {
+                    // Initial pass, nothing consumed: we observe the gesture without taking it
+                    // away from the TabButtons, so a tap still routes through their clickable.
+                    val down = awaitFirstDown(
+                        requireUnconsumed = false,
+                        pass = PointerEventPass.Initial,
+                    )
+                    val start = routeAt(down.position.x) ?: return@awaitEachGesture
+                    anchorRoute = start
+                    hoverRoute = start
+                    pressed = true
+
+                    var crossed = false
+                    try {
+                        while (true) {
+                            val event = awaitPointerEvent(PointerEventPass.Initial)
+                            val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                            if (!change.pressed) break
+                            val over = routeAt(change.position.x)
+                            if (over != null && over != hoverRoute) {
+                                hoverRoute = over
+                                crossed = true
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            }
+                        }
+                    } finally {
+                        pressed = false
+                    }
+
+                    // Only commit here when the finger actually travelled to a different tab. A
+                    // tap that never left its own tab is already handled by TabButton, and
+                    // firing both would navigate twice.
+                    val landed = hoverRoute
+                    if (crossed && landed != null && landed != start) {
+                        tabs.firstOrNull { it.route == landed }?.let { screen ->
+                            onItemClick(screen, isSelected(screen))
+                        }
+                    }
+                }
+            },
+        contentAlignment = Alignment.CenterStart,
     ) {
-        tabs.forEach { screen ->
-            TabButton(
-                screen = screen,
-                selected = isSelected(screen),
-                pureBlack = pureBlack,
-                onClick = { onItemClick(screen, isSelected(screen)) },
-            )
+        // Drawn first = behind the tabs, so icons and labels ride on top of the glass.
+        // Not composed at all until the first touch: before that it would be a 0x0 node still
+        // running a backdrop shader, and there is nothing for it to indicate anyway — at rest
+        // the active tab is its accent-tinted icon, full stop.
+        if (anchorRoute != null) Box(
+            Modifier
+                // Measured in the layout phase rather than by animating a Dp size: reading the
+                // animatables here keeps a moving capsule out of recomposition entirely, and the
+                // row's own children are already measured so nothing else re-measures with it.
+                .layout { measurable, _ ->
+                    val left = capsuleLeft.value
+                    val width = (capsuleRight.value - left).coerceAtLeast(0f).fastRoundToInt()
+                    val height = capsuleHeight.value.fastRoundToInt()
+                    val placeable = measurable.measure(Constraints.fixed(width, height))
+                    layout(placeable.width, placeable.height) {
+                        placeable.place(left.fastRoundToInt(), 0)
+                    }
+                }
+                .graphicsLayer { alpha = capsuleAlpha.value }
+                .then(indicatorGlass),
+        )
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceEvenly,
+        ) {
+            tabs.forEach { screen ->
+                TabButton(
+                    screen = screen,
+                    // While a drag is in flight the tint follows the finger, so the selection is
+                    // previewed under the thumb and the commit on release is never a surprise.
+                    selected = if (pressed) hoverRoute == screen.route else isSelected(screen),
+                    pureBlack = pureBlack,
+                    onClick = { onItemClick(screen, isSelected(screen)) },
+                    modifier = Modifier.onGloballyPositioned { coords ->
+                        val pos = coords.positionInParent()
+                        val next = Triple(
+                            pos.x,
+                            coords.size.width.toFloat(),
+                            coords.size.height.toFloat(),
+                        )
+                        if (bounds[screen.route] != next) bounds[screen.route] = next
+                    },
+                )
+            }
         }
     }
 }

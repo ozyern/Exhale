@@ -27,7 +27,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
+import com.ozyern.exhale.ui.component.liquid.LiquidSlider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -568,7 +568,7 @@ fun AppearanceSettings(
                             modifier = Modifier.padding(bottom = 16.dp)
                         )
     
-                        Slider(
+                        LiquidSlider(
                             value = tempSensitivity,
                             onValueChange = { tempSensitivity = it },
                             valueRange = 0f..1f,
@@ -676,7 +676,7 @@ fun AppearanceSettings(
                         modifier = Modifier.padding(bottom = 16.dp)
                     )
 
-                    Slider(
+                    LiquidSlider(
                         value = tempTextSize,
                         onValueChange = { tempTextSize = it },
                         valueRange = 16f..36f,
@@ -749,7 +749,7 @@ fun AppearanceSettings(
                         modifier = Modifier.padding(bottom = 16.dp)
                     )
 
-                    Slider(
+                    LiquidSlider(
                         value = tempLineSpacing,
                         onValueChange = { tempLineSpacing = it },
                         valueRange = 1.0f..2.0f,

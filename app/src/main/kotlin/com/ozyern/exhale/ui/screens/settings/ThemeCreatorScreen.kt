@@ -65,7 +65,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Slider
+import com.ozyern.exhale.ui.component.liquid.LiquidSlider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -985,7 +985,7 @@ private fun ThemeRichPreview(
                                 RadioButton(selected = radioSelected == 0, onClick = { radioSelected = 0 })
                                 RadioButton(selected = radioSelected == 1, onClick = { radioSelected = 1 })
                             }
-                            Slider(
+                            LiquidSlider(
                                 value = sliderValue,
                                 onValueChange = { sliderValue = it },
                                 modifier = Modifier.fillMaxWidth(),
@@ -1397,15 +1397,12 @@ private fun RgbSlider(
                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
             )
         }
-        Slider(
+        LiquidSlider(
             value = value.toFloat(),
             onValueChange = { onValueChange(it.toInt().coerceIn(0, 255)) },
             valueRange = 0f..255f,
-            colors = SliderDefaults.colors(
-                thumbColor = color,
-                activeTrackColor = color,
-                inactiveTrackColor = MaterialTheme.colorScheme.surfaceVariant,
-            ),
+            // Each channel keeps its own track colour — that is the whole point of this control.
+            accentColor = color,
             modifier = Modifier.weight(1f),
         )
         Text(

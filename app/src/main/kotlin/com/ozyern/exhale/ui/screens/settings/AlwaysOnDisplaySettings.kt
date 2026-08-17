@@ -54,7 +54,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.LargeFlexibleTopAppBar
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Slider
+import com.ozyern.exhale.ui.component.liquid.LiquidSlider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import com.ozyern.exhale.ui.component.liquid.LiquidToggle
@@ -866,7 +866,7 @@ private fun AodSliderRow(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.width(40.dp)
         )
-        Slider(
+        LiquidSlider(
             value = value,
             onValueChange = onValueChange,
             valueRange = valueRange,

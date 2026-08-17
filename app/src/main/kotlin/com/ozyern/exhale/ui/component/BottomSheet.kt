@@ -51,6 +51,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.input.pointer.util.addPointerInputChange
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.Velocity
@@ -68,14 +69,25 @@ import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.launch
 
 // At p=0 (fully collapsed) the content layer is squashed to this fraction of its natural height.
-// 0.18 is aggressive enough that the controls visibly compress into the pill band; anything above
-// ~0.30 reads as a shrink rather than a morph.
-private const val PILL_VERTICAL_SQUASH = 0.18f
+// It has to be aggressive enough that the controls visibly compress into the pill band, and stay
+// well under ~0.45 or the collapse reads as a shrink rather than a morph.
+//
+// 0.32, not the 0.18 this used to be. Against a scaleX of ~0.9 that was a 5:1 anisotropic squash —
+// past a certain ratio the eye stops reading "compressed into a band" and starts reading "smeared",
+// and the artwork and title spent the first frames of every collapse as a horizontal streak. The
+// crossfade below now holds the content visible longer, which makes those frames matter more, not
+// less.
+private const val PILL_VERTICAL_SQUASH = 0.32f
 
-// The content fades from transparent to opaque over this fraction of the progress range (0→1).
-// Keeping it tiny (0.12) means geometry carries the whole gesture and the fade is just the
-// hand-off at the very start of the drag, not a crossfade that hides the transformation.
-private const val MORPH_HANDOFF_FRACTION = 0.12f
+// The window over which the full player and the mini pill trade places, as a fraction of the
+// progress range (0→1). Small on purpose: geometry carries the gesture and the fade is only the
+// hand-off, not a crossfade that hides the transformation.
+//
+// Both layers MUST ramp over this same window, in opposite directions, so their alphas sum to 1 at
+// every p. They used to ramp over different windows (content over 0.12, pill over 0.25), which left
+// a band around p≈0.15 where both were near-opaque and stacked — two different layouts of the same
+// song superimposed. That double image was the single most visible flaw in the collapse.
+private const val MORPH_HANDOFF_FRACTION = 0.16f
 
 /**
  * Bottom Sheet
@@ -257,8 +269,12 @@ fun BottomSheet(
                             scaleX = grow
                             scaleY = grow
                             transformOrigin = TransformOrigin(0.5f, 0f)
+                            // Exactly the complement of the content layer's ramp above, so the two
+                            // always sum to 1 and never both paint at full strength.
+                            alpha = 1f - (p / MORPH_HANDOFF_FRACTION).coerceIn(0f, 1f)
+                        } else {
+                            alpha = 1f - (p * 4).coerceAtMost(1f)
                         }
-                        alpha = 1f - (p * 4).coerceAtMost(1f)
                     }.clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
@@ -278,6 +294,8 @@ class BottomSheetState(
     private val animatable: Animatable<Dp, AnimationVector1D>,
     private val onAnchorChanged: (Int) -> Unit,
     val collapsedBound: Dp,
+    /** Used only to convert fling velocities out of pixel space. See [performFling]. */
+    private val density: Density,
 ) : DraggableState by draggableState {
     val dismissedBound: Dp
         get() = animatable.lowerBound!!
@@ -303,26 +321,26 @@ class BottomSheetState(
         1f - (animatable.upperBound!! - animatable.value) / (animatable.upperBound!! - collapsedBound)
     }
 
-    fun collapse(animationSpec: AnimationSpec<Dp>) {
+    fun collapse(animationSpec: AnimationSpec<Dp>, initialVelocity: Dp = 0.dp) {
         onAnchorChanged(COLLAPSED_ANCHOR)
         coroutineScope.launch(start = CoroutineStart.UNDISPATCHED) {
-            animatable.animateTo(collapsedBound, animationSpec)
+            animatable.animateTo(collapsedBound, animationSpec, initialVelocity)
         }
     }
 
-    fun expand(animationSpec: AnimationSpec<Dp>) {
+    fun expand(animationSpec: AnimationSpec<Dp>, initialVelocity: Dp = 0.dp) {
         onAnchorChanged(EXPANDED_ANCHOR)
         coroutineScope.launch(start = CoroutineStart.UNDISPATCHED) {
-            animatable.animateTo(animatable.upperBound!!, animationSpec)
+            animatable.animateTo(animatable.upperBound!!, animationSpec, initialVelocity)
         }
     }
 
-    private fun collapse() {
-        collapse(BottomSheetAnimationSpec)
+    private fun collapse(initialVelocity: Dp = 0.dp) {
+        collapse(BottomSheetAnimationSpec, initialVelocity)
     }
 
-    private fun expand() {
-        expand(BottomSheetAnimationSpec)
+    private fun expand(initialVelocity: Dp = 0.dp) {
+        expand(BottomSheetAnimationSpec, initialVelocity)
     }
 
     fun collapseSoft() {
@@ -346,18 +364,31 @@ class BottomSheetState(
         }
     }
 
+    /**
+     * @param velocity release velocity in **pixels per second**, positive = the sheet is travelling
+     *   up (toward expanded).
+     */
     fun performFling(
         velocity: Float,
         onDismiss: (() -> Unit)?,
     ) {
+        // Hand the gesture's own speed to the spring instead of starting it from rest.
+        //
+        // This used to consume `velocity` purely as a direction test and then animate from zero, so
+        // a hard flick and a slow release collapsed at exactly the same canned speed — the sheet
+        // stopped dead the instant the finger lifted and then re-launched itself. Seeding the
+        // spring is what makes the player feel like it was *thrown* down rather than released and
+        // separately animated, and it is the difference the eye reads as "weight".
+        val initialVelocity = with(density) { velocity.toDp() }
+
         if (velocity > 250) {
-            expand()
+            expand(initialVelocity)
         } else if (velocity < -250) {
             if (value < collapsedBound && onDismiss != null) {
                 dismiss()
                 onDismiss.invoke()
             } else {
-                collapse()
+                collapse(initialVelocity)
             }
         } else {
             val l0 = dismissedBound
@@ -371,12 +402,15 @@ class BottomSheetState(
                         dismiss()
                         onDismiss.invoke()
                     } else {
-                        collapse()
+                        collapse(initialVelocity)
                     }
                 }
 
-                in l1..l2 -> collapse()
-                in l2..l3 -> expand()
+                // Below the fling threshold this is a positional snap, but the finger was still
+                // moving; carrying the residual through means the sheet never visibly stalls
+                // between the release and the spring picking it up.
+                in l1..l2 -> collapse(initialVelocity)
+                in l2..l3 -> expand(initialVelocity)
                 else -> Unit
             }
         }
@@ -479,7 +513,7 @@ fun rememberBottomSheetState(
             Animatable(0.dp, Dp.VectorConverter)
         }
 
-    return remember(dismissedBound, expandedBound, collapsedBound, coroutineScope) {
+    return remember(dismissedBound, expandedBound, collapsedBound, coroutineScope, density) {
         val initialValue =
             when (previousAnchor) {
                 EXPANDED_ANCHOR -> expandedBound
@@ -512,6 +546,7 @@ fun rememberBottomSheetState(
             coroutineScope = coroutineScope,
             animatable = animatable,
             collapsedBound = collapsedBound,
+            density = density,
         )
     }
 }

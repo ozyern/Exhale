@@ -21,6 +21,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.takeOrElse
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
@@ -45,6 +46,17 @@ import kotlinx.coroutines.flow.collectLatest
 
 /**
  * Liquid glass slider with lens refraction and smooth damped drag animation.
+ *
+ * Drop-in for Material's `Slider` at the call sites this app uses, hence [steps],
+ * [onValueChangeFinished] and [accentColor] — without those three, swapping it in would have
+ * silently turned discrete sliders continuous, dropped commit-on-release, and repainted the
+ * theme creator's per-channel R/G/B tracks a single blue.
+ *
+ * @param steps number of discrete stops *between* the range ends, matching Material's meaning.
+ *   0 (default) is a continuous slider.
+ * @param onValueChangeFinished invoked once when the drag or tap settles — for callers that
+ *   only want to persist the final value, not every frame of the drag.
+ * @param accentColor active-track colour. Defaults to the app's system blue.
  */
 @Composable
 fun LiquidSlider(
@@ -52,12 +64,29 @@ fun LiquidSlider(
     onValueChange: (Float) -> Unit,
     modifier: Modifier = Modifier,
     valueRange: ClosedFloatingPointRange<Float> = 0f..1f,
+    steps: Int = 0,
+    onValueChangeFinished: (() -> Unit)? = null,
+    accentColor: Color = Color.Unspecified,
     // Kept for API compatibility only — see LiquidToggle. Never consumes the app layer.
-    @Suppress("UNUSED_PARAMETER") backdrop: Backdrop = rememberDefaultBackdrop()
+    @Suppress("UNUSED_PARAMETER") backdrop: Backdrop = rememberInContentBackdrop()
 ) {
     val isLightTheme = !isSystemInDarkTheme()
-    val accentColor = if (isLightTheme) Color(0xFF0088FF) else Color(0xFF0091FF)
+    val activeColor = accentColor.takeOrElse {
+        if (isLightTheme) Color(0xFF0088FF) else Color(0xFF0091FF)
+    }
     val trackColor = if (isLightTheme) Color(0xFF787878).copy(0.2f) else Color(0xFF787880).copy(0.36f)
+
+    // Quantise to the nearest stop before anything leaves this component, so the hosting state
+    // and the thumb position can never disagree about where the slider actually is.
+    val snap: (Float) -> Float = { raw ->
+        if (steps <= 0) raw.coerceIn(valueRange)
+        else {
+            val stepSize = (valueRange.endInclusive - valueRange.start) / (steps + 1)
+            (valueRange.start + ((raw - valueRange.start) / stepSize).fastRoundToInt() * stepSize)
+                .coerceIn(valueRange)
+        }
+    }
+    val emit: (Float) -> Unit = { raw -> onValueChange(snap(raw)) }
 
     val trackBackdrop = rememberLayerBackdrop()
 
@@ -81,15 +110,16 @@ fun LiquidSlider(
                 onDragStarted = {},
                 onDragStopped = {
                     if (didDrag) {
-                        onValueChange(targetValue)
+                        emit(targetValue)
                     }
+                    onValueChangeFinished?.invoke()
                 },
                 onDrag = { _, dragAmount ->
                     if (!didDrag) {
                         didDrag = dragAmount.x != 0f
                     }
                     val delta = (valueRange.endInclusive - valueRange.start) * (dragAmount.x / trackWidth)
-                    onValueChange(
+                    emit(
                         if (isLtr) (targetValue + delta).coerceIn(valueRange)
                         else (targetValue - delta).coerceIn(valueRange)
                     )
@@ -116,12 +146,14 @@ fun LiquidSlider(
                     .pointerInput(animationScope) {
                         detectTapGestures { position ->
                             val delta = (valueRange.endInclusive - valueRange.start) * (position.x / trackWidth)
-                            val targetValue =
+                            val targetValue = snap(
                                 (if (isLtr) valueRange.start + delta
                                 else valueRange.endInclusive - delta)
                                     .coerceIn(valueRange)
+                            )
                             dampedDragAnimation.animateToValue(targetValue)
                             onValueChange(targetValue)
+                            onValueChangeFinished?.invoke()
                         }
                     }
                     .height(6f.dp)
@@ -132,7 +164,7 @@ fun LiquidSlider(
             Box(
                 Modifier
                     .clip(RoundedCornerShape(50)) // Capsule
-                    .background(accentColor)
+                    .background(activeColor)
                     .height(6f.dp)
                     .layout { measurable, constraints ->
                         val placeable = measurable.measure(constraints)

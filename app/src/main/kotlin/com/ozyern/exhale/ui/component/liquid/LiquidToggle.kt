@@ -53,7 +53,7 @@ fun LiquidToggle(
     modifier: Modifier = Modifier,
     // Kept for API compatibility only. In-content toggles never consume the app content
     // layer (that would crash); the thumb refracts its own local track layer instead.
-    @Suppress("UNUSED_PARAMETER") backdrop: Backdrop = rememberDefaultBackdrop()
+    @Suppress("UNUSED_PARAMETER") backdrop: Backdrop = rememberInContentBackdrop()
 ) {
     val isLightTheme = !isSystemInDarkTheme()
     // The ON track is the app's brand colour, not iOS system green. Every interactive tint in the

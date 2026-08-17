@@ -15,6 +15,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -68,6 +69,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -84,6 +86,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.util.fastForEach
 import androidx.compose.ui.zIndex
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -539,33 +542,45 @@ fun ArtistScreen(
                             .padding(top = systemBarsTopPadding + AppBarHeight),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        // Artist Image - Circular with shadow
+                        // Artist portrait. Sized down from 210dp and given a soft rim: at 210 it ate
+                        // the whole first screen and, sitting directly on the colour wash with no
+                        // edge of its own, it bled into the gradient behind it instead of reading
+                        // as a portrait on top of one.
                         Box(
-                            modifier = Modifier
-                                .padding(top = 8.dp, bottom = 16.dp)
+                            modifier = Modifier.padding(top = 4.dp, bottom = 18.dp),
+                            contentAlignment = Alignment.Center,
                         ) {
+                            val rimBrush = Brush.linearGradient(
+                                listOf(
+                                    Color.White.copy(alpha = 0.55f),
+                                    Color.White.copy(alpha = 0.08f),
+                                ),
+                            )
                             if (thumbnail != null) {
                                 AsyncImage(
                                     model = thumbnail.resize(600, 600),
                                     contentDescription = null,
                                     contentScale = ContentScale.Crop,
                                     modifier = Modifier
-                                        .size(210.dp)
+                                        .size(172.dp)
+                                        .shadow(22.dp, CircleShape, clip = false)
                                         .clip(CircleShape)
+                                        .border(1.5.dp, rimBrush, CircleShape)
                                 )
                             } else {
-                                // Placeholder when no image
                                 Box(
                                     modifier = Modifier
-                                        .size(200.dp)
+                                        .size(172.dp)
+                                        .shadow(22.dp, CircleShape, clip = false)
                                         .clip(CircleShape)
-                                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                                        .border(1.5.dp, rimBrush, CircleShape),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Icon(
                                         painter = painterResource(R.drawable.person),
                                         contentDescription = null,
-                                        modifier = Modifier.size(80.dp),
+                                        modifier = Modifier.size(72.dp),
                                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
@@ -575,7 +590,7 @@ fun ArtistScreen(
                         // Artist Name
                         Text(
                             text = artistName ?: stringResource(R.string.unknown_artist),
-                            style = MaterialTheme.typography.headlineMedium,
+                            style = MaterialTheme.typography.displaySmall,
                             fontWeight = FontWeight.Bold,
                             textAlign = TextAlign.Center,
                             maxLines = 2,
@@ -584,53 +599,66 @@ fun ArtistScreen(
                         )
 
                         // Artist Description (expandable)
+                        //
+                        // Left-aligned, and truncated by LINE COUNT rather than by character count.
+                        // Centring a paragraph is fine for one line and hostile past that — every
+                        // line starts at a different x, so the eye has to hunt for the start of the
+                        // next one, and this block routinely runs to eight or ten lines expanded.
+                        // The old `description.take(100)` also cut mid-word and then appended its
+                        // own ellipsis on top of an `overflow = Ellipsis` that was already doing the
+                        // job, so a clipped bio could end in two ellipses.
                         val description = artistPage?.description
                         if (!description.isNullOrBlank()) {
                             var isExpanded by rememberSaveable { mutableStateOf(false) }
-                            val maxLines = if (isExpanded) Int.MAX_VALUE else 2
+                            var isTruncated by remember(description) { mutableStateOf(false) }
 
                             Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(horizontal = 24.dp, vertical = 8.dp)
+                                    .padding(horizontal = 24.dp)
+                                    .padding(top = 14.dp)
                                     .combinedClickable(
                                         onClick = { isExpanded = !isExpanded },
                                         onLongClick = {}
                                     ),
-                                horizontalAlignment = Alignment.CenterHorizontally
                             ) {
                                 Text(
-                                    text = if (!isExpanded && description.length > 100) {
-                                        description.take(100).trimEnd() + "…"
-                                    } else {
-                                        description
-                                    },
+                                    text = description,
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    textAlign = TextAlign.Center,
-                                    maxLines = maxLines,
-                                    overflow = TextOverflow.Ellipsis
+                                    lineHeight = 20.sp,
+                                    maxLines = if (isExpanded) Int.MAX_VALUE else 3,
+                                    overflow = TextOverflow.Ellipsis,
+                                    // The only reliable way to know whether the text actually
+                                    // overflowed at this width; guessing from `length` shows a
+                                    // "More" link on bios that already fit.
+                                    onTextLayout = { result ->
+                                        if (!isExpanded) isTruncated = result.hasVisualOverflow
+                                    },
                                 )
 
-                                if (!isExpanded && description.length > 100) {
+                                if (isTruncated || isExpanded) {
                                     Text(
-                                        text = stringResource(R.string.more),
-                                        style = MaterialTheme.typography.labelMedium,
+                                        text = stringResource(
+                                            if (isExpanded) R.string.less else R.string.more
+                                        ),
+                                        style = MaterialTheme.typography.labelLarge,
                                         color = MaterialTheme.colorScheme.primary,
-                                        fontWeight = FontWeight.Medium,
-                                        modifier = Modifier.padding(top = 4.dp)
+                                        fontWeight = FontWeight.SemiBold,
+                                        modifier = Modifier.padding(top = 6.dp)
                                     )
                                 }
                             }
                         }
 
-                        // Stats Row
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 16.dp, horizontal = 32.dp),
-                            horizontalArrangement = Arrangement.SpaceEvenly
-                        ) {
+                        // Counts, as one quiet caption line under the name.
+                        //
+                        // They used to be a `SpaceEvenly` row of `titleLarge` bold numerals with
+                        // labels beneath — a stats panel of the kind a dashboard has. On an artist
+                        // page the counts are context, not content: they belong at caption weight
+                        // beside the name, and reclaiming that band of vertical space is what lets
+                        // the actual music start above the fold.
+                        run {
                             // Songs count - sum all SongItem instances across all sections
                             val songSections = artistPage?.sections?.filter { section ->
                                 section.items.any { it is SongItem }
@@ -646,13 +674,6 @@ fun ArtistScreen(
                             }
                             // Check if any song section has moreEndpoint (meaning there are more songs)
                             val hasMoreSongs = !showLocal && songSections?.any { it.moreEndpoint != null } == true
-
-                            if (songCount > 0) {
-                                StatItem(
-                                    value = if (hasMoreSongs) "$songCount+" else songCount.toString(),
-                                    label = stringResource(R.string.songs)
-                                )
-                            }
 
                             // Albums count - sum all AlbumItem instances across all sections
                             val albumSections = artistPage?.sections?.filter { section ->
@@ -670,25 +691,91 @@ fun ArtistScreen(
                             // Check if any album section has moreEndpoint (meaning there are more albums)
                             val hasMoreAlbums = !showLocal && albumSections?.any { it.moreEndpoint != null } == true
 
-                            if (albumCount > 0) {
-                                StatItem(
-                                    value = if (hasMoreAlbums) "$albumCount+" else albumCount.toString(),
-                                    label = stringResource(R.string.albums)
+                            val parts = buildList {
+                                if (songCount > 0) {
+                                    val n = if (hasMoreSongs) "$songCount+" else songCount.toString()
+                                    add("$n ${stringResource(R.string.songs)}")
+                                }
+                                if (albumCount > 0) {
+                                    val n = if (hasMoreAlbums) "$albumCount+" else albumCount.toString()
+                                    add("$n ${stringResource(R.string.albums)}")
+                                }
+                            }
+
+                            if (parts.isNotEmpty()) {
+                                Text(
+                                    text = parts.joinToString("  ·  "),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.padding(top = 6.dp),
                                 )
                             }
                         }
 
-                        // Action Buttons
+                        // One action row instead of three buttons in two rows across three
+                        // different Material styles (filled-tonal, filled, outlined). There is
+                        // exactly one primary thing to do on an artist page — play them — so that
+                        // is the only button carrying a label; subscribing and starting a radio are
+                        // secondary, and secondary actions read better as glyphs beside the primary
+                        // than as full-width buttons stacked under it.
+                        val isSubscribed = libraryArtist?.artist?.bookmarkedAt != null
+                        val shuffleEnabled = if (showLocal) {
+                            librarySongs.isNotEmpty()
+                        } else {
+                            artistPage?.artist?.shuffleEndpoint != null
+                        }
+
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 24.dp, vertical = 8.dp),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally)
+                                .padding(horizontal = 24.dp)
+                                .padding(top = 20.dp, bottom = 4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            // Subscribe/Following Button
-                            val isSubscribed = libraryArtist?.artist?.bookmarkedAt != null
+                            Button(
+                                onClick = {
+                                    if (!showLocal) {
+                                        artistPage?.artist?.shuffleEndpoint?.let { shuffleEndpoint ->
+                                            playerConnection.playQueue(YouTubeQueue(shuffleEndpoint))
+                                        }
+                                    } else if (librarySongs.isNotEmpty()) {
+                                        val shuffledSongs = librarySongs.shuffled()
+                                        playerConnection.playQueue(
+                                            ListQueue(
+                                                title = libraryArtist?.artist?.name ?: "Unknown Artist",
+                                                items = shuffledSongs.map { it.toMediaItem() }
+                                            )
+                                        )
+                                    }
+                                },
+                                enabled = shuffleEnabled,
+                                shape = RoundedCornerShape(percent = 50),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(52.dp)
+                            ) {
+                                Icon(
+                                    painter = painterResource(R.drawable.shuffle),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = stringResource(R.string.shuffle),
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1
+                                )
+                            }
 
-                            FilledTonalButton(
+                            ArtistActionButton(
+                                iconRes = if (isSubscribed) R.drawable.done else R.drawable.add,
+                                contentDescription = stringResource(
+                                    if (isSubscribed) R.string.subscribed else R.string.subscribe
+                                ),
+                                active = isSubscribed,
                                 onClick = {
                                     database.transaction {
                                         val artist = libraryArtist?.artist
@@ -708,93 +795,18 @@ fun ArtistScreen(
                                         }
                                     }
                                 },
-                                colors = ButtonDefaults.filledTonalButtonColors(
-                                    containerColor = if (isSubscribed)
-                                        MaterialTheme.colorScheme.primaryContainer
-                                    else
-                                        MaterialTheme.colorScheme.secondaryContainer,
-                                    contentColor = if (isSubscribed)
-                                        MaterialTheme.colorScheme.onPrimaryContainer
-                                    else
-                                        MaterialTheme.colorScheme.onSecondaryContainer
-                                ),
-                                shape = RoundedCornerShape(24.dp),
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(48.dp)
-                            ) {
-                                Icon(
-                                    painter = painterResource(
-                                        if (isSubscribed) R.drawable.done else R.drawable.add
-                                    ),
-                                    contentDescription = null,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = stringResource(
-                                        if (isSubscribed) R.string.subscribed else R.string.subscribe
-                                    ),
-                                    maxLines = 1
-                                )
-                            }
+                            )
 
-                            // Shuffle Button
-                            Button(
-                                onClick = {
-                                    if (!showLocal) {
-                                        artistPage?.artist?.shuffleEndpoint?.let { shuffleEndpoint ->
-                                            playerConnection.playQueue(YouTubeQueue(shuffleEndpoint))
-                                        }
-                                    } else if (librarySongs.isNotEmpty()) {
-                                        val shuffledSongs = librarySongs.shuffled()
-                                        playerConnection.playQueue(
-                                            ListQueue(
-                                                title = libraryArtist?.artist?.name ?: "Unknown Artist",
-                                                items = shuffledSongs.map { it.toMediaItem() }
-                                            )
-                                        )
-                                    }
-                                },
-                                enabled = if (showLocal) librarySongs.isNotEmpty() else artistPage?.artist?.shuffleEndpoint != null,
-                                shape = RoundedCornerShape(24.dp),
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(48.dp)
-                            ) {
-                                Icon(
-                                    painter = painterResource(R.drawable.shuffle),
-                                    contentDescription = null,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = stringResource(R.string.shuffle),
-                                    maxLines = 1
-                                )
-                            }
-                        }
-
-                        // Radio Button (for YouTube artists)
-                        if (!showLocal) {
-                            artistPage?.artist?.radioEndpoint?.let { radioEndpoint ->
-                                OutlinedButton(
-                                    onClick = {
-                                        playerConnection.playQueue(YouTubeQueue(radioEndpoint))
-                                    },
-                                    shape = RoundedCornerShape(24.dp),
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 24.dp, vertical = 8.dp)
-                                        .height(44.dp)
-                                ) {
-                                    Icon(
-                                        painter = painterResource(R.drawable.radio),
-                                        contentDescription = null,
-                                        modifier = Modifier.size(18.dp)
+                            if (!showLocal) {
+                                artistPage?.artist?.radioEndpoint?.let { radioEndpoint ->
+                                    ArtistActionButton(
+                                        iconRes = R.drawable.radio,
+                                        contentDescription = stringResource(R.string.radio),
+                                        active = false,
+                                        onClick = {
+                                            playerConnection.playQueue(YouTubeQueue(radioEndpoint))
+                                        },
                                     )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(text = stringResource(R.string.radio))
                                 }
                             }
                         }
@@ -1236,28 +1248,50 @@ fun ArtistScreen(
 }
 
 /**
- * Stat item component for displaying statistics like subscriber count, songs, albums
+ * A secondary action beside the artist page's primary Shuffle pill: a 52dp glyph disc, sized to
+ * match the pill's height so the row reads as one control cluster rather than a pill with two
+ * smaller things next to it.
+ *
+ * [active] is the "already subscribed" state — a filled accent disc, versus the neutral translucent
+ * plate an inactive action gets.
  */
 @Composable
-private fun StatItem(
-    value: String,
-    label: String,
-    modifier: Modifier = Modifier
+private fun ArtistActionButton(
+    iconRes: Int,
+    contentDescription: String?,
+    active: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
+    val container = if (active) {
+        MaterialTheme.colorScheme.primary
+    } else {
+        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f)
+    }
+    val content = if (active) {
+        MaterialTheme.colorScheme.onPrimary
+    } else {
+        MaterialTheme.colorScheme.onSurface
+    }
+
+    Box(
         modifier = modifier
+            .size(52.dp)
+            .clip(CircleShape)
+            .background(container)
+            .border(
+                width = 1.dp,
+                color = if (active) Color.Transparent else Color.White.copy(alpha = 0.14f),
+                shape = CircleShape,
+            )
+            .combinedClickable(onClick = onClick, onLongClick = {}),
+        contentAlignment = Alignment.Center,
     ) {
-        Text(
-            text = value,
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface
-        )
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+        Icon(
+            painter = painterResource(iconRes),
+            contentDescription = contentDescription,
+            tint = content,
+            modifier = Modifier.size(22.dp),
         )
     }
 }

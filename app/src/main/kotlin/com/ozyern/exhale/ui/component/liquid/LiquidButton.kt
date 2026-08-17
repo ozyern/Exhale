@@ -38,7 +38,11 @@ import kotlin.math.tanh
 fun LiquidButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    backdrop: Backdrop = LocalAppBackdrop.current,
+    // NOT LocalAppBackdrop. Buttons live inside the NavHost, i.e. inside the layer that local
+    // records; sampling it here is a re-entrant layer draw and throws on the first frame. See
+    // rememberInContentBackdrop. Callers rendering a button as *chrome* (outside the NavHost)
+    // may pass LocalAppBackdrop.current explicitly.
+    backdrop: Backdrop = rememberInContentBackdrop(),
     isInteractive: Boolean = true,
     tint: Color = Color.Unspecified,
     surfaceColor: Color = Color.Unspecified,

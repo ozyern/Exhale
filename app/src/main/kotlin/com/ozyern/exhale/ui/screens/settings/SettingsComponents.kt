@@ -6,9 +6,15 @@
 
 package com.ozyern.exhale.ui.screens.settings
 
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -45,6 +51,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -58,6 +65,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.ozyern.exhale.BuildConfig
 import com.ozyern.exhale.R
 import com.ozyern.exhale.ui.component.settingsIconPuck
@@ -189,25 +197,57 @@ fun SettingsProfileHeader(
             .background(MaterialTheme.colorScheme.onSurface.copy(alpha = bgAlpha))
             .padding(horizontal = 18.dp, vertical = 18.dp),
     ) {
+        // 64dp, and with a live accent behind it. At 56dp on a flat tint this card was a settings
+        // row with a slightly larger glyph — the most prominent thing on the page was carrying no
+        // more visual weight than the five rows under it. The breathing halo is the same idea as
+        // About's spectrum band: on a page of static plates, the identity is the one element that
+        // should look like the app is running.
+        val haloTransition = rememberInfiniteTransition(label = "heroHalo")
+        val halo by haloTransition.animateFloat(
+            initialValue = 0f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 4200, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse,
+            ),
+            label = "heroHaloPhase",
+        )
+        val accent = MaterialTheme.colorScheme.primary
+
         Box(
             modifier = Modifier
-                .size(SettingsDimensions.HeroIconSize)
-                .clip(RoundedCornerShape(18.dp))
+                .size(64.dp)
+                .clip(RoundedCornerShape(20.dp))
                 .background(
                     Brush.linearGradient(
                         colors = listOf(
-                            MaterialTheme.colorScheme.primary.copy(alpha = 0.26f),
-                            MaterialTheme.colorScheme.primary.copy(alpha = 0.10f),
+                            accent.copy(alpha = 0.26f),
+                            accent.copy(alpha = 0.10f),
                         ),
                     )
-                ),
+                )
+                // Draw phase, so a permanent animation on the settings root costs one draw
+                // invalidation per frame and never recomposes the header or relays it out.
+                .drawBehind {
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            colors = listOf(
+                                accent.copy(alpha = 0.10f + 0.22f * halo),
+                                Color.Transparent,
+                            ),
+                            center = center,
+                            radius = size.minDimension * (0.42f + 0.16f * halo),
+                        ),
+                        radius = size.minDimension * (0.42f + 0.16f * halo),
+                    )
+                },
             contentAlignment = Alignment.Center,
         ) {
             Icon(
                 painter = painterResource(R.drawable.exhale),
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(SettingsDimensions.HeroIconInnerSize),
+                tint = accent,
+                modifier = Modifier.size(34.dp),
             )
         }
 
@@ -219,7 +259,7 @@ fun SettingsProfileHeader(
         ) {
             Text(
                 text = stringResource(R.string.app_name),
-                style = MaterialTheme.typography.headlineSmall,
+                style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface,
             )
@@ -228,7 +268,7 @@ fun SettingsProfileHeader(
                     R.string.settings_hero_subtitle,
                     BuildConfig.VERSION_NAME,
                 ),
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
@@ -437,6 +477,11 @@ fun SettingsSearchEmpty(
  * One definition, used by the categories, the quick actions and the integrations alike. Before
  * this, two of the three groups on the Settings screen had *no* header at all — they were bare
  * cards floating with nothing naming them, which is the one thing an iOS grouped table never does.
+ *
+ * It is a **label**, not a title. At `titleLarge`/Bold/`onSurface` — what it used to be — the header
+ * was set larger and heavier than the row titles it introduced, so scrolling the page read as a
+ * stack of competing headlines with the actual content in between. A grouped list wants its
+ * headers quiet: small, tracked, one tone down, doing nothing but naming the plate underneath.
  */
 @Composable
 fun SettingsSectionHeader(
@@ -445,14 +490,15 @@ fun SettingsSectionHeader(
 ) {
     Text(
         text = title,
-        style = MaterialTheme.typography.titleLarge,
-        fontWeight = FontWeight.Bold,
-        color = MaterialTheme.colorScheme.onSurface,
+        style = MaterialTheme.typography.labelLarge,
+        fontWeight = FontWeight.SemiBold,
+        letterSpacing = 0.4.sp,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = modifier.padding(
-            start = SettingsDimensions.SectionHeaderHorizontalPadding,
+            start = SettingsDimensions.SectionHeaderHorizontalPadding + 8.dp,
             end = SettingsDimensions.SectionHeaderHorizontalPadding,
-            top = 20.dp,
-            bottom = 10.dp,
+            top = 18.dp,
+            bottom = 8.dp,
         ),
     )
 }

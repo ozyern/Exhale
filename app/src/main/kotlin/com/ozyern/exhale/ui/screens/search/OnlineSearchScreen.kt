@@ -128,10 +128,14 @@ fun OnlineSearchScreen(
         return
     }
 
-    // iOS inset-grouped list geometry: history + suggestions render as ONE rounded card,
-    // so every row needs its global position to pick its corner shape and divider.
+    // Two separate inset-grouped cards, each indexed from its own zero.
+    //
+    // They used to be ONE card: `groupCount = history + suggestions`, so the "Search history" header
+    // sat above a single plate whose top half was things you had typed before and whose bottom half
+    // was live suggestions from YouTube, with nothing marking the boundary and no header naming the
+    // second half. Two different kinds of thing in one container, told apart only by a 19dp icon.
     val historyCount = viewState.history.size
-    val groupCount = historyCount + viewState.suggestions.size
+    val suggestionCount = viewState.suggestions.size
 
     LazyColumn(
         state = lazyListState,
@@ -149,30 +153,35 @@ fun OnlineSearchScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(start = 28.dp, end = 24.dp, top = 8.dp, bottom = 6.dp)
+                        .padding(start = 28.dp, end = 20.dp, top = 8.dp, bottom = 6.dp)
                         .animateItem(),
                 ) {
                     Text(
-                        text = stringResource(R.string.search_history),
+                        text = stringResource(R.string.search_recent),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         letterSpacing = (-0.2).sp,
                         color = if (pureBlack) Color.White else MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.weight(1f),
                     )
+                    // A tinted pill, not a bare word. "Clear" as plain accent text beside a bold
+                    // title read as part of the heading rather than as the destructive action it
+                    // is, and it had no visible bounds to aim at.
                     Text(
                         text = stringResource(R.string.clear),
-                        style = MaterialTheme.typography.labelLarge,
+                        style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier
                             .clip(RoundedCornerShape(percent = 50))
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
                             .clickable {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                 database.query {
                                     clearSearchHistory()
                                 }
                             }
-                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
                     )
                 }
             }
@@ -182,8 +191,8 @@ fun OnlineSearchScreen(
             SuggestionItem(
                 query = history.query,
                 online = false,
-                position = groupPosition(index, groupCount),
-                showDivider = index < groupCount - 1,
+                position = groupPosition(index, historyCount),
+                showDivider = index < historyCount - 1,
                 onClick = {
                     onSearch(history.query)
                     onDismiss()
@@ -201,12 +210,33 @@ fun OnlineSearchScreen(
             )
         }
 
+        if (suggestionCount > 0) {
+            item(key = "suggestions_header") {
+                Text(
+                    text = stringResource(R.string.search_suggestions),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = (-0.2).sp,
+                    color = if (pureBlack) Color.White else MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(
+                            start = 28.dp,
+                            end = 24.dp,
+                            top = if (historyCount > 0) 20.dp else 8.dp,
+                            bottom = 6.dp,
+                        )
+                        .animateItem(),
+                )
+            }
+        }
+
         itemsIndexed(viewState.suggestions, key = { _, it -> "suggestion_$it" }) { index, query ->
             SuggestionItem(
                 query = query,
                 online = true,
-                position = groupPosition(historyCount + index, groupCount),
-                showDivider = historyCount + index < groupCount - 1,
+                position = groupPosition(index, suggestionCount),
+                showDivider = index < suggestionCount - 1,
                 onClick = {
                     onSearch(query)
                     onDismiss()
@@ -428,6 +458,21 @@ fun SuggestionItem(
         GroupPosition.MIDDLE -> RoundedCornerShape(0.dp)
     }
 
+    // Trailing glyphs were drawn at 16dp and 0.35 alpha — below the threshold at which a control
+    // reads as a control at all, so the row looked like it had two smudges on it. Both are now
+    // legible, and the leading icon sits in a puck so the row has a proper icon column instead of
+    // a floating glyph.
+    val trailingTint = if (pureBlack) {
+        Color.White.copy(alpha = 0.62f)
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant
+    }
+    val puckColor = if (pureBlack) {
+        Color.White.copy(alpha = 0.08f)
+    } else {
+        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f)
+    }
+
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -441,16 +486,24 @@ fun SuggestionItem(
                 .fillMaxWidth()
                 .focusable()
                 .clickable(onClick = onClick)
-                .padding(start = 16.dp, end = 4.dp, top = 11.dp, bottom = 11.dp),
+                .padding(start = 12.dp, end = 6.dp, top = 10.dp, bottom = 10.dp),
         ) {
-            Icon(
-                painterResource(if (online) R.drawable.search else R.drawable.history),
-                contentDescription = null,
-                tint = iconTint,
-                modifier = Modifier.size(19.dp)
-            )
+            Box(
+                modifier = Modifier
+                    .size(34.dp)
+                    .clip(RoundedCornerShape(percent = 50))
+                    .background(puckColor),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    painterResource(if (online) R.drawable.search else R.drawable.history),
+                    contentDescription = null,
+                    tint = iconTint,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
 
-            Spacer(Modifier.width(14.dp))
+            Spacer(Modifier.width(12.dp))
 
             Text(
                 text = query,
@@ -463,23 +516,27 @@ fun SuggestionItem(
                 modifier = Modifier.weight(1f),
             )
 
+            // Delete first, then the fill-field arrow at the outer edge. The arrow is the one that
+            // belongs against the screen edge: it is the row's "expand into the box" affordance and
+            // every search field on the platform puts it there, so having ✕ in that slot meant the
+            // muscle-memory tap on a suggestion deleted a search instead of editing it.
             if (!online) {
-                IconButton(onClick = onDelete, modifier = Modifier.size(36.dp)) {
+                IconButton(onClick = onDelete, modifier = Modifier.size(38.dp)) {
                     Icon(
                         painter = painterResource(R.drawable.close),
                         contentDescription = null,
-                        tint = if (pureBlack) Color.White.copy(alpha = 0.35f) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                        modifier = Modifier.size(16.dp)
+                        tint = trailingTint,
+                        modifier = Modifier.size(18.dp)
                     )
                 }
             }
 
-            IconButton(onClick = onFillTextField, modifier = Modifier.size(36.dp)) {
+            IconButton(onClick = onFillTextField, modifier = Modifier.size(38.dp)) {
                 Icon(
                     painter = painterResource(R.drawable.arrow_top_left),
                     contentDescription = null,
-                    tint = if (pureBlack) Color.White.copy(alpha = 0.35f) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                    modifier = Modifier.size(16.dp)
+                    tint = trailingTint,
+                    modifier = Modifier.size(18.dp)
                 )
             }
         }
@@ -489,7 +546,7 @@ fun SuggestionItem(
             HorizontalDivider(
                 thickness = 0.5.dp,
                 color = if (pureBlack) Color.White.copy(alpha = 0.08f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
-                modifier = Modifier.padding(start = 49.dp)
+                modifier = Modifier.padding(start = 58.dp)
             )
         }
     }
