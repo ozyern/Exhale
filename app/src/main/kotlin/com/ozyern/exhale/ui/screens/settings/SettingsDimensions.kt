@@ -9,12 +9,14 @@ package com.ozyern.exhale.ui.screens.settings
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.ozyern.exhale.ui.component.SettingsDividerStartIndent
 import com.ozyern.exhale.ui.component.SettingsDividerThickness
 import com.ozyern.exhale.ui.component.SettingsGroupCornerRadius
 import com.ozyern.exhale.ui.component.settingsDividerColor
+import com.ozyern.exhale.ui.component.settingsGroupBorderBrush
 import com.ozyern.exhale.ui.component.settingsGroupSurfaceColor
 import com.ozyern.exhale.ui.component.settingsPageBackgroundColor
 
@@ -81,6 +83,10 @@ object SettingsDimensions {
     /** Hairline used only *between* rows of a group, never at a card's top or bottom edge. */
     @Composable
     fun dividerColor(): Color = settingsDividerColor()
+
+    /** Rim around a group card, so the plate has an edge on any palette. */
+    @Composable
+    fun groupBorderBrush(): Brush = settingsGroupBorderBrush()
 }
 
 object SettingsAnimations {

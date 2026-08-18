@@ -1038,8 +1038,12 @@ fun Lyrics(
                                     Modifier
                                 }
                             )
-                            .alpha(animatedAlpha)
+                            // Alpha moved INTO the layer beside scale. As a standalone
+                            // `Modifier.alpha()` it was read during composition, so every frame of
+                            // every line transition recomposed the line — and the lyrics screen
+                            // transitions all of its visible lines at once, continuously.
                             .graphicsLayer {
+                                alpha = animatedAlpha
                                 scaleX = animatedScale
                                 scaleY = animatedScale
                                 transformOrigin = lineTransformOrigin

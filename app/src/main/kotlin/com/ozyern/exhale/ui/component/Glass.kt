@@ -33,15 +33,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import com.kyant.backdrop.drawBackdrop
-import com.kyant.backdrop.effects.blur
-import com.kyant.backdrop.effects.lens
-import com.kyant.backdrop.effects.vibrancy
-import com.kyant.backdrop.highlight.Highlight
-import com.kyant.backdrop.shadow.Shadow
-import com.ozyern.exhale.ui.component.liquid.LocalAppBackdrop
 import com.ozyern.exhale.ui.theme.LocalGlass
 import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.HazeTint
 import dev.chrisbanes.haze.hazeEffect
 import kotlin.math.PI
 import kotlin.math.cos
@@ -67,13 +61,14 @@ val supportsLiveBlur: Boolean
  * it at the edges (`lens`), which is the part a plain blur can never fake and the reason
  * Apple's chrome reads as a physical pane rather than a frosted rectangle.
  *
- * **Chrome only — never call this from inside the NavHost.** [LocalAppBackdrop] is a
- * recording of the NavHost content. A component that lives inside that content and then
- * consumes it is a re-entrant `GraphicsLayer` draw: the layer would have to draw itself, and
- * it throws on the first frame. (That was the old "Settings crashes on click".) In-content
- * glass must record its own local layer the way `LiquidToggle` does with its track. Chrome is
- * safe because the dock and top bar are Scaffold slots — siblings drawn *over* the NavHost,
- * not descendants of it.
+ * **Implemented on Haze, not Kyant.** Kyant's `drawBackdrop` samples a `GraphicsLayer`
+ * recording published by `Modifier.layerBackdrop` on the NavHost. That layer's origin is the
+ * NavHost's top-left, not the window's, so a pane living in the Scaffold's *bottomBar* slot
+ * looked up pixels from the wrong place: the dock showed a slice of artwork from halfway up
+ * the screen, and its `lens()` refraction painted that slice as bulging ghost discs that
+ * escaped the pill outline entirely. Haze resolves the effect node against the source node
+ * through real `LayoutCoordinates` on every draw, so it samples exactly what is behind the
+ * pane, and it clips strictly to the node's own shape — no spill, no ghosts.
  *
  * @param tintAlpha opacity of the film laid over the refraction. Higher = milkier, more legible.
  * @param blurRadius blur strength of the pane's interior.
@@ -88,27 +83,46 @@ fun rememberChromeGlassModifier(
     blurRadius: Dp = 48.dp,
     @Suppress("UNUSED_PARAMETER") quality: Float = 0.5f,
 ): Modifier {
-    val backdrop = LocalAppBackdrop.current
+    val hazeState = LocalHazeState.current
     val tint = if (dark) Color.Black.copy(alpha = tintAlpha) else Color.White.copy(alpha = tintAlpha)
     val shadowColor = if (dark) Color.Black.copy(alpha = 0.45f) else Color.Black.copy(alpha = 0.16f)
+    val rimBrush = Brush.verticalGradient(
+        listOf(
+            Color.White.copy(alpha = if (dark) 0.26f else 0.60f),
+            Color.White.copy(alpha = if (dark) 0.06f else 0.20f),
+        ),
+    )
 
-    return Modifier
-        .drawBackdrop(
-            backdrop = backdrop,
-            shape = { shape },
-            effects = {
-                // Order matters: saturate first, then soften, then bend. Bending an
-                // already-desaturated blur is what looks like plastic.
-                vibrancy()
-                blur(blurRadius.toPx() * 0.25f)
-                // Refraction reaching ~14dp in from the rim. This is the edge highlight you
-                // see wrapping around content as it passes under the pane.
-                lens(14f.dp.toPx(), 28f.dp.toPx(), true)
-            },
-            highlight = { Highlight.Default },
-            shadow = { Shadow(radius = 14f.dp, color = shadowColor) },
-            onDrawSurface = { drawRect(tint) },
-        )
+    // PERF + correctness: memoised on everything it reads. Rebuilding the chain per
+    // recomposition replaces the haze node, which re-registers the blur area and re-reads the
+    // source layer; doing that mid-animation is what turns a cheap GPU blur into dropped frames.
+    return remember(hazeState, shape, dark, tintAlpha, blurRadius, tint, shadowColor, rimBrush) {
+        Modifier
+            .shadow(
+                elevation = 12.dp,
+                shape = shape,
+                clip = false,
+                ambientColor = shadowColor,
+                spotColor = shadowColor,
+            )
+            .clip(shape)
+            .then(
+                if (hazeState != null && supportsLiveBlur) {
+                    Modifier.hazeEffect(state = hazeState) {
+                        this.blurRadius = blurRadius
+                        backgroundColor = Color.Transparent
+                        noiseFactor = 0.04f
+                        tints = listOf(HazeTint(tint))
+                    }
+                } else {
+                    Modifier.background(
+                        if (dark) Color.Black.copy(alpha = 0.62f)
+                        else Color.White.copy(alpha = 0.78f),
+                    )
+                },
+            )
+            .border(0.8.dp, rimBrush, shape)
+    }
 }
 
 /**

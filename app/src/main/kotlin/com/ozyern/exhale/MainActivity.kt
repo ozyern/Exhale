@@ -872,11 +872,20 @@ class MainActivity : ComponentActivity() {
                                     navBackStackEntry?.destination?.route?.startsWith("search/") == true
                         }
 
+                    // True on any route that is a *committed* search result page ("search/{q}").
+                    // Those pages keep the search field docked at the bottom rather than throwing
+                    // it up into the top bar, so they need the bottom chrome on screen and the
+                    // content padded for it exactly like a tab route does.
+                    val isSearchResultsRoute =
+                        navBackStackEntry?.destination?.route?.startsWith("search/") == true
+
                     val shouldShowNavigationBar =
-                        remember(navBackStackEntry, active) {
-                            navBackStackEntry?.destination?.route == null ||
-                                    navigationItems.fastAny { it.route == navBackStackEntry?.destination?.route } &&
-                                    !active
+                        remember(navBackStackEntry, active, isSearchResultsRoute) {
+                            !active && (
+                                navBackStackEntry?.destination?.route == null ||
+                                    navigationItems.fastAny { it.route == navBackStackEntry?.destination?.route } ||
+                                    isSearchResultsRoute
+                                )
                         }
 
                     val shouldShowHomeShuffleButton =
@@ -1545,8 +1554,14 @@ class MainActivity : ComponentActivity() {
                                             )
                                         }
                                     }
+                                    // Only while the user is actually typing. This used to also be
+                                    // shown for `search/{q}` routes, and on those the collapsed
+                                    // TopSearch renders as a slim bar in the Scaffold's TOP slot —
+                                    // which is the "the search bar moves to the top when results
+                                    // come" behaviour. Results now keep the field docked at the
+                                    // bottom via `SearchBottomBar` in the bottomBar slot below.
                                     AnimatedVisibility(
-                                        visible = active || navBackStackEntry?.destination?.route?.startsWith("search/") == true,
+                                        visible = active,
                                         enter = fadeIn(animationSpec = tween(durationMillis = 300)),
                                         exit = fadeOut(animationSpec = tween(durationMillis = 200))
                                     ) {
@@ -1778,9 +1793,18 @@ class MainActivity : ComponentActivity() {
                                         // to get it back. That is the "player disappears everywhere
                                         // except Home" bug, and it is a genuine disappearance rather
                                         // than an overlap.
+                                        //
+                                        // `isSearchResultsRoute` is excluded for the same reason as
+                                        // `isSearchScreen`: results pages now keep the docked search
+                                        // bar in the bottomBar slot, so there is no State-B capsule
+                                        // for the player to merge into there. Without this the newly
+                                        // widened `shouldShowNavigationBar` would let State B engage
+                                        // on a results page and take the player away with it — the
+                                        // exact disappearance described above, on a new route.
                                         val bottomBarCollapsed by remember(
                                             isSettingsScreen,
                                             isSearchScreen,
+                                            isSearchResultsRoute,
                                             active,
                                             shouldShowNavigationBar,
                                             useRail,
@@ -1790,6 +1814,7 @@ class MainActivity : ComponentActivity() {
                                                         !useRail &&
                                                         !isSettingsScreen &&
                                                         !isSearchScreen &&
+                                                        !isSearchResultsRoute &&
                                                         !active &&
                                                         searchBarScrollBehavior.state.collapsedFraction > 0.5f
                                             }
@@ -1892,25 +1917,57 @@ class MainActivity : ComponentActivity() {
                                                         }
                                                     },
                                         ) {
-                                            if (isSearchScreen && !active) {
+                                            if ((isSearchScreen || isSearchResultsRoute) && !active) {
                                                 // ---- SEARCH LAYOUT: fixed frosted bar row ----
-                                                // Home circle in its OWN round pill + search input
-                                                // in its own capsule; NO A/B morphing. The
+                                                // Leading circle in its OWN round pill + search
+                                                // input in its own capsule; NO A/B morphing. The
                                                 // mini-player (BottomSheetPlayer above) floats
                                                 // directly over this row.
+                                                //
+                                                // Used on the Search tab AND on committed result
+                                                // pages, so the field stays under the thumb for the
+                                                // whole search flow instead of relocating to the
+                                                // top bar the moment results arrive.
+                                                val committed = if (isSearchResultsRoute) {
+                                                    navBackStackEntry?.arguments
+                                                        ?.getString("query")
+                                                        ?.takeIf { it.isNotEmpty() }
+                                                } else {
+                                                    null
+                                                }
                                                 SearchBottomBar(
                                                     pureBlack = pureBlack,
                                                     placeholder = stringResource(R.string.search),
+                                                    committedQuery = committed,
+                                                    leadingIsBack = isSearchResultsRoute,
                                                     onHomeClick = {
-                                                        navController.navigate(Screens.Home.route) {
-                                                            popUpTo(navController.graph.startDestinationId) {
-                                                                saveState = true
+                                                        if (isSearchResultsRoute) {
+                                                            navController.navigateUp()
+                                                        } else {
+                                                            navController.navigate(Screens.Home.route) {
+                                                                popUpTo(navController.graph.startDestinationId) {
+                                                                    saveState = true
+                                                                }
+                                                                launchSingleTop = true
+                                                                restoreState = true
                                                             }
-                                                            launchSingleTop = true
-                                                            restoreState = true
                                                         }
                                                     },
-                                                    onSearchClick = { onActiveChange(true) },
+                                                    onSearchClick = {
+                                                        // Re-opening the field from a results page
+                                                        // pre-fills it with the query that produced
+                                                        // them, caret at the end, so refining a
+                                                        // search is an edit and not a retype.
+                                                        if (committed != null) {
+                                                            onQueryChange(
+                                                                TextFieldValue(
+                                                                    text = committed,
+                                                                    selection = TextRange(committed.length),
+                                                                ),
+                                                            )
+                                                        }
+                                                        onActiveChange(true)
+                                                    },
                                                     modifier = Modifier
                                                         .align(Alignment.BottomCenter)
                                                         .padding(

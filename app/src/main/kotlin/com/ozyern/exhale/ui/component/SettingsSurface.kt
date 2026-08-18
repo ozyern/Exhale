@@ -10,6 +10,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -56,22 +57,48 @@ val SettingsDividerThickness = 1.dp
 val SettingsDividerStartIndent = 66.dp
 
 /**
- * The ground the group cards float on. Pure black on dark (correct on OLED and the strongest
- * possible contrast against the cards), a near-white grey on light.
+ * The ground the group cards float on.
+ *
+ * These were hard-coded `0xFF000000` / `0xFFF2F2F7` / `0xFF1C1C1E` / `0xFFFFFFFF` — the literal
+ * iOS system greys. They gave a clean two-tone, but they were the only surfaces in Exhale that
+ * ignored the theme: everywhere else the palette is generated from the current album art, so
+ * opening Settings dropped you out of the app into a neutral grey clone of another platform.
+ *
+ * The two-tone is what makes a grouped table work, so it is kept exactly — a solid page colour
+ * and a solid card colour one step off it, never translucent, never elevated. The two steps are
+ * now taken from the Material container ramp, so they carry the same tint as the rest of the app
+ * and follow the user's palette instead of contradicting it.
  */
 @Composable
-fun settingsPageBackgroundColor(): Color =
-    if (isSystemInDarkTheme()) Color.Black else Color(0xFFF2F2F7)
+fun settingsPageBackgroundColor(): Color = MaterialTheme.colorScheme.surfaceContainerLowest
 
 /** The card colour — one step off [settingsPageBackgroundColor], solid, never elevated. */
 @Composable
-fun settingsGroupSurfaceColor(): Color =
-    if (isSystemInDarkTheme()) Color(0xFF1C1C1E) else Color.White
+fun settingsGroupSurfaceColor(): Color = MaterialTheme.colorScheme.surfaceContainerHigh
 
 /** Low-contrast row separator: enough to divide, not enough to draw a grid. */
 @Composable
 fun settingsDividerColor(): Color =
     if (isSystemInDarkTheme()) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.07f)
+
+/**
+ * Hairline rim for a group card.
+ *
+ * On a two-tone grey the card edge is carried entirely by the step between the two colours, and
+ * on a tinted palette that step can shrink to almost nothing. A rim guarantees the plate has an
+ * edge whatever the palette does, and it catches light the same way every other surface in the
+ * app does.
+ */
+@Composable
+fun settingsGroupBorderBrush(): Brush {
+    val dark = isSystemInDarkTheme()
+    return Brush.verticalGradient(
+        listOf(
+            Color.White.copy(alpha = if (dark) 0.10f else 0.55f),
+            Color.White.copy(alpha = if (dark) 0.02f else 0.16f),
+        ),
+    )
+}
 
 /**
  * The rounded-square plate every settings glyph sits on.

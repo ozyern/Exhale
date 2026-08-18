@@ -10,6 +10,7 @@ package com.ozyern.exhale.ui.screens.library
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -441,29 +442,10 @@ fun LibraryMixScreen(
 
             if (showSpotifyPlaylists && spotifyPlaylists.isNotEmpty()) {
                 item(key = "spotify_playlists_header") {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 24.dp, vertical = 8.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            text = stringResource(R.string.spotify_playlists),
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                            color = MaterialTheme.colorScheme.onBackground,
-                        )
-                        Icon(
-                            painter = painterResource(R.drawable.chevron_right),
-                            contentDescription = stringResource(R.string.see_all),
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier
-                                .size(24.dp)
-                                .clip(CircleShape)
-                                .clickable { onTabSelected(LibraryFilter.SPOTIFY) }
-                                .padding(4.dp),
-                        )
-                    }
+                    LibrarySectionHeader(
+                        title = stringResource(R.string.spotify_playlists),
+                        onSeeAll = { onTabSelected(LibraryFilter.SPOTIFY) },
+                    )
                 }
 
                 item(key = "spotify_playlists_row") {
@@ -491,29 +473,10 @@ fun LibraryMixScreen(
 
             if (sortedAlbums.isNotEmpty()) {
                 item(key = "albums_header") {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 24.dp, vertical = 8.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            text = stringResource(R.string.your_albums),
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                            color = MaterialTheme.colorScheme.onBackground,
-                        )
-                        Icon(
-                            painter = painterResource(R.drawable.chevron_right),
-                            contentDescription = stringResource(R.string.see_all),
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier
-                                .size(24.dp)
-                                .clip(CircleShape)
-                                .clickable { onTabSelected(LibraryFilter.ALBUMS) }
-                                .padding(4.dp),
-                        )
-                    }
+                    LibrarySectionHeader(
+                        title = stringResource(R.string.your_albums),
+                        onSeeAll = { onTabSelected(LibraryFilter.ALBUMS) },
+                    )
                 }
 
                 item(key = "albums_row") {
@@ -567,29 +530,10 @@ fun LibraryMixScreen(
 
             if (sortedArtists.isNotEmpty()) {
                 item(key = "artists_header") {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 24.dp, vertical = 8.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            text = stringResource(R.string.your_artists),
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                            color = MaterialTheme.colorScheme.onBackground,
-                        )
-                        Icon(
-                            painter = painterResource(R.drawable.chevron_right),
-                            contentDescription = stringResource(R.string.see_all),
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier
-                                .size(24.dp)
-                                .clip(CircleShape)
-                                .clickable { onTabSelected(LibraryFilter.ARTISTS) }
-                                .padding(4.dp),
-                        )
-                    }
+                    LibrarySectionHeader(
+                        title = stringResource(R.string.your_artists),
+                        onSeeAll = { onTabSelected(LibraryFilter.ARTISTS) },
+                    )
                 }
 
                 item(key = "artists_row") {
@@ -605,10 +549,12 @@ fun LibraryMixScreen(
                         ) { artist ->
                             Column(
                                 modifier = Modifier
-                                    .width(80.dp)
+                                    .width(92.dp)
+                                    .clip(RoundedCornerShape(16.dp))
                                     .clickable {
                                         navController.navigate("artist/${artist.id}")
-                                    },
+                                    }
+                                    .padding(vertical = 4.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally,
                             ) {
                                 AsyncImage(
@@ -616,14 +562,29 @@ fun LibraryMixScreen(
                                     contentDescription = null,
                                     contentScale = ContentScale.Crop,
                                     modifier = Modifier
-                                        .size(72.dp)
-                                        .clip(CircleShape),
+                                        .size(80.dp)
+                                        .clip(CircleShape)
+                                        // A hairline rim so a dark portrait does not dissolve
+                                        // into a dark page — the same trick the artist page
+                                        // uses on its hero.
+                                        .border(
+                                            1.dp,
+                                            Brush.verticalGradient(
+                                                listOf(
+                                                    Color.White.copy(alpha = 0.22f),
+                                                    Color.White.copy(alpha = 0.05f),
+                                                ),
+                                            ),
+                                            CircleShape,
+                                        ),
                                 )
-                                Spacer(modifier = Modifier.height(8.dp))
+                                Spacer(modifier = Modifier.height(10.dp))
                                 Text(
                                     text = artist.artist.name,
-                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                                    maxLines = 1,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 2,
+                                    minLines = 2,
                                     overflow = TextOverflow.Ellipsis,
                                     textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                                     color = MaterialTheme.colorScheme.onBackground,
@@ -634,35 +595,99 @@ fun LibraryMixScreen(
                         item {
                             Column(
                                 modifier = Modifier
-                                    .width(80.dp)
-                                    .clickable { onTabSelected(LibraryFilter.ARTISTS) },
+                                    .width(92.dp)
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .clickable { onTabSelected(LibraryFilter.ARTISTS) }
+                                    .padding(vertical = 4.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally,
                             ) {
                                 Box(
                                     modifier = Modifier
-                                        .size(72.dp)
+                                        .size(80.dp)
                                         .clip(CircleShape)
-                                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                                        .background(
+                                            MaterialTheme.colorScheme.primary.copy(alpha = 0.14f),
+                                        ),
                                     contentAlignment = Alignment.Center,
                                 ) {
                                     Icon(
-                                        painter = painterResource(R.drawable.add),
+                                        painter = painterResource(R.drawable.chevron_right),
                                         contentDescription = stringResource(R.string.more_label),
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.size(24.dp),
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(26.dp),
                                     )
                                 }
-                                Spacer(modifier = Modifier.height(8.dp))
+                                Spacer(modifier = Modifier.height(10.dp))
                                 Text(
                                     text = stringResource(R.string.more_label),
-                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                                    color = MaterialTheme.colorScheme.onBackground,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 2,
+                                    minLines = 2,
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                    color = MaterialTheme.colorScheme.primary,
                                 )
                             }
                         }
                     }
                 }
             }
+        }
+    }
+}
+
+/**
+ * The one section heading used by every carousel on the Library page.
+ *
+ * There used to be three hand-rolled copies of this Row — Spotify, Albums, Artists — each a
+ * `titleMedium` label beside a bare 24dp chevron. A naked chevron is not a control: it reads as
+ * decoration, it has a 24dp touch target, and nothing about it says where it goes. This is one
+ * heading at real heading weight with an explicit labelled affordance, and changing it changes
+ * every section at once.
+ */
+@Composable
+private fun LibrarySectionHeader(
+    title: String,
+    onSeeAll: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(start = 24.dp, end = 16.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onBackground,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f, fill = false),
+        )
+        Spacer(Modifier.width(12.dp))
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .clip(RoundedCornerShape(percent = 50))
+                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
+                .clickable(onClick = onSeeAll)
+                .padding(start = 14.dp, end = 10.dp, top = 6.dp, bottom = 6.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.view_all),
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            Icon(
+                painter = painterResource(R.drawable.chevron_right),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(16.dp),
+            )
         }
     }
 }
@@ -737,10 +762,20 @@ private fun LibraryControlCard(
     onToggleReorder: () -> Unit,
     controls: @Composable RowScope.() -> Unit,
 ) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
-        shape = MaterialTheme.shapes.large,
-        modifier = Modifier.padding(horizontal = 16.dp),
+    // A translucent hairline capsule rather than a filled `surfaceContainerHigh` Card. The Card
+    // read as an opaque grey brick sitting on top of the page mesh gradient, which is the one
+    // thing that backdrop exists not to have happen.
+    val shape = RoundedCornerShape(22.dp)
+    Box(
+        modifier = Modifier
+            .padding(horizontal = 16.dp)
+            .clip(shape)
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.55f))
+            .border(
+                0.8.dp,
+                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
+                shape,
+            ),
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,

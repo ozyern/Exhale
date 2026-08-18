@@ -1596,7 +1596,7 @@ fun PlayerPlaybackControls(
                         Modifier
                             .size(playSize)
                             .clip(RoundedCornerShape(playPauseRoundness))
-                            .alpha(playAlpha)
+                            .graphicsLayer { alpha = playAlpha }
                             .background(textButtonColor)
                             .clickable(
                                 interactionSource = playInteraction,

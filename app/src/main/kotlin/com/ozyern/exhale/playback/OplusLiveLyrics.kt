@@ -37,6 +37,27 @@ object OplusLiveLyrics {
     const val METADATA_KEY = "lyricInfo"
 
     /**
+     * Every key the payload is published under, not just [METADATA_KEY].
+     *
+     * The lyric surface and the Live Alert capsule are two different SystemUI consumers of the
+     * same media session, and they do not have to agree on a key — which is what the observed
+     * split looks like on ColorOS 16.1, where the capsule scrolls our lines correctly while the
+     * lock screen still falls back to "no lyrics". `lyricInfo` is the key documented against
+     * ColorOS 15; the class doc already warned that a private SystemUI key can move between OPlus
+     * releases, and a lock screen that reads a renamed key would fail in exactly this way.
+     *
+     * Publishing under all of them is close to free — this is one `Bundle` with a few more short
+     * strings in it — and it cannot regress the surface that already works, because that surface
+     * keeps reading the key it always read. Every other ROM ignores all of them.
+     */
+    val METADATA_KEY_ALIASES = listOf(
+        METADATA_KEY,
+        "oplus.lyricInfo",
+        "com.oplus.media.metadata.LYRIC",
+        "android.media.metadata.LYRIC",
+    )
+
+    /**
      * Manifest opt-in that keeps the ColorOS media card alive after the app is fully stopped.
      * Declared in AndroidManifest. Not required for lyric delivery itself.
      */
@@ -118,7 +139,7 @@ object OplusLiveLyrics {
      */
     fun MediaItem.withLyricInfo(payload: String, signal: Uri? = null): MediaItem {
         val extras = mediaMetadata.extras?.let { Bundle(it) } ?: Bundle()
-        extras.putString(METADATA_KEY, payload)
+        METADATA_KEY_ALIASES.forEach { key -> extras.putString(key, payload) }
         return buildUpon()
             .setMediaMetadata(
                 mediaMetadata.buildUpon()

@@ -9,21 +9,22 @@ package com.ozyern.exhale.ui.screens.search
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
-import androidx.compose.foundation.layout.add
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyItemScope
 import androidx.compose.foundation.lazy.items
@@ -31,11 +32,9 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -48,14 +47,18 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.navigation.NavController
+import com.ozyern.exhale.innertube.YouTube.SearchFilter
 import com.ozyern.exhale.innertube.YouTube.SearchFilter.Companion.FILTER_ALBUM
 import com.ozyern.exhale.innertube.YouTube.SearchFilter.Companion.FILTER_ARTIST
 import com.ozyern.exhale.innertube.YouTube.SearchFilter.Companion.FILTER_COMMUNITY_PLAYLIST
@@ -71,7 +74,6 @@ import com.ozyern.exhale.innertube.models.YTItem
 import com.ozyern.exhale.LocalPlayerAwareWindowInsets
 import com.ozyern.exhale.LocalPlayerConnection
 import com.ozyern.exhale.R
-import com.ozyern.exhale.constants.AppBarHeight
 import com.ozyern.exhale.constants.SearchFilterHeight
 import com.ozyern.exhale.extensions.togglePlayPause
 import com.ozyern.exhale.models.toMediaMetadata
@@ -86,7 +88,6 @@ import com.ozyern.exhale.ui.menu.YouTubeAlbumMenu
 import com.ozyern.exhale.ui.menu.YouTubeArtistMenu
 import com.ozyern.exhale.ui.menu.YouTubePlaylistMenu
 import com.ozyern.exhale.ui.menu.YouTubeSongMenu
-import com.ozyern.exhale.innertube.pages.SearchSummary
 import com.ozyern.exhale.viewmodels.OnlineSearchViewModel
 import kotlinx.coroutines.launch
 import kotlin.text.get
@@ -115,9 +116,13 @@ fun OnlineSearchResult(
             }
         }
     }
+    // Sections in "All" mode, each carrying the filter that shows the rest of it. The top
+    // summary ("Top result") has no filter of its own, so its header gets no See-all affordance.
     val allModeSections =
-        buildList<SearchSummary> {
-            searchSummary?.summaries?.firstOrNull()?.takeIf { it.items.isNotEmpty() }?.let(::add)
+        buildList<Triple<String, List<YTItem>, SearchFilter?>> {
+            searchSummary?.summaries?.firstOrNull()?.takeIf { it.items.isNotEmpty() }?.let {
+                add(Triple(it.title, it.items, null))
+            }
 
             listOf(
                 FILTER_SONG to stringResource(R.string.filter_songs),
@@ -131,10 +136,11 @@ fun OnlineSearchResult(
                     ?.items
                     ?.takeIf { it.isNotEmpty() }
                     ?.let { items ->
-                        add(SearchSummary(title = sectionTitle, items = items))
+                        add(Triple(sectionTitle, items, sectionFilter))
                     }
             }
         }
+
     val isAllModeLoaded =
         searchSummary != null ||
                 listOf(
@@ -237,145 +243,192 @@ fun OnlineSearchResult(
         )
     }
 
-    LazyColumn(
-        state = lazyListState,
-        contentPadding =
-            LocalPlayerAwareWindowInsets.current
-                .add(WindowInsets(top = SearchFilterHeight + 8.dp))
-                .asPaddingValues(),
-    ) {
-        if (searchFilter == null) {
-            allModeSections.forEachIndexed { index, summary ->
-                if (index > 0) {
-                    item(key = "divider_$index") {
-                        HorizontalDivider(
-                            modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
-                            thickness = 0.5.dp,
-                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+    val topInset = WindowInsets.systemBars.only(WindowInsetsSides.Top).asPaddingValues()
+        .calculateTopPadding()
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        LazyColumn(
+            state = lazyListState,
+            contentPadding = PaddingValues(
+                // The filter row is no longer an opaque slab pinned under a top search bar —
+                // it floats over the list — so the list only has to clear the status bar plus
+                // the row's own height. `AppBarHeight` used to be reserved on top of that for
+                // a search field that is now docked at the bottom of the screen instead.
+                top = topInset + SearchFilterHeight + 12.dp,
+                bottom = LocalPlayerAwareWindowInsets.current.asPaddingValues()
+                    .calculateBottomPadding(),
+            ),
+        ) {
+            if (searchFilter == null) {
+                allModeSections.forEachIndexed { index, (title, sectionItems, sectionFilter) ->
+                    item(key = "section_header_${title}_$index") {
+                        SearchSectionHeader(
+                            title = title,
+                            // "See all" swaps the chip row onto this section's filter, which is
+                            // the same thing tapping the chip does — so the header is a shortcut
+                            // to the full list rather than a dead label.
+                            onSeeAll = sectionFilter?.let {
+                                {
+                                    if (viewModel.filter.value != it) viewModel.filter.value = it
+                                    coroutineScope.launch { lazyListState.animateScrollToItem(0) }
+                                }
+                            },
+                            modifier = Modifier.animateItem(),
                         )
+                    }
+
+                    itemsIndexed(
+                        items = sectionItems,
+                        key = { itemIndex, item -> "$title/${item.id}/$itemIndex" },
+                    ) { _, item ->
+                        ytItemContent(item)
+                    }
+
+                    item(key = "section_spacer_${title}_$index") {
+                        Spacer(Modifier.height(12.dp))
                     }
                 }
 
-                item(key = "section_header_${summary.title}_$index") {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .width(3.dp)
-                                .height(18.dp)
-                                .clip(RoundedCornerShape(2.dp))
-                                .background(MaterialTheme.colorScheme.primary)
-                        )
-                        Spacer(Modifier.width(10.dp))
-                        Text(
-                            text = summary.title,
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurface,
+                if (allModeSections.isEmpty() && isAllModeLoaded) {
+                    item {
+                        EmptyPlaceholder(
+                            icon = R.drawable.search,
+                            text = stringResource(R.string.no_results_found),
                         )
                     }
                 }
+            } else {
+                items(
+                    items = itemsPage?.items.orEmpty().distinctBy { it.id },
+                    key = { "filtered_${it.id}" },
+                    itemContent = ytItemContent,
+                )
 
-                itemsIndexed(
-                    items = summary.items,
-                    key = { itemIndex, item -> "${summary.title}/${item.id}/$itemIndex" },
-                ) { _, item ->
-                    ytItemContent(item)
+                if (itemsPage?.continuation != null) {
+                    item(key = "loading") {
+                        ShimmerHost {
+                            repeat(3) {
+                                ListItemPlaceHolder()
+                            }
+                        }
+                    }
                 }
 
-                item(key = "section_spacer_${summary.title}_$index") {
-                    Spacer(Modifier.height(4.dp))
+                if (itemsPage?.items?.isEmpty() == true) {
+                    item {
+                        EmptyPlaceholder(
+                            icon = R.drawable.search,
+                            text = stringResource(R.string.no_results_found),
+                        )
+                    }
                 }
             }
 
-            if (allModeSections.isEmpty() && isAllModeLoaded) {
+            if (searchFilter == null && allModeSections.isEmpty() && !isAllModeLoaded ||
+                searchFilter != null && itemsPage == null
+            ) {
                 item {
-                    EmptyPlaceholder(
-                        icon = R.drawable.search,
-                        text = stringResource(R.string.no_results_found),
-                    )
-                }
-            }
-        } else {
-            items(
-                items = itemsPage?.items.orEmpty().distinctBy { it.id },
-                key = { "filtered_${it.id}" },
-                itemContent = ytItemContent,
-            )
-
-            if (itemsPage?.continuation != null) {
-                item(key = "loading") {
                     ShimmerHost {
-                        repeat(3) {
+                        repeat(8) {
                             ListItemPlaceHolder()
                         }
                     }
                 }
             }
-
-            if (itemsPage?.items?.isEmpty() == true) {
-                item {
-                    EmptyPlaceholder(
-                        icon = R.drawable.search,
-                        text = stringResource(R.string.no_results_found),
-                    )
-                }
-            }
         }
 
-        if (searchFilter == null && allModeSections.isEmpty() && !isAllModeLoaded || searchFilter != null && itemsPage == null) {
-            item {
-                ShimmerHost {
-                    repeat(8) {
-                        ListItemPlaceHolder()
+        // Floating filter row. It used to be a `Surface` with a shadow — an opaque grey plank
+        // welded across the top of the results, which is the single most dated thing on this
+        // page. Now the chips ride on a scrim that fades to nothing, so results scroll up and
+        // dissolve under them instead of hitting a hard edge.
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .align(Alignment.TopCenter)
+                .background(
+                    Brush.verticalGradient(
+                        0f to MaterialTheme.colorScheme.surface,
+                        0.72f to MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
+                        1f to Color.Transparent,
+                    ),
+                )
+                .padding(top = topInset, bottom = 10.dp),
+        ) {
+            ChipsRow(
+                chips =
+                    listOf(
+                        null to stringResource(R.string.filter_all),
+                        FILTER_SONG to stringResource(R.string.filter_songs),
+                        FILTER_VIDEO to stringResource(R.string.filter_videos),
+                        FILTER_ALBUM to stringResource(R.string.filter_albums),
+                        FILTER_ARTIST to stringResource(R.string.filter_artists),
+                        FILTER_COMMUNITY_PLAYLIST to stringResource(R.string.filter_community_playlists),
+                        FILTER_FEATURED_PLAYLIST to stringResource(R.string.filter_featured_playlists),
+                    ),
+                currentValue = searchFilter,
+                onValueUpdate = {
+                    if (viewModel.filter.value != it) {
+                        viewModel.filter.value = it
                     }
-                }
-            }
+                    coroutineScope.launch {
+                        lazyListState.animateScrollToItem(0)
+                    }
+                },
+                icons = mapOf(
+                    null to R.drawable.search,
+                    FILTER_SONG to R.drawable.music_note,
+                    FILTER_VIDEO to R.drawable.slow_motion_video,
+                    FILTER_ALBUM to R.drawable.album,
+                    FILTER_ARTIST to R.drawable.person,
+                    FILTER_COMMUNITY_PLAYLIST to R.drawable.queue_music,
+                    FILTER_FEATURED_PLAYLIST to R.drawable.playlist_play,
+                ),
+            )
         }
     }
+}
 
-    Surface(
-        color = MaterialTheme.colorScheme.surface,
-        tonalElevation = 0.dp,
-        shadowElevation = 1.dp,
-        modifier = Modifier
-            .windowInsetsPadding(
-                WindowInsets.systemBars.only(WindowInsetsSides.Top)
-                    .add(WindowInsets(top = AppBarHeight))
-            )
+/**
+ * Section heading for "All" results.
+ *
+ * The old one was a 3dp accent tick beside 14sp semibold text — a Material-2 era list caption.
+ * This is a real heading: the title at `titleLarge` weight so sections separate at a glance
+ * while scrolling fast, and a "See all" chip that jumps the chip row to that category instead
+ * of leaving the user to find the matching filter themselves.
+ */
+@Composable
+private fun SearchSectionHeader(
+    title: String,
+    onSeeAll: (() -> Unit)?,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = modifier
             .fillMaxWidth()
+            .padding(start = 20.dp, end = 12.dp, top = 18.dp, bottom = 6.dp),
     ) {
-        ChipsRow(
-            chips =
-                listOf(
-                    null to stringResource(R.string.filter_all),
-                    FILTER_SONG to stringResource(R.string.filter_songs),
-                    FILTER_VIDEO to stringResource(R.string.filter_videos),
-                    FILTER_ALBUM to stringResource(R.string.filter_albums),
-                    FILTER_ARTIST to stringResource(R.string.filter_artists),
-                    FILTER_COMMUNITY_PLAYLIST to stringResource(R.string.filter_community_playlists),
-                    FILTER_FEATURED_PLAYLIST to stringResource(R.string.filter_featured_playlists),
-                ),
-            currentValue = searchFilter,
-            onValueUpdate = {
-                if (viewModel.filter.value != it) {
-                    viewModel.filter.value = it
-                }
-                coroutineScope.launch {
-                    lazyListState.animateScrollToItem(0)
-                }
-            },
-            icons = mapOf(
-                null to R.drawable.search,
-                FILTER_SONG to R.drawable.music_note,
-                FILTER_VIDEO to R.drawable.slow_motion_video,
-                FILTER_ALBUM to R.drawable.album,
-                FILTER_ARTIST to R.drawable.person,
-                FILTER_COMMUNITY_PLAYLIST to R.drawable.queue_music,
-                FILTER_FEATURED_PLAYLIST to R.drawable.playlist_play,
-            ),
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
         )
+        if (onSeeAll != null) {
+            Text(
+                text = stringResource(R.string.view_all),
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(percent = 50))
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
+                    .clickable(onClick = onSeeAll)
+                    .padding(horizontal = 14.dp, vertical = 6.dp),
+            )
+        }
     }
 }

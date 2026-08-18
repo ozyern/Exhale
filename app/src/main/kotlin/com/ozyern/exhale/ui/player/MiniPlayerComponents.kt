@@ -22,6 +22,7 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.border
@@ -65,12 +66,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
@@ -252,12 +257,15 @@ fun SwipeableMiniPlayerBox(
 
 @Composable
 fun RowScope.MiniPlayerInfo(
-    mediaMetadata: MediaMetadata
+    mediaMetadata: MediaMetadata,
+    // Non-null when the current track has an artist worth opening. The artist line becomes the
+    // navigation affordance, replacing the separate person button that used to sit in the row.
+    onArtistClick: (() -> Unit)? = null,
 ) {
     Column(
         modifier = Modifier
             .weight(1f)
-            .padding(horizontal = 12.dp),
+            .padding(end = 8.dp),
         verticalArrangement = Arrangement.Center
     ) {
         AnimatedContent(
@@ -267,13 +275,16 @@ fun RowScope.MiniPlayerInfo(
         ) { title ->
             Text(
                 text = title,
-                style = MaterialTheme.typography.titleMedium,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.basicMarquee()
             )
         }
+
+        Spacer(Modifier.height(1.dp))
 
         AnimatedContent(
             targetState = mediaMetadata.artists,
@@ -286,7 +297,19 @@ fun RowScope.MiniPlayerInfo(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.basicMarquee()
+                modifier = Modifier
+                    .then(
+                        if (onArtistClick != null) {
+                            Modifier.clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                                onClick = onArtistClick,
+                            )
+                        } else {
+                            Modifier
+                        },
+                    )
+                    .basicMarquee()
             )
         }
     }
@@ -295,169 +318,80 @@ fun RowScope.MiniPlayerInfo(
 @Composable
 private fun MiniPlayerArtwork(
     mediaMetadata: MediaMetadata?,
-    position: Long,
-    duration: Long,
     isLoading: Boolean,
     modifier: Modifier = Modifier
 ) {
+    // A rounded square, matching every other piece of artwork in the app. The disc-in-a-ring
+    // this replaced spent 8dp of a 44dp box on a progress indicator, so the actual album art
+    // was 36dp and cropped to a circle — the least legible way to show a square image.
+    val shape = RoundedCornerShape(14.dp)
     Box(
         contentAlignment = Alignment.Center,
-        modifier = modifier.size(44.dp)
+        modifier = modifier
+            .size(46.dp)
+            .clip(shape)
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .border(
+                width = 1.dp,
+                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.18f),
+                shape = shape,
+            )
     ) {
-        if (isLoading) {
-            CircularProgressIndicator(
-                modifier = Modifier.fillMaxSize(),
-                color = MaterialTheme.colorScheme.primary,
-                trackColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.18f),
-                strokeWidth = 2.5.dp,
+        val thumbnailUrl = mediaMetadata?.thumbnailUrl
+        if (thumbnailUrl != null) {
+            AsyncImage(
+                // Pinned to the memory cache under the URL so the artwork does not blink
+                // when the player morphs between this pill and the nav bar capsule.
+                model = rememberPinnedArtworkRequest(thumbnailUrl),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
             )
         } else {
-            CircularProgressIndicator(
-                progress = { if (duration > 0) (position.toFloat() / duration).coerceIn(0f, 1f) else 0f },
-                modifier = Modifier.fillMaxSize(),
-                color = MaterialTheme.colorScheme.primary,
-                trackColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.18f),
-                strokeWidth = 2.5.dp,
+            Image(
+                painter = painterResource(R.drawable.exhale),
+                contentDescription = null,
+                modifier = Modifier.size(24.dp)
             )
         }
 
-        Box(
-            contentAlignment = Alignment.Center,
-            modifier = Modifier
-                .size(36.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.surfaceVariant)
-                .border(
-                    width = 1.dp,
-                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),
-                    shape = CircleShape
-                )
-        ) {
-            val thumbnailUrl = mediaMetadata?.thumbnailUrl
-            if (thumbnailUrl != null) {
-                AsyncImage(
-                    // Pinned to the memory cache under the URL so the artwork does not blink
-                    // when the player morphs between this pill and the nav bar's capsule.
-                    model = rememberPinnedArtworkRequest(thumbnailUrl),
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
-            } else {
-                Image(
-                    painter = painterResource(R.drawable.exhale),
-                    contentDescription = null,
-                    modifier = Modifier.size(22.dp)
+        // Buffering veil over the art rather than a ring around it: the state belongs to the
+        // track, so it reads better sitting on the track than orbiting it.
+        if (isLoading) {
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.42f)),
+            ) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(20.dp),
+                    color = Color.White,
+                    strokeWidth = 2.dp,
                 )
             }
         }
     }
 }
 
-@Composable
-private fun MiniPlayerTransportButton(
-    iconResId: Int,
-    contentDescription: String?,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    enabled: Boolean = true,
-    isPrimary: Boolean = false
-) {
-    val containerColor =
-        if (isPrimary) MaterialTheme.colorScheme.surface else Color.Transparent
-    val borderColor =
-        if (enabled) MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
-        else MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)
-    val iconTint =
-        if (enabled) MaterialTheme.colorScheme.onSurface
-        else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-
-    Box(
-        contentAlignment = Alignment.Center,
-        modifier = Modifier
-            .then(modifier)
-            .size(if (isPrimary) 40.dp else 36.dp)
-            // Instant (ACTION_DOWN) bounce; no ripple — iOS-style tactile feedback.
-            .pressScaleContainer()
-            .clip(CircleShape)
-            .background(containerColor)
-            .border(width = 1.dp, color = borderColor, shape = CircleShape)
-            .clickable(
-                enabled = enabled,
-                onClick = onClick,
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-            )
-    ) {
-        Icon(
-            painter = painterResource(iconResId),
-            contentDescription = contentDescription,
-            tint = iconTint,
-            modifier = Modifier.size(if (isPrimary) 22.dp else 18.dp)
-        )
-    }
-}
-
-@RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
-@Composable
-private fun MiniPlayerTransportControls(
-    isPlaying: Boolean,
-    playbackState: Int,
-    isLoading: Boolean,
-    canSkipPrevious: Boolean,
-    canSkipNext: Boolean,
-    playerConnection: PlayerConnection
-) {
-    val haptic = rememberHaptic()
-
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        MiniPlayerTransportButton(
-            iconResId = R.drawable.skip_previous,
-            contentDescription = null,
-            onClick = playerConnection::seekToPrevious,
-            enabled = canSkipPrevious
-        )
-
-        Box(
-            contentAlignment = Alignment.Center,
-            modifier = Modifier.size(40.dp)
-        ) {
-            MiniPlayerTransportButton(
-                iconResId = when {
-                    playbackState == Player.STATE_ENDED -> R.drawable.replay
-                    isPlaying -> R.drawable.pause
-                    else -> R.drawable.play
-                },
-                contentDescription = stringResource(
-                    if (playbackState == Player.STATE_ENDED || !isPlaying) R.string.play else R.string.play
-                ).let {
-                    if (isPlaying && playbackState != Player.STATE_ENDED) "Pause" else it
-                },
-                onClick = {
-                    haptic.click()
-                    if (playbackState == Player.STATE_ENDED) {
-                        playerConnection.player.seekTo(0, 0)
-                        playerConnection.player.playWhenReady = true
-                    } else {
-                        playerConnection.player.togglePlayPause()
-                    }
-                },
-                isPrimary = true
-            )
-        }
-
-        MiniPlayerTransportButton(
-            iconResId = R.drawable.skip_next,
-            contentDescription = null,
-            onClick = playerConnection::seekToNext,
-            enabled = canSkipNext
-        )
-    }
-}
-
+/**
+ * The State-A mini player: the wide pill that floats above the dock.
+ *
+ * Rebuilt. What was here before crammed five separate controls into a 64dp capsule — a circular
+ * thumbnail wearing a circular progress ring, title, artist, a person button, a like button and a
+ * stock filled play button — so nothing in it had any weight and the whole row read as a toolbar
+ * rather than as the thing that is playing. Three changes carry the redesign:
+ *
+ *  * **Artwork is a rounded square again.** Every other piece of album art in the app is a rounded
+ *    rectangle; only this one was a disc, and it was wrapped in a progress ring that fought the
+ *    thumbnail for the same 44dp. Progress moved to a hairline that runs along the bottom of the
+ *    pill, where it is both more legible and out of the way.
+ *  * **The artist line navigates.** The separate person button existed only to open the artist;
+ *    tapping the artist's name does that now, which is the affordance people already try, and the
+ *    row gets a whole 40dp slot back.
+ *  * **Play/pause is the loudest thing in the pill**, which is the one control the pill exists for.
+ *    See [MiniPlayerPlayPauseButton].
+ */
 @Composable
 fun NewMiniPlayerContent(
     pureBlack: Boolean,
@@ -471,41 +405,49 @@ fun NewMiniPlayerContent(
     val playbackState by playerConnection.playbackState.collectAsState()
     val mediaMetadata by playerConnection.mediaMetadata.collectAsState()
     val togetherSessionState by playerConnection.service.togetherSessionState.collectAsState()
-    val canSkipPrevious by playerConnection.canSkipPrevious.collectAsState()
-    val canSkipNext by playerConnection.canSkipNext.collectAsState()
     val currentSong by playerConnection.currentSong.collectAsState(initial = null)
     val isLiked = currentSong?.song?.liked == true
 
     val isLoading = playbackState == Player.STATE_BUFFERING
 
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 8.dp, vertical = 8.dp),
-    ) {
-        MiniPlayerArtwork(
-            mediaMetadata = mediaMetadata,
-            position = position,
-            duration = duration,
-            isLoading = isLoading
-        )
+    val progressColor = MaterialTheme.colorScheme.primary
+    val progressTrackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f)
 
-        Spacer(modifier = Modifier.width(12.dp))
+    Box(modifier = Modifier.fillMaxSize()) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(start = 9.dp, end = 9.dp),
+        ) {
+            MiniPlayerArtwork(
+                mediaMetadata = mediaMetadata,
+                isLoading = isLoading,
+            )
 
-        mediaMetadata?.let {
-            MiniPlayerInfo(mediaMetadata = it)
-        } ?: Spacer(Modifier.weight(1f))
+            Spacer(modifier = Modifier.width(12.dp))
 
-        if (togetherSessionState !is TogetherSessionState.Idle) {
-            Spacer(modifier = Modifier.width(8.dp))
-            Surface(
-                shape = RoundedCornerShape(999.dp),
-                color = MaterialTheme.colorScheme.primaryContainer,
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+            mediaMetadata?.let {
+                MiniPlayerInfo(
+                    mediaMetadata = it,
+                    onArtistClick = {
+                        val artistId = it.artists.firstOrNull()?.id
+                        if (!artistId.isNullOrBlank()) {
+                            navController.navigate("artist/$artistId")
+                            state.collapseSoft()
+                        }
+                    },
+                )
+            } ?: Spacer(Modifier.weight(1f))
+
+            if (togetherSessionState !is TogetherSessionState.Idle) {
+                Spacer(modifier = Modifier.width(6.dp))
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .size(26.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primaryContainer),
                 ) {
                     Icon(
                         painter = painterResource(R.drawable.all_inclusive),
@@ -515,115 +457,144 @@ fun NewMiniPlayerContent(
                     )
                 }
             }
-        }
 
-        Spacer(modifier = Modifier.width(4.dp))
+            Spacer(modifier = Modifier.width(4.dp))
 
-        // ── Ícono de Persona (acceso al perfil del artista) ─────────
-        IconButton(
-            onClick = {
-                val firstArtist = mediaMetadata?.artists?.firstOrNull()
-                val artistId = firstArtist?.id
-                if (!artistId.isNullOrBlank()) {
-                    navController.navigate("artist/$artistId")
-                    state.collapseSoft()
-                }
-            },
-            modifier = Modifier.size(40.dp)
-        ) {
-            Icon(
-                painter = painterResource(R.drawable.person),
-                contentDescription = stringResource(R.string.artists),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(20.dp)
-            )
-        }
-
-        // ── Ícono de Corazón (guardar en favoritos) ────────────────
-        IconButton(
-            onClick = { playerConnection.toggleLike() },
-            modifier = Modifier.size(40.dp)
-        ) {
+            // Like. A quiet 38dp glyph beside a loud 46dp play button, so the hierarchy in the
+            // pill is unambiguous instead of two same-sized circles competing.
             val heartScale by animateFloatAsState(
-                targetValue = if (isLiked) 1.25f else 1f,
+                targetValue = if (isLiked) 1.2f else 1f,
                 animationSpec = spring(
                     dampingRatio = Spring.DampingRatioMediumBouncy,
-                    stiffness = Spring.StiffnessMedium
+                    stiffness = Spring.StiffnessMedium,
                 ),
-                label = "heartScale"
+                label = "heartScale",
             )
-            Icon(
-                painter = painterResource(
-                    if (isLiked) R.drawable.favorite else R.drawable.favorite_border
-                ),
-                contentDescription = null,
-                tint = if (isLiked)
-                    MaterialTheme.colorScheme.error
-                else
-                    MaterialTheme.colorScheme.onSurfaceVariant,
+            Box(
+                contentAlignment = Alignment.Center,
                 modifier = Modifier
-                    .size(20.dp)
-                    .graphicsLayer {
-                        scaleX = heartScale
-                        scaleY = heartScale
-                    }
+                    .size(38.dp)
+                    .clip(CircleShape)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = { playerConnection.toggleLike() },
+                    ),
+            ) {
+                Icon(
+                    painter = painterResource(
+                        if (isLiked) R.drawable.favorite else R.drawable.favorite_border
+                    ),
+                    contentDescription = null,
+                    tint = if (isLiked) MaterialTheme.colorScheme.error
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier
+                        .size(20.dp)
+                        .graphicsLayer {
+                            scaleX = heartScale
+                            scaleY = heartScale
+                        },
+                )
+            }
+
+            Spacer(modifier = Modifier.width(2.dp))
+
+            MiniPlayerPlayPauseButton(
+                isPlaying = isPlaying,
+                isLoading = isLoading,
+                playerConnection = playerConnection
             )
         }
 
-        Spacer(modifier = Modifier.width(4.dp))
-
-        // ── Botón Play/Pause principal (Cookie6Sided) ─────────────────────
-        MiniPlayerPlayPauseButton(
-            isPlaying = isPlaying,
-            isLoading = isLoading,
-            playerConnection = playerConnection
-        )
-
-        Spacer(modifier = Modifier.width(4.dp))
+        // Progress hairline hugging the bottom of the capsule. Inset from the rounded ends so it
+        // never pokes out of the pill, and drawn — not laid out — so ticking it forward every
+        // second costs one draw and no recomposition of the row above it.
+        Canvas(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .height(3.dp)
+                .padding(horizontal = 26.dp),
+        ) {
+            val fraction =
+                if (duration > 0) (position.toFloat() / duration).coerceIn(0f, 1f) else 0f
+            val stroke = size.height
+            val y = size.height / 2f
+            drawLine(
+                color = progressTrackColor,
+                start = Offset(0f, y),
+                end = Offset(size.width, y),
+                strokeWidth = stroke,
+                cap = StrokeCap.Round,
+            )
+            if (fraction > 0f) {
+                drawLine(
+                    color = progressColor,
+                    start = Offset(0f, y),
+                    end = Offset(size.width * fraction, y),
+                    strokeWidth = stroke,
+                    cap = StrokeCap.Round,
+                )
+            }
+        }
     }
 }
 
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+/**
+ * The pill's play/pause control.
+ *
+ * The old one was a stock `FilledIconButton` in flat `primary`, with a `buttonScale` spring whose
+ * target was a constant `1f` — an animation that could never run, driving a `graphicsLayer` that
+ * could never change. It is now a hand-built disc: a vertical gradient off the accent so it catches
+ * light like the rest of the chrome, a soft rim, and a real press response through
+ * [pressScaleContainer] (which fires on ACTION_DOWN, unlike a ripple, so the button moves the
+ * instant the thumb lands).
+ */
 @Composable
 private fun MiniPlayerPlayPauseButton(
     isPlaying: Boolean,
     isLoading: Boolean,
     playerConnection: PlayerConnection,
 ) {
-    // Animación de escala del botón
-    val buttonScale by animateFloatAsState(
-        targetValue = 1f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessMedium,
-            visibilityThreshold = 0.01f
-        ),
-        label = "buttonScale"
-    )
-
-    val animationKey by rememberUpdatedState(isPlaying)
     val (enableHaptic) = rememberPreference(EnableHapticFeedbackKey, true)
     val haptic = rememberHaptic(enabled = enableHaptic)
 
-    FilledIconButton(
-        onClick = {
-            haptic.click()
-            if (!isLoading) playerConnection.player.togglePlayPause()
-        },
+    val accent = MaterialTheme.colorScheme.primary
+    val fill = remember(accent) {
+        Brush.verticalGradient(
+            listOf(
+                accent.copy(alpha = 1f),
+                accent.copy(alpha = 0.82f),
+            ),
+        )
+    }
+
+    Box(
+        contentAlignment = Alignment.Center,
         modifier = Modifier
-            .size(48.dp)
-            .graphicsLayer {
-                scaleX = buttonScale
-                scaleY = buttonScale
-            },
-        shape = CircleShape,
-        colors = IconButtonDefaults.filledIconButtonColors(
-            containerColor = MaterialTheme.colorScheme.primary,
-            contentColor = MaterialTheme.colorScheme.onPrimary,
-            disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-            disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-        ),
-        enabled = !isLoading,
+            .size(46.dp)
+            .pressScaleContainer()
+            .clip(CircleShape)
+            .background(fill)
+            .border(
+                width = 1.dp,
+                brush = Brush.verticalGradient(
+                    listOf(
+                        Color.White.copy(alpha = 0.30f),
+                        Color.White.copy(alpha = 0.06f),
+                    ),
+                ),
+                shape = CircleShape,
+            )
+            .clickable(
+                enabled = !isLoading,
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = {
+                    haptic.click()
+                    playerConnection.player.togglePlayPause()
+                },
+            ),
     ) {
         if (isLoading) {
             CircularProgressIndicator(
@@ -635,27 +606,23 @@ private fun MiniPlayerPlayPauseButton(
             AnimatedContent(
                 targetState = isPlaying,
                 transitionSpec = {
-                    // Efecto Expressive: el icono entrante escala desde el centro
-                    // mientras el saliente escala hacia afuera
-                    (fadeIn(animationSpec = tween(150)) +
-                            scaleIn(
-                                initialScale = 0.4f, animationSpec = spring(
-                                    dampingRatio = Spring.DampingRatioLowBouncy,
-                                    stiffness = Spring.StiffnessLow
-                                )
-                            )
-                            ).togetherWith(
-                            fadeOut(animationSpec = tween(100)) +
-                                    scaleOut(targetScale = 1.6f, animationSpec = tween(100))
-                        )
+                    (fadeIn(tween(120)) +
+                        scaleIn(
+                            initialScale = 0.55f,
+                            animationSpec = spring(
+                                dampingRatio = Spring.DampingRatioMediumBouncy,
+                                stiffness = Spring.StiffnessMedium,
+                            ),
+                        )).togetherWith(
+                        fadeOut(tween(90)) + scaleOut(targetScale = 1.35f, animationSpec = tween(90)),
+                    )
                 },
                 label = "playPauseIcon",
             ) { playing ->
                 Icon(
-                    painter = painterResource(
-                        if (playing) R.drawable.pause else R.drawable.play
-                    ),
-                    contentDescription = null,
+                    painter = painterResource(if (playing) R.drawable.pause else R.drawable.play),
+                    contentDescription = stringResource(if (playing) R.string.pause else R.string.play),
+                    tint = MaterialTheme.colorScheme.onPrimary,
                     modifier = Modifier.size(22.dp),
                 )
             }

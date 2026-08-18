@@ -398,7 +398,10 @@ fun TopSearch(
                     inputField(Modifier.padding(animatedInputFieldPadding))
 
                     if (animationProgress > 0) {
-                        Column(Modifier.alpha(animationProgress)) {
+                        // Draw-phase, matching the docked branch above: `animationProgress`
+                        // ticks every frame of the expansion, and reading it during composition
+                        // recomposed the entire result list underneath on each one.
+                        Column(Modifier.graphicsLayer { alpha = animationProgress }) {
                             HorizontalDivider(color = colors.dividerColor)
                             content()
                         }

@@ -13,6 +13,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
@@ -202,6 +203,8 @@ internal fun CanvasArtworkPlayer(
             if (view.player !== exoPlayer) view.player = exoPlayer
             if (view.resizeMode != resizeMode) view.resizeMode = resizeMode
         },
-        modifier = modifier.alpha(alpha),
+        // Draw-phase: this fades in over a video surface, and a composition-phase read here
+        // re-runs the AndroidView update block on every frame of the fade.
+        modifier = modifier.graphicsLayer { this.alpha = alpha },
     )
 }

@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -26,6 +27,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.navigation.NavController
@@ -55,6 +57,17 @@ fun LibraryScreen(navController: NavController) {
 
     val filterContent = @Composable {
         Column {
+            // The page opened straight onto a row of filter chips with nothing above it, so
+            // there was no moment where the screen said what it was. A display-weight title
+            // gives the carousels below something to hang off and matches the heading scale
+            // the rest of the app moved to.
+            Text(
+                text = stringResource(R.string.filter_library),
+                style = MaterialTheme.typography.displaySmall,
+                fontWeight = FontWeight.Black,
+                color = MaterialTheme.colorScheme.onBackground,
+                modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 8.dp, bottom = 14.dp),
+            )
             Row {
                 ChipsRow(
                     chips =
@@ -103,12 +116,10 @@ fun LibraryScreen(navController: NavController) {
         }
     }
 
-    // Capture M3 Expressive colors from theme outside drawBehind
+    // Captured outside `drawBehind` so the draw lambda reads no composition state.
     val color1 = MaterialTheme.colorScheme.primary
     val color2 = MaterialTheme.colorScheme.secondary
     val color3 = MaterialTheme.colorScheme.tertiary
-    val color4 = MaterialTheme.colorScheme.primaryContainer
-    val color5 = MaterialTheme.colorScheme.secondaryContainer
     val surfaceColor = MaterialTheme.colorScheme.surface
 
     Box(
@@ -126,95 +137,61 @@ fun LibraryScreen(navController: NavController) {
                     val width = size.width
                     val height = size.height
 
-                    // Create mesh gradient with 5 color blobs for more variation
-                    // First color blob - top left
+                    // Three blobs, not five. Each `drawRect` here covers the top 70% of the
+                    // display with a full-size radial gradient, and every one of them is a
+                    // separate full-surface fill — on a 1080p panel that was five overlapping
+                    // screen-sized paints plus a sixth for the fade, on every invalidation of
+                    // this layer. Three carries the same mesh read (warm left, cool right, a
+                    // lift through the middle) at just over half the fill cost, and the fade
+                    // to surface is folded into the same pass.
                     drawRect(
                         brush = Brush.radialGradient(
                             colors = listOf(
                                 color1.copy(alpha = 0.38f),
-                                color1.copy(alpha = 0.24f),
-                                color1.copy(alpha = 0.14f),
-                                color1.copy(alpha = 0.06f),
-                                Color.Transparent
+                                color1.copy(alpha = 0.18f),
+                                Color.Transparent,
                             ),
-                            center = Offset(width * 0.15f, height * 0.1f),
-                            radius = width * 0.55f
-                        )
+                            center = Offset(width * 0.15f, height * 0.10f),
+                            radius = width * 0.72f,
+                        ),
                     )
 
-                    // Second color blob - top right
                     drawRect(
                         brush = Brush.radialGradient(
                             colors = listOf(
                                 color2.copy(alpha = 0.34f),
-                                color2.copy(alpha = 0.2f),
-                                color2.copy(alpha = 0.11f),
-                                color2.copy(alpha = 0.05f),
-                                Color.Transparent
+                                color2.copy(alpha = 0.15f),
+                                Color.Transparent,
                             ),
-                            center = Offset(width * 0.85f, height * 0.2f),
-                            radius = width * 0.65f
-                        )
+                            center = Offset(width * 0.88f, height * 0.20f),
+                            radius = width * 0.78f,
+                        ),
                     )
 
-                    // Third color blob - middle left
                     drawRect(
                         brush = Brush.radialGradient(
                             colors = listOf(
-                                color3.copy(alpha = 0.3f),
-                                color3.copy(alpha = 0.17f),
-                                color3.copy(alpha = 0.09f),
-                                color3.copy(alpha = 0.04f),
-                                Color.Transparent
+                                color3.copy(alpha = 0.26f),
+                                color3.copy(alpha = 0.11f),
+                                Color.Transparent,
                             ),
-                            center = Offset(width * 0.3f, height * 0.45f),
-                            radius = width * 0.6f
-                        )
+                            center = Offset(width * 0.42f, height * 0.52f),
+                            radius = width * 0.85f,
+                        ),
                     )
 
-                    // Fourth color blob - middle right
-                    drawRect(
-                        brush = Brush.radialGradient(
-                            colors = listOf(
-                                color4.copy(alpha = 0.26f),
-                                color4.copy(alpha = 0.14f),
-                                color4.copy(alpha = 0.08f),
-                                color4.copy(alpha = 0.03f),
-                                Color.Transparent
-                            ),
-                            center = Offset(width * 0.7f, height * 0.5f),
-                            radius = width * 0.7f
-                        )
-                    )
-
-                    // Fifth color blob - bottom center (helps with smooth fade)
-                    drawRect(
-                        brush = Brush.radialGradient(
-                            colors = listOf(
-                                color5.copy(alpha = 0.22f),
-                                color5.copy(alpha = 0.12f),
-                                color5.copy(alpha = 0.06f),
-                                color5.copy(alpha = 0.02f),
-                                Color.Transparent
-                            ),
-                            center = Offset(width * 0.5f, height * 0.75f),
-                            radius = width * 0.8f
-                        )
-                    )
-
-                    // Add a final vertical gradient overlay to ensure smooth bottom fade
+                    // Fade the whole thing into the page so the mesh has no visible edge.
                     drawRect(
                         brush = Brush.verticalGradient(
                             colors = listOf(
                                 Color.Transparent,
-                                Color.Transparent,
-                                surfaceColor.copy(alpha = 0.22f),
-                                surfaceColor.copy(alpha = 0.55f),
-                                surfaceColor
+                                surfaceColor.copy(alpha = 0.30f),
+                                surfaceColor.copy(alpha = 0.72f),
+                                surfaceColor,
                             ),
-                            startY = height * 0.4f,
-                            endY = height
-                        )
+                            startY = height * 0.42f,
+                            endY = height,
+                        ),
                     )
                 }
         ) {}

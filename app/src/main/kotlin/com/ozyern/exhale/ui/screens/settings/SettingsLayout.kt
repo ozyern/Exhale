@@ -2,12 +2,10 @@ package com.ozyern.exhale.ui.screens.settings
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
-import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -31,6 +29,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import androidx.compose.material3.adaptive.currentWindowAdaptiveInfo
 import androidx.window.core.layout.WindowSizeClass
@@ -80,31 +79,41 @@ fun AdaptiveSettingsLayout(
 ) {
     val layoutMode = resolveLayoutMode()
 
-    var heroVisible by remember { mutableStateOf(false) }
-    var bannerVisible by remember { mutableStateOf(false) }
-    var quickActionsVisible by remember { mutableStateOf(false) }
-    var integrationsVisible by remember { mutableStateOf(false) }
-    var categoriesVisible by remember { mutableStateOf(false) }
-
+    // One entrance for the whole page, not five staggered ones.
+    //
+    // This used to flip five booleans in sequence off a `LaunchedEffect`, each gating its own
+    // `AnimatedVisibility`. Two problems, and they compound. Visually, every visit to Settings
+    // played a ~300ms cascade of sections dropping in one after another, which reads as the page
+    // struggling to assemble itself rather than as polish. Mechanically, the entrances used
+    // `expandVertically` and `slideInVertically` — both of which animate LAYOUT, not just paint —
+    // so each section forced a measure and layout pass over the LazyColumn on every frame of its
+    // own entrance, five of them overlapping, at exactly the moment the screen is inflating. That
+    // is the settings-page stutter, and it is not a blur or a shader: it is five relayouts a frame.
+    //
+    // The flags are kept (the layouts below take them as parameters, and search still toggles
+    // sections independently) but they all now flip together on the first frame, and the
+    // transitions they gate are pure fades. The arrival itself is one alpha ramp applied to the
+    // whole list in the draw phase — no layout, no recomposition, one render-thread property.
+    var sectionsVisible by remember { mutableStateOf(false) }
+    val entrance = remember { Animatable(0f) }
     LaunchedEffect(Unit) {
-        val anim = Animatable(0f)
-        anim.animateTo(1f, tween(50))
-        heroVisible = true
-        anim.animateTo(1f, tween(60))
-        bannerVisible = true
-        anim.animateTo(1f, tween(60))
-        quickActionsVisible = true
-        anim.animateTo(1f, tween(70))
-        integrationsVisible = true
-        anim.animateTo(1f, tween(70))
-        categoriesVisible = true
+        sectionsVisible = true
+        entrance.animateTo(1f, tween(durationMillis = 280, easing = FastOutSlowInEasing))
     }
+    val heroVisible = sectionsVisible
+    val bannerVisible = sectionsVisible
+    val quickActionsVisible = sectionsVisible
+    val integrationsVisible = sectionsVisible
+    val categoriesVisible = sectionsVisible
 
     val quickActionColumns = when (layoutMode) {
         SettingsLayoutMode.COMPACT -> SettingsDimensions.CompactColumns
         SettingsLayoutMode.MEDIUM -> SettingsDimensions.MediumColumns
         SettingsLayoutMode.EXPANDED -> SettingsDimensions.ExpandedColumns
     }
+
+    // Read inside `graphicsLayer`, so the ramp never recomposes or relayouts anything under it.
+    val entranceModifier = modifier.graphicsLayer { alpha = entrance.value }
 
     when (layoutMode) {
         SettingsLayoutMode.COMPACT -> {
@@ -118,7 +127,7 @@ fun AdaptiveSettingsLayout(
                 integrationsVisible = integrationsVisible,
                 categoriesVisible = categoriesVisible,
                 topPadding = topPadding,
-                modifier = modifier,
+                modifier = entranceModifier,
             )
         }
         SettingsLayoutMode.MEDIUM -> {
@@ -131,7 +140,7 @@ fun AdaptiveSettingsLayout(
                 integrationsVisible = integrationsVisible,
                 categoriesVisible = categoriesVisible,
                 topPadding = topPadding,
-                modifier = modifier,
+                modifier = entranceModifier,
             )
         }
         SettingsLayoutMode.EXPANDED -> {
@@ -144,7 +153,7 @@ fun AdaptiveSettingsLayout(
                 integrationsVisible = integrationsVisible,
                 categoriesVisible = categoriesVisible,
                 topPadding = topPadding,
-                modifier = modifier,
+                modifier = entranceModifier,
             )
         }
     }
@@ -191,11 +200,7 @@ private fun CompactSettingsLayout(
         item(key = "hero") {
             AnimatedVisibility(
                 visible = heroVisible,
-                enter = fadeIn(SettingsAnimations.entranceSpring()) +
-                    slideInVertically(
-                        initialOffsetY = { -it / 5 },
-                        animationSpec = SettingsAnimations.entranceSpring(),
-                    ),
+                enter = fadeIn(SettingsAnimations.entranceSpring()),
             ) {
                 SettingsProfileHeader(
                     onClick = state.onAboutClick,
@@ -210,9 +215,8 @@ private fun CompactSettingsLayout(
             item(key = "permission") {
                 AnimatedVisibility(
                     visible = bannerVisible && state.showPermissionBanner,
-                    enter = fadeIn(SettingsAnimations.entranceSpring()) +
-                        expandVertically(SettingsAnimations.entranceSpring()),
-                    exit = fadeOut(tween(300)) + shrinkVertically(tween(300)),
+                    enter = fadeIn(SettingsAnimations.entranceSpring()),
+                    exit = fadeOut(tween(300)),
                 ) {
                     SettingsPermissionBanner(
                         onRequestPermission = state.onRequestPermission,
@@ -226,9 +230,8 @@ private fun CompactSettingsLayout(
             item(key = "update") {
                 AnimatedVisibility(
                     visible = bannerVisible && state.showUpdateBanner,
-                    enter = fadeIn(SettingsAnimations.entranceSpring()) +
-                        expandVertically(SettingsAnimations.entranceSpring()),
-                    exit = fadeOut(tween(300)) + shrinkVertically(tween(300)),
+                    enter = fadeIn(SettingsAnimations.entranceSpring()),
+                    exit = fadeOut(tween(300)),
                 ) {
                     SettingsUpdateBanner(
                         latestVersion = state.latestVersion,
@@ -245,11 +248,7 @@ private fun CompactSettingsLayout(
             item(key = "quickActions") {
                 AnimatedVisibility(
                     visible = quickActionsVisible,
-                    enter = fadeIn(SettingsAnimations.entranceSpring()) +
-                        slideInVertically(
-                            initialOffsetY = { it / 6 },
-                            animationSpec = SettingsAnimations.entranceSpring(),
-                        ),
+                    enter = fadeIn(SettingsAnimations.entranceSpring()),
                 ) {
                     SettingsQuickActionsSection(
                         actions = state.quickActions,
@@ -266,11 +265,7 @@ private fun CompactSettingsLayout(
             item(key = "integrations") {
                 AnimatedVisibility(
                     visible = integrationsVisible,
-                    enter = fadeIn(SettingsAnimations.entranceSpring()) +
-                        slideInVertically(
-                            initialOffsetY = { it / 6 },
-                            animationSpec = SettingsAnimations.entranceSpring(),
-                        ),
+                    enter = fadeIn(SettingsAnimations.entranceSpring()),
                 ) {
                     SettingsIntegrationsSection(
                         integrations = state.integrations,
@@ -301,33 +296,23 @@ private fun CompactSettingsLayout(
                 }
             }
 
+            // No per-card entrance. Each group used to slide in behind an
+            // `index * StaggerDelayPerItem` delay, so on a page with eight groups the last
+            // one arrived more than half a second after the first — and `slideInVertically`
+            // relayouts the item every frame it runs, so the whole cascade was overlapping
+            // layout passes. The page-level alpha ramp in `AdaptiveSettingsLayout` covers
+            // the arrival for nothing.
             items(
                 count = state.groups.size,
                 key = { state.groups[it].title },
             ) { index ->
                 val group = state.groups[index]
-                AnimatedVisibility(
-                    visible = categoriesVisible,
-                    enter = fadeIn(
-                        tween(
-                            SettingsAnimations.EntranceSlideDuration,
-                            delayMillis = index * SettingsAnimations.StaggerDelayPerItem,
-                        )
-                    ) + slideInVertically(
-                        initialOffsetY = { it / 5 },
-                        animationSpec = tween(
-                            SettingsAnimations.EntranceSlideDuration,
-                            delayMillis = index * SettingsAnimations.StaggerDelayPerItem,
-                        ),
-                    ),
-                ) {
-                    SettingsGroupCard(
-                        group = group,
-                        modifier = Modifier
-                            .padding(horizontal = pad)
-                            .padding(bottom = spacing),
-                    )
-                }
+                SettingsGroupCard(
+                    group = group,
+                    modifier = Modifier
+                        .padding(horizontal = pad)
+                        .padding(bottom = spacing),
+                )
             }
         }
     }
@@ -381,9 +366,8 @@ private fun MediumSettingsLayout(
                 item(key = "permission") {
                     AnimatedVisibility(
                         visible = bannerVisible && state.showPermissionBanner,
-                        enter = fadeIn(SettingsAnimations.entranceSpring()) +
-                            expandVertically(SettingsAnimations.entranceSpring()),
-                        exit = fadeOut(tween(300)) + shrinkVertically(tween(300)),
+                        enter = fadeIn(SettingsAnimations.entranceSpring()),
+                        exit = fadeOut(tween(300)),
                     ) {
                         SettingsPermissionBanner(
                             onRequestPermission = state.onRequestPermission,
@@ -395,9 +379,8 @@ private fun MediumSettingsLayout(
                 item(key = "update") {
                     AnimatedVisibility(
                         visible = bannerVisible && state.showUpdateBanner,
-                        enter = fadeIn(SettingsAnimations.entranceSpring()) +
-                            expandVertically(SettingsAnimations.entranceSpring()),
-                        exit = fadeOut(tween(300)) + shrinkVertically(tween(300)),
+                        enter = fadeIn(SettingsAnimations.entranceSpring()),
+                        exit = fadeOut(tween(300)),
                     ) {
                         SettingsUpdateBanner(
                             latestVersion = state.latestVersion,
@@ -463,26 +446,10 @@ private fun MediumSettingsLayout(
                     count = state.groups.size,
                     key = { state.groups[it].title },
                 ) { index ->
-                    AnimatedVisibility(
-                        visible = categoriesVisible,
-                        enter = fadeIn(
-                            tween(
-                                SettingsAnimations.EntranceSlideDuration,
-                                delayMillis = index * SettingsAnimations.StaggerDelayPerItem,
-                            )
-                        ) + slideInVertically(
-                            initialOffsetY = { it / 5 },
-                            animationSpec = tween(
-                                SettingsAnimations.EntranceSlideDuration,
-                                delayMillis = index * SettingsAnimations.StaggerDelayPerItem,
-                            ),
-                        ),
-                    ) {
-                        SettingsGroupCard(
-                            group = state.groups[index],
-                            modifier = Modifier.padding(bottom = spacing),
-                        )
-                    }
+                    SettingsGroupCard(
+                        group = state.groups[index],
+                        modifier = Modifier.padding(bottom = spacing),
+                    )
                 }
             }
         }
@@ -537,9 +504,8 @@ private fun ExpandedSettingsLayout(
                 item(key = "permission") {
                     AnimatedVisibility(
                         visible = bannerVisible && state.showPermissionBanner,
-                        enter = fadeIn(SettingsAnimations.entranceSpring()) +
-                            expandVertically(SettingsAnimations.entranceSpring()),
-                        exit = fadeOut(tween(300)) + shrinkVertically(tween(300)),
+                        enter = fadeIn(SettingsAnimations.entranceSpring()),
+                        exit = fadeOut(tween(300)),
                     ) {
                         SettingsPermissionBanner(
                             onRequestPermission = state.onRequestPermission,
@@ -551,9 +517,8 @@ private fun ExpandedSettingsLayout(
                 item(key = "update") {
                     AnimatedVisibility(
                         visible = bannerVisible && state.showUpdateBanner,
-                        enter = fadeIn(SettingsAnimations.entranceSpring()) +
-                            expandVertically(SettingsAnimations.entranceSpring()),
-                        exit = fadeOut(tween(300)) + shrinkVertically(tween(300)),
+                        enter = fadeIn(SettingsAnimations.entranceSpring()),
+                        exit = fadeOut(tween(300)),
                     ) {
                         SettingsUpdateBanner(
                             latestVersion = state.latestVersion,
@@ -619,26 +584,10 @@ private fun ExpandedSettingsLayout(
                     count = state.groups.size,
                     key = { state.groups[it].title },
                 ) { index ->
-                    AnimatedVisibility(
-                        visible = categoriesVisible,
-                        enter = fadeIn(
-                            tween(
-                                SettingsAnimations.EntranceSlideDuration,
-                                delayMillis = index * SettingsAnimations.StaggerDelayPerItem,
-                            )
-                        ) + slideInVertically(
-                            initialOffsetY = { it / 5 },
-                            animationSpec = tween(
-                                SettingsAnimations.EntranceSlideDuration,
-                                delayMillis = index * SettingsAnimations.StaggerDelayPerItem,
-                            ),
-                        ),
-                    ) {
-                        SettingsGroupCard(
-                            group = state.groups[index],
-                            modifier = Modifier.padding(bottom = spacing),
-                        )
-                    }
+                    SettingsGroupCard(
+                        group = state.groups[index],
+                        modifier = Modifier.padding(bottom = spacing),
+                    )
                 }
             }
         }

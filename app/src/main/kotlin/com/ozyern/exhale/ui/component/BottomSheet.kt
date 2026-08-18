@@ -216,7 +216,14 @@ fun BottomSheet(
                             val insetPx = pillHorizontalInset.toPx()
                             val pillWidthRatio =
                                 if (size.width > 0f) {
-                                    ((size.width - 2f * insetPx) / size.width).coerceIn(0.5f, 1f)
+                                    // Floor at 0.3, not 0.5. In State B the inset is the whole
+                                    // nav-bar side slot — a home circle, a search circle and their
+                                    // gaps — which on a narrow phone is well over a quarter of the
+                                    // display from each side. Clamping at 0.5 there stopped the
+                                    // content shrinking as far as its own clip window, so the last
+                                    // stretch of the collapse cropped the player instead of
+                                    // scaling it, and the pill appeared to swallow it whole.
+                                    ((size.width - 2f * insetPx) / size.width).coerceIn(0.3f, 1f)
                                 } else {
                                     1f
                                 }
@@ -237,7 +244,16 @@ fun BottomSheet(
                             // keeps content and window locked together, so the player appears to
                             // travel *into* the bar. Pure graphicsLayer — no layout is involved,
                             // so this costs nothing per frame beyond the render-thread transform.
-                            translationY = pillTopOffset.toPx() * (1f - eased)
+                            // LINEAR, matching `DynamicIslandMorphShape`, which walks its window
+                            // down by `pillTopOffsetPx * (1 - progress)`. This used to ease with
+                            // `(1 - eased)` while the window stayed linear, so through the middle
+                            // of every State-B collapse the two disagreed by up to ~12% of the
+                            // offset: the content slid *inside* its own clip window instead of
+                            // travelling with it, and the player looked like it was being wiped
+                            // into the nav bar rather than shrinking into it. In State A the
+                            // offset is 0 and this line is a no-op either way, which is why the
+                            // mismatch only ever showed up against the collapsed dock.
+                            translationY = pillTopOffset.toPx() * (1f - p)
 
                             // ---- The opacity half ----
                             //

@@ -233,6 +233,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Notification
 import android.os.Build
+import android.os.Bundle
 import android.content.pm.ServiceInfo
 import androidx.core.app.NotificationCompat
 
@@ -1551,6 +1552,16 @@ class MusicService :
             lyrics = lyrics?.takeIf { it != LyricsEntity.LYRICS_NOT_FOUND },
         )
 
+        // Second delivery channel, independent of the media items.
+        //
+        // Track metadata reaches SystemUI through `MediaSession#setMetadata`, and getting a
+        // lyrics-only change past Media3 to that call is the elaborate dance documented above.
+        // Session extras are a separate broadcast that Media3 forwards verbatim and immediately,
+        // with none of the equality gating, so a consumer reading from there sees the payload the
+        // moment it resolves. The Live Alert capsule is already served by the metadata path; this
+        // exists for the lock-screen surface, which on ColorOS 16.1 is not picking that path up.
+        withContext(Dispatchers.Main) { publishSessionLyricExtras(payload) }
+
         if (payload == null) {
             Log.i(
                 LiveLyricsTag,
@@ -1565,6 +1576,19 @@ class MusicService :
         }
 
         preAttachQueueLyrics()
+    }
+
+    /**
+     * Mirrors [payload] onto the session extras under every key in
+     * [OplusLiveLyrics.METADATA_KEY_ALIASES], clearing them when there are no timed lyrics so a
+     * previous track's words can never linger on the lock screen. Main thread.
+     */
+    private fun publishSessionLyricExtras(payload: String?) {
+        val extras = Bundle(mediaSession.sessionExtras)
+        OplusLiveLyrics.METADATA_KEY_ALIASES.forEach { key ->
+            if (payload == null) extras.remove(key) else extras.putString(key, payload)
+        }
+        mediaSession.sessionExtras = extras
     }
 
     /** Whether the current item is [songId] and already carries [payload]. Main thread. */
