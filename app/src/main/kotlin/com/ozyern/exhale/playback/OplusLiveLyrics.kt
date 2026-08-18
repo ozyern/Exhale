@@ -37,18 +37,18 @@ object OplusLiveLyrics {
     const val METADATA_KEY = "lyricInfo"
 
     /**
-     * Every key the payload is published under, not just [METADATA_KEY].
+     * Every key the whole-song document is published under, not just [METADATA_KEY].
      *
-     * The lyric surface and the Live Alert capsule are two different SystemUI consumers of the
-     * same media session, and they do not have to agree on a key — which is what the observed
-     * split looks like on ColorOS 16.1, where the capsule scrolls our lines correctly while the
-     * lock screen still falls back to "no lyrics". `lyricInfo` is the key documented against
-     * ColorOS 15; the class doc already warned that a private SystemUI key can move between OPlus
-     * releases, and a lock screen that reads a renamed key would fail in exactly this way.
+     * The lyric surfaces are separate SystemUI consumers of the same media session and they do
+     * not have to agree on a key — which is exactly what the observed split looks like: the Live
+     * Alert capsule scrolls our lines correctly while the lock screen still falls back to "no
+     * lyrics". `lyricInfo` is the key documented against ColorOS 15; the class doc already warned
+     * a private SystemUI key can move between OPlus releases, and a lock screen reading a renamed
+     * key fails in precisely this way.
      *
-     * Publishing under all of them is close to free — this is one `Bundle` with a few more short
-     * strings in it — and it cannot regress the surface that already works, because that surface
-     * keeps reading the key it always read. Every other ROM ignores all of them.
+     * Publishing under all of them is close to free — one `Bundle` with a few more short strings —
+     * and it cannot regress the surface that already works, because that surface keeps reading the
+     * key it always read. Every other ROM ignores all of them.
      */
     val METADATA_KEY_ALIASES = listOf(
         METADATA_KEY,
@@ -58,8 +58,45 @@ object OplusLiveLyrics {
     )
 
     /**
+     * Keys carrying the **single line playing right now**, refreshed as playback advances.
+     *
+     * This is a different shape of protocol from [METADATA_KEY_ALIASES], not another guess at a
+     * name for the same one, and it closes a real gap rather than widening a net. The document
+     * keys hand the consumer a whole LRC and leave it to do its own timing against the session's
+     * playback position; a consumer built the other way round — one that expects to be *fed* the
+     * current line and simply renders whatever it was last given — receives nothing at all from
+     * us today. A capsule that scrolls a document while a lock screen shows nothing is consistent
+     * with the lock screen being that second kind of consumer.
+     *
+     * These ride on the session extras rather than the track metadata: extras are forwarded
+     * verbatim and immediately, so publishing per line there costs nothing and cannot trip the
+     * per-track metadata debounce the document path has to be careful about.
+     */
+    val CURRENT_LINE_KEY_ALIASES = listOf(
+        "currentLyric",
+        "oplus.currentLyric",
+        "com.oplus.media.metadata.CURRENT_LYRIC",
+        "lyric",
+    )
+
+    /** Companion keys for the current line's start time, in milliseconds. */
+    val CURRENT_LINE_TIME_KEY_ALIASES = listOf(
+        "currentLyricTime",
+        "oplus.currentLyricTime",
+    )
+
+    /**
      * Manifest opt-in that keeps the ColorOS media card alive after the app is fully stopped.
      * Declared in AndroidManifest. Not required for lyric delivery itself.
+     *
+     * Worth being clear about what this is and is not: the name is the community bridge's, and it
+     * is the *bridge* that reads it. Stock ColorOS SystemUI gates its lock-screen lyric surface on
+     * its own package whitelist, which a third-party player is never going to be on. So on a
+     * device without the bridge installed, a working Live Alert capsule and an empty lock screen
+     * is a possible *correct* outcome of everything here — the capsule is an open surface, the
+     * lock screen may simply not be one. The multi-key and current-line publication exist to cover
+     * the case where it IS readable and we were addressing it wrongly; they cannot open a door
+     * that is bolted from the other side.
      */
     const val MANIFEST_META_MEDIA_HISTORY =
         "io.github.andrealtb.lockscreenlyrics.OPLUS_MEDIA_HISTORY"
@@ -117,12 +154,28 @@ object OplusLiveLyrics {
         lyrics: String?,
     ): String? {
         val lrc = toLrc(lyrics) ?: return null
+        return buildPayloadFromLrc(songId, songName, artist, lrc, lyrics)
+    }
+
+    /**
+     * The document as [buildPayload] would emit it, from an already-normalised [lrc].
+     *
+     * Split out so the caller can normalise once and keep the LRC for the line ticker instead of
+     * running the TTML flattener a second time to get the same string back.
+     */
+    fun buildPayloadFromLrc(
+        songId: String,
+        songName: String,
+        artist: String,
+        lrc: String,
+        rawLyrics: String?,
+    ): String {
         return JSONObject()
             .put("songName", songName)
             .put("artist", artist)
             .put("songId", songId)
             .put("lyric", lrc)
-            .apply { toEnhancedLrc(lyrics!!)?.let { put("rawLyric", it) } }
+            .apply { rawLyrics?.let { raw -> toEnhancedLrc(raw)?.let { put("rawLyric", it) } } }
             .toString()
     }
 

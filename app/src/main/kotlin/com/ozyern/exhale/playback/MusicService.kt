@@ -156,6 +156,8 @@ import com.ozyern.exhale.extensions.togglePlayPause
 import com.ozyern.exhale.extensions.toMediaItem
 import com.ozyern.exhale.extensions.toPersistQueue
 import com.ozyern.exhale.extensions.toQueue
+import com.ozyern.exhale.lyrics.LyricsEntry
+import com.ozyern.exhale.lyrics.LyricsUtils
 import com.ozyern.exhale.lyrics.LyricsHelper
 import com.ozyern.exhale.models.PersistQueue
 import com.ozyern.exhale.models.PersistPlayerState
@@ -446,6 +448,15 @@ class MusicService :
 
     /** Makes each forced Live Space publication distinguishable. See [publishLiveLyrics]. */
     private var liveLyricsRevision = 0
+
+    /** Timed lines for the current track, driving [startLiveLyricLineTicker]. */
+    private var liveLyricLines: List<LyricsEntry> = emptyList()
+
+    /** The line index last pushed to the session, so the ticker only writes on a change. */
+    private var liveLyricLineIndex = -1
+
+    /** The ticker itself; one at a time, cancelled on every track change. */
+    private var liveLyricTickerJob: Job? = null
 
     val maxSafeGainFactor = 1.414f // +3 dB
     @Volatile
@@ -1545,12 +1556,22 @@ class MusicService :
         val enabled = dataStore.data.first()[EnableLockScreenLyricsKey] ?: true
         if (!enabled) return
 
-        val payload = OplusLiveLyrics.buildPayload(
-            songId = metadata.id,
-            songName = metadata.title,
-            artist = metadata.artists.joinToString { it.name },
-            lyrics = lyrics?.takeIf { it != LyricsEntity.LYRICS_NOT_FOUND },
-        )
+        val usable = lyrics?.takeIf { it != LyricsEntity.LYRICS_NOT_FOUND }
+        // Normalise once. `toLrc` is the TTML flattener for word-synced providers, and both the
+        // document below and the line ticker need its output — running it twice to get the same
+        // string back would be a full re-parse of the lyrics on every track change.
+        val lrc = OplusLiveLyrics.toLrc(usable)
+        val payload = lrc?.let {
+            OplusLiveLyrics.buildPayloadFromLrc(
+                songId = metadata.id,
+                songName = metadata.title,
+                artist = metadata.artists.joinToString { it.name },
+                lrc = it,
+                rawLyrics = usable,
+            )
+        }
+
+        startLiveLyricLineTicker(lrc)
 
         // Second delivery channel, independent of the media items.
         //
@@ -1575,7 +1596,126 @@ class MusicService :
             withContext(Dispatchers.Main) { forceLyricInfo(metadata.id, payload) }
         }
 
+        withContext(Dispatchers.Main) { logLiveLyricsDelivery(metadata.id) }
+
         preAttachQueueLyrics()
+    }
+
+    /**
+     * Feeds the **current line** to the session extras as playback advances.
+     *
+     * The document channel hands a consumer a whole LRC and leaves the timing to it. A consumer
+     * built the other way round — one that renders whichever line it was last handed — gets
+     * nothing from a document, which is a plausible shape for the split we are seeing, where the
+     * Live Alert capsule scrolls correctly and the lock screen shows its own "no lyrics" state.
+     * This is the second shape, published alongside the first rather than instead of it.
+     *
+     * Deliberately cheap. It polls rather than driving off a position flow because the session
+     * only needs line granularity: a 300ms tick is four decimal places finer than the shortest
+     * line anyone sings, and a tick that finds no change writes nothing at all. It also only runs
+     * while something is actually playing, so a paused or idle service is not holding a loop open.
+     */
+    private suspend fun startLiveLyricLineTicker(lrc: String?) {
+        // Parse on whatever background thread got us here — this is a full pass over the lyric
+        // text — then hand the result over on main. Swapping the fields from off-main while the
+        // previous ticker is still winding down would let it read the new track's lines against
+        // the old track's index for a tick.
+        val parsed = lrc?.let {
+            runCatching { LyricsUtils.parseLyrics(it) }.getOrNull().orEmpty()
+        }.orEmpty()
+
+        withContext(Dispatchers.Main) {
+            liveLyricTickerJob?.cancel()
+            liveLyricLineIndex = -1
+            liveLyricLines = parsed
+
+            if (parsed.isEmpty()) {
+                // Clear, so a previous track's words can never sit under a new one.
+                publishSessionCurrentLine(null, 0L)
+                return@withContext
+            }
+
+            liveLyricTickerJob = launchLiveLyricTicker()
+        }
+    }
+
+    /** The polling loop itself. Main thread: it reads the player directly. */
+    private fun launchLiveLyricTicker(): Job =
+        scope.launch {
+            while (isActive) {
+                val playing = player.isPlaying
+                if (playing) {
+                    val position = player.currentPosition
+                    val index = LyricsUtils.findCurrentLineIndex(liveLyricLines, position)
+                    if (index >= 0 && index != liveLyricLineIndex) {
+                        liveLyricLineIndex = index
+                        val entry = liveLyricLines[index]
+                        publishSessionCurrentLine(entry.text, entry.time)
+                    }
+                }
+                delay(if (playing) LiveLyricsTickMs else LiveLyricsIdleTickMs)
+            }
+        }
+
+    /**
+     * Writes one lyric line onto the session extras under every key in
+     * [OplusLiveLyrics.CURRENT_LINE_KEY_ALIASES], or clears them when [line] is null.
+     */
+    private fun publishSessionCurrentLine(line: String?, timeMs: Long) {
+        val extras = Bundle(mediaSession.sessionExtras)
+        OplusLiveLyrics.CURRENT_LINE_KEY_ALIASES.forEach { key ->
+            if (line == null) extras.remove(key) else extras.putString(key, line)
+        }
+        OplusLiveLyrics.CURRENT_LINE_TIME_KEY_ALIASES.forEach { key ->
+            if (line == null) extras.remove(key) else extras.putLong(key, timeMs)
+        }
+        mediaSession.sessionExtras = extras
+    }
+
+    /**
+     * Logs what actually landed on the **platform** session, as opposed to what we asked Media3
+     * to put there.
+     *
+     * The whole difficulty with this feature is that a publication can be dropped by three
+     * separate layers before SystemUI ever sees it, and until now the only evidence either way
+     * was that the lock screen looked empty. This reads the framework session back through its
+     * own token and reports, per key, whether the payload survived — so the next iteration starts
+     * from a measurement instead of a guess. Wrapped in `runCatching` and gated on the log tag:
+     * nothing here may ever be able to interrupt playback.
+     *
+     * `adb logcat -s LiveLyrics` to read it.
+     */
+    private fun logLiveLyricsDelivery(songId: String) {
+        runCatching {
+            val token = mediaSession.platformToken
+            val controller = android.media.session.MediaController(this, token)
+            val metadata = controller.metadata
+            if (metadata == null) {
+                Log.w(LiveLyricsTag, "$songId: platform session has NO metadata yet")
+                return@runCatching
+            }
+            val landed = OplusLiveLyrics.METADATA_KEY_ALIASES.filter { key ->
+                metadata.getString(key) != null
+            }
+            val sessionExtraKeys = OplusLiveLyrics.METADATA_KEY_ALIASES.filter { key ->
+                controller.extras?.getString(key) != null
+            }
+            Log.i(
+                LiveLyricsTag,
+                "$songId: metadata keys carrying the document = $landed; " +
+                    "session-extra keys = $sessionExtraKeys; " +
+                    "lines parsed for the ticker = ${liveLyricLines.size}",
+            )
+            if (landed.isEmpty() && sessionExtraKeys.isEmpty()) {
+                Log.w(
+                    LiveLyricsTag,
+                    "$songId: nothing reached the platform session — the drop is on our side, " +
+                        "not the ROM's",
+                )
+            }
+        }.onFailure {
+            Log.w(LiveLyricsTag, "delivery read-back unavailable: ${it.message}")
+        }
     }
 
     /**
@@ -5271,6 +5411,12 @@ class MusicService :
 
         /** The retry window the OPlus spec allows when a first publication is swallowed. */
         private const val LiveLyricsRepublishDelayMs = 800L
+
+        /** Line-ticker cadence while playing. Line granularity needs nothing finer. */
+        private const val LiveLyricsTickMs = 300L
+
+        /** Cadence while paused — just often enough to notice playback resuming. */
+        private const val LiveLyricsIdleTickMs = 1_000L
 
         /** How far ahead to attach cached lyrics, so transitions publish them from the start. */
         private const val LiveLyricsPreAttachCount = 3
