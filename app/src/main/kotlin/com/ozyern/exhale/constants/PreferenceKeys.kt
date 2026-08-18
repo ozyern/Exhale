@@ -468,6 +468,24 @@ val PreloadQueueLyricsEnabledKey = booleanPreferencesKey("preload_queue_lyrics_e
  * not leave the app at all.
  */
 val EnableLockScreenLyricsKey = booleanPreferencesKey("enableLockScreenLyrics")
+
+/**
+ * Write the line currently playing into the media session's own subtitle, so it appears on the
+ * lock screen's standard media card.
+ *
+ * This is the delivery path that does not depend on the ROM. `lyricInfo` and its aliases address
+ * OPlus SystemUI's private lyric surface, which stock ColorOS gates on a package whitelist no
+ * third-party player is on — hence the Live Alert capsule working while the lock screen never
+ * does. The media card is not private: it is the platform media control every Android lock screen
+ * has drawn since 11, it renders whatever the session puts in its subtitle field, and nothing
+ * about it can be whitelisted away.
+ *
+ * The cost is that the same field feeds the notification shade, Bluetooth head units and Android
+ * Auto, so while this is on the artist name is replaced by the lyric everywhere the session is
+ * read. That is a real trade, which is why it is its own switch rather than part of
+ * [EnableLockScreenLyricsKey].
+ */
+val LyricsOnMediaCardKey = booleanPreferencesKey("lyricsOnMediaCard")
 val QueueLyricsPreloadCountKey = intPreferencesKey("queue_lyrics_preload_count")
 
 val PlayerVolumeKey = floatPreferencesKey("playerVolume")

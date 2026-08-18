@@ -13,6 +13,7 @@ import androidx.annotation.RequiresApi
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -513,8 +514,10 @@ fun NewMiniPlayerContent(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
-                .height(3.dp)
-                .padding(horizontal = 26.dp),
+                // Inset to clear the capsule's own 32dp corner radius, so the line stops where
+                // the pill starts curving rather than running out to a point.
+                .padding(start = 30.dp, end = 30.dp, bottom = 7.dp)
+                .height(2.5.dp),
         ) {
             val fraction =
                 if (duration > 0) (position.toFloat() / duration).coerceIn(0f, 1f) else 0f
@@ -528,8 +531,14 @@ fun NewMiniPlayerContent(
                 cap = StrokeCap.Round,
             )
             if (fraction > 0f) {
+                // Fades in from the left rather than starting at full strength, so a track that
+                // has barely begun does not put a hard accent dot under the artwork.
                 drawLine(
-                    color = progressColor,
+                    brush = Brush.horizontalGradient(
+                        colors = listOf(progressColor.copy(alpha = 0.45f), progressColor),
+                        startX = 0f,
+                        endX = (size.width * fraction).coerceAtLeast(1f),
+                    ),
                     start = Offset(0f, y),
                     end = Offset(size.width * fraction, y),
                     strokeWidth = stroke,
@@ -543,12 +552,20 @@ fun NewMiniPlayerContent(
 /**
  * The pill's play/pause control.
  *
- * The old one was a stock `FilledIconButton` in flat `primary`, with a `buttonScale` spring whose
- * target was a constant `1f` — an animation that could never run, driving a `graphicsLayer` that
- * could never change. It is now a hand-built disc: a vertical gradient off the accent so it catches
- * light like the rest of the chrome, a soft rim, and a real press response through
- * [pressScaleContainer] (which fires on ACTION_DOWN, unlike a ripple, so the button moves the
- * instant the thumb lands).
+ * The state change is carried by the **shape**, not just by swapping a glyph. Paused it is a
+ * circle; playing it pulls in to a squircle, and the corner radius springs between the two with a
+ * little overshoot — so the button visibly reacts to the thing it just did, and you can read
+ * playback state from the corner of your eye without resolving the icon at all. That is the part
+ * a stock `FilledIconButton` cannot do: its shape is fixed, so the only thing that ever moved was
+ * the glyph crossfade, and the button sat there inert underneath.
+ *
+ * (The version before that was worse still — it drove a `graphicsLayer` from an
+ * `animateFloatAsState` whose target was a constant `1f`, an animation that could never run.)
+ *
+ * The fill is a vertical gradient off the accent rather than a flat tint, with a light rim, so it
+ * catches light like every other surface in the app instead of reading as a Material chip dropped
+ * onto glass. Press response is [pressScaleContainer], which fires on ACTION_DOWN, so the button
+ * moves the instant the thumb lands rather than after a ripple has decided.
  */
 @Composable
 private fun MiniPlayerPlayPauseButton(
@@ -559,13 +576,27 @@ private fun MiniPlayerPlayPauseButton(
     val (enableHaptic) = rememberPreference(EnableHapticFeedbackKey, true)
     val haptic = rememberHaptic(enabled = enableHaptic)
 
+    // 23dp of a 46dp box is exactly a circle; 15dp is the squircle. The spring is deliberately
+    // under-damped — the overshoot is what makes the press feel answered.
+    val corner by animateDpAsState(
+        targetValue = if (isPlaying) 15.dp else 23.dp,
+        animationSpec = spring(
+            dampingRatio = 0.55f,
+            stiffness = Spring.StiffnessMediumLow,
+        ),
+        label = "playPauseCorner",
+    )
+    val shape = RoundedCornerShape(corner)
+
     val accent = MaterialTheme.colorScheme.primary
     val fill = remember(accent) {
         Brush.verticalGradient(
-            listOf(
-                accent.copy(alpha = 1f),
-                accent.copy(alpha = 0.82f),
-            ),
+            listOf(accent, accent.copy(alpha = 0.80f)),
+        )
+    }
+    val rim = remember {
+        Brush.verticalGradient(
+            listOf(Color.White.copy(alpha = 0.32f), Color.White.copy(alpha = 0.06f)),
         )
     }
 
@@ -574,18 +605,9 @@ private fun MiniPlayerPlayPauseButton(
         modifier = Modifier
             .size(46.dp)
             .pressScaleContainer()
-            .clip(CircleShape)
+            .clip(shape)
             .background(fill)
-            .border(
-                width = 1.dp,
-                brush = Brush.verticalGradient(
-                    listOf(
-                        Color.White.copy(alpha = 0.30f),
-                        Color.White.copy(alpha = 0.06f),
-                    ),
-                ),
-                shape = CircleShape,
-            )
+            .border(width = 1.dp, brush = rim, shape = shape)
             .clickable(
                 enabled = !isLoading,
                 interactionSource = remember { MutableInteractionSource() },

@@ -131,6 +131,10 @@ fun ContentSettings(
         EnableLockScreenLyricsKey,
         defaultValue = true
     )
+    val (lyricsOnMediaCard, onLyricsOnMediaCardChange) = rememberPreference(
+        LyricsOnMediaCardKey,
+        defaultValue = true
+    )
     val (queueLyricsPreloadCount, onQueueLyricsPreloadCountChange) = rememberPreference(
         QueueLyricsPreloadCountKey,
         defaultValue = 1
@@ -394,6 +398,14 @@ fun ContentSettings(
             icon = { Icon(painterResource(R.drawable.lyrics), null) },
             checked = lockScreenLyrics,
             onCheckedChange = onLockScreenLyricsChange,
+        )
+
+        SwitchPreference(
+            title = { Text(stringResource(R.string.lyrics_on_media_card)) },
+            description = stringResource(R.string.lyrics_on_media_card_desc),
+            icon = { Icon(painterResource(R.drawable.lyrics), null) },
+            checked = lyricsOnMediaCard,
+            onCheckedChange = onLyricsOnMediaCardChange,
         )
 
         if (preloadQueueLyricsEnabled) {

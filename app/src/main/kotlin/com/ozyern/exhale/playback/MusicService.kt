@@ -110,6 +110,7 @@ import com.ozyern.exhale.constants.EqualizerVirtualizerEnabledKey
 import com.ozyern.exhale.constants.EqualizerVirtualizerStrengthKey
 import com.ozyern.exhale.constants.EnableDiscordRPCKey
 import com.ozyern.exhale.constants.EnableLockScreenLyricsKey
+import com.ozyern.exhale.constants.LyricsOnMediaCardKey
 import com.ozyern.exhale.constants.HideExplicitKey
 import com.ozyern.exhale.constants.HideVideoKey
 import com.ozyern.exhale.constants.HistoryDuration
@@ -458,6 +459,15 @@ class MusicService :
     /** The ticker itself; one at a time, cancelled on every track change. */
     private var liveLyricTickerJob: Job? = null
 
+    /**
+     * Whether the current line is also written into the session's displayed subtitle. Cached off
+     * the datastore so the ticker never has to suspend on a preference read per line.
+     */
+    private var liveLyricsOnMediaCard = true
+
+    /** The subtitle currently published, so a repeat line is not republished. */
+    private var liveLyricCardLine: String? = null
+
     val maxSafeGainFactor = 1.414f // +3 dB
     @Volatile
     private var hasCalledStartForeground = false
@@ -794,6 +804,16 @@ class MusicService :
                 }
 
                 publishLiveLyrics(mediaMetadata, lyrics)
+            }
+
+        // Cached so the per-line ticker never suspends on a datastore read. Turning it off
+        // restores the real artist immediately rather than at the next track change.
+        dataStore.data
+            .map { it[LyricsOnMediaCardKey] ?: true }
+            .distinctUntilChanged()
+            .collectLatest(scope) { enabled ->
+                liveLyricsOnMediaCard = enabled
+                if (!enabled) publishMediaCardLine(null)
             }
 
         dataStore.data
@@ -1632,6 +1652,7 @@ class MusicService :
             if (parsed.isEmpty()) {
                 // Clear, so a previous track's words can never sit under a new one.
                 publishSessionCurrentLine(null, 0L)
+                publishMediaCardLine(null)
                 return@withContext
             }
 
@@ -1651,6 +1672,7 @@ class MusicService :
                         liveLyricLineIndex = index
                         val entry = liveLyricLines[index]
                         publishSessionCurrentLine(entry.text, entry.time)
+                        publishMediaCardLine(entry.text)
                     }
                 }
                 delay(if (playing) LiveLyricsTickMs else LiveLyricsIdleTickMs)
@@ -1670,6 +1692,40 @@ class MusicService :
             if (line == null) extras.remove(key) else extras.putLong(key, timeMs)
         }
         mediaSession.sessionExtras = extras
+    }
+
+    /**
+     * Writes [line] into the session's displayed subtitle, which is what the lock screen's media
+     * card renders under the song title. Null restores the real artist.
+     *
+     * This is the path that works without a ROM module. Everything else here talks to OPlus
+     * SystemUI's private lyric surface, and stock ColorOS gates that on a package whitelist a
+     * third-party player is never added to — which is why the Live Alert capsule lights up and
+     * the lock screen stays on "no lyrics" no matter how many keys we publish under. The media
+     * card is the platform control every Android lock screen has drawn since 11. It has no
+     * whitelist. It renders whatever the session's subtitle says.
+     *
+     * `replaceMediaItem` on the current item is the same mechanism [forceLyricInfo] already uses
+     * and does not interrupt playback: the item keeps its URI and its `tag`, so the player sees a
+     * metadata edit rather than a new track. At one write per line — a few seconds apart, and only
+     * while something is playing — the cost is far below what a position ticker already does.
+     *
+     * Main thread.
+     */
+    private fun publishMediaCardLine(line: String?) {
+        if (!liveLyricsOnMediaCard && line != null) return
+        if (line == liveLyricCardLine) return
+
+        val index = player.currentMediaItemIndex
+        val item = player.currentMediaItem ?: return
+        // The real artist comes from our own tag, which `withDisplayLine` preserves — so this
+        // restores correctly however many times the subtitle has been overwritten.
+        val artist = item.metadata?.artists?.joinToString { it.name }
+
+        liveLyricCardLine = line
+        with(OplusLiveLyrics) {
+            player.replaceMediaItem(index, item.withDisplayLine(line, artist))
+        }
     }
 
     /**

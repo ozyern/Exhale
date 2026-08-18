@@ -22,10 +22,11 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
@@ -66,7 +67,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.IntOffset
@@ -90,11 +90,18 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.util.fastRoundToInt
 import coil3.compose.AsyncImage
+import com.kyant.backdrop.drawBackdrop
+import com.kyant.backdrop.effects.blur
+import com.kyant.backdrop.effects.lens
+import com.kyant.backdrop.effects.vibrancy
+import com.kyant.backdrop.highlight.Highlight
+import com.kyant.backdrop.shadow.Shadow
 import com.ozyern.exhale.LocalPlayerConnection
 import com.ozyern.exhale.R
 import com.ozyern.exhale.constants.AquamorphicDampingRatio
 import com.ozyern.exhale.constants.AquamorphicStiffness
 import com.ozyern.exhale.extensions.togglePlayPause
+import com.ozyern.exhale.ui.component.liquid.LocalAppBackdrop
 import com.ozyern.exhale.ui.screens.Screens
 import kotlin.math.abs
 import kotlinx.coroutines.coroutineScope
@@ -161,20 +168,23 @@ fun LiquidGlassBottomBar(
                     dampingRatio = AquamorphicDampingRatio,
                     stiffness = AquamorphicStiffness
                 )
+                val intSpring = spring<IntOffset>(
+                    dampingRatio = AquamorphicDampingRatio,
+                    stiffness = AquamorphicStiffness
+                )
+
                 // PERF: `using SizeTransform { snap() }` makes the container jump to the target
                 // size instantly instead of animating its width every frame. Animating the size
                 // forced a full layout pass (and re-measured the expensive frosted-glass
                 // backdrops) ~60×/s during the A/B morph — the heavy frame drops. With clip=false
                 // the cross-fading/scaling children mask the instant size change, so the morph
                 // still reads as fluid but is now purely GPU-composited.
-                // No horizontal slide. The two states are the SAME bar in two configurations —
-                // sliding one out to the left while the other comes in from the right reads as two
-                // unrelated panels swapping places, and it was fighting the player shrinking down
-                // into the very same strip. Scaling both about the centre makes the bar look like
-                // it reconfigures where it stands: State A contracts toward the middle as State B
-                // opens out of it, which is also the direction the player is travelling.
-                (fadeIn(spring) + scaleIn(spring, initialScale = 0.88f)) togetherWith
-                    (fadeOut(spring) + scaleOut(spring, targetScale = 0.88f))
+                (fadeIn(spring) +
+                    slideInHorizontally(intSpring) { if (targetState) it / 4 else -it / 4 } +
+                    scaleIn(spring, initialScale = 0.92f)) togetherWith
+                    (fadeOut(spring) +
+                        slideOutHorizontally(intSpring) { if (targetState) -it / 4 else it / 4 } +
+                        scaleOut(spring, targetScale = 0.92f))
             },
             label = "bottomBarState",
             modifier = Modifier.weight(1f),
@@ -276,10 +286,10 @@ private fun frostedGlassModifier(shape: androidx.compose.ui.graphics.Shape): Mod
     // Scaffold's bottomBar slot — a sibling of the NavHost, drawn over it — so reading the
     // NavHost's haze source here is safe and not a re-entrant layer draw.
     //
-    // See `rememberChromeGlassModifier` for why this is Haze and not Kyant: the Kyant backdrop
-    // layer is recorded on the NavHost, whose origin is not the window's, so a pane in the
-    // bottomBar slot sampled the wrong strip of the screen and its lens painted that strip as
-    // ghost discs outside the pill.
+    // This used to reach for Kyant's `drawBackdrop(LocalAppBackdrop.current, …)`. That local
+    // is `rememberDefaultBackdrop()`, an EMPTY passthrough canvas: blurring and refracting it
+    // yields no pixels at all, so the only thing the bar ever painted was its own 0.34-alpha
+    // film. That is the "dock is fully transparent" bug — the glass was never glass.
     val isDark = isSystemInDarkTheme()
     return rememberChromeGlassModifier(
         shape = shape,
@@ -362,35 +372,43 @@ private fun NavGlyph(iconRes: Int, contentDescription: String?, tint: Color) {
 /* ----------------------------------------------------------------------- */
 
 /**
- * Selection capsule that slides between tabs.
+ * Glass selection capsule that slides between tabs — the AndroidLiquidGlass demo's tab bar.
  *
- * A pane floating *inside* the dock pill and inset from its tab slot on all four sides, drawn
- * brighter than the dock so it reads as lifted off it rather than punched into it. It used to
- * run its own backdrop refraction; it no longer does, for the reasons below.
+ * It is a second pane of glass floating *inside* the dock pill: it refracts the same app
+ * content the dock does, so as it travels the icons and artwork underneath visibly bend
+ * through it. Safe to consume [LocalAppBackdrop] here for the same reason the dock itself is
+ * (see `rememberChromeGlassModifier`): the bar is a Scaffold slot drawn over the NavHost, not
+ * a descendant of the recorded layer.
  */
 @Composable
 private fun indicatorGlassModifier(shape: androidx.compose.ui.graphics.Shape): Modifier {
+    val backdrop = LocalAppBackdrop.current
     val isDark = isSystemInDarkTheme()
 
-    // No backdrop shader here any more. The capsule used to run its own `drawBackdrop` with a
-    // `lens()` on top of the dock's, which cost a second full-screen shader pass every frame of
-    // a drag *and* inherited the same misregistration as the dock — so it painted a washed-out
-    // slab of the wrong pixels rather than a pane of glass. A segmented-control highlight does
-    // not need to refract: it needs to read brighter than the surface it slides on. That is a
-    // fill and a rim, and it composites for free.
-    val fill = if (isDark) Color.White.copy(alpha = 0.16f) else Color.White.copy(alpha = 0.62f)
-    val rim = Brush.verticalGradient(
-        listOf(
-            Color.White.copy(alpha = if (isDark) 0.34f else 0.85f),
-            Color.White.copy(alpha = if (isDark) 0.10f else 0.35f),
-        ),
+    // The capsule has to end up BRIGHTER than the dock it sits on, and that is not automatic here.
+    // The dock paints a 0.30 milky tint over its own blur; the capsule samples the raw backdrop
+    // underneath, which at the bottom of the screen is dark album art and darker page. At the old
+    // 0.16 the result was a lozenge *darker* than its surroundings — it read as a hole punched in
+    // the dock rather than a pane lifted off it, which is exactly the flat grey blob in the
+    // recording. It needs to clear the dock's own tint, not sit under it.
+    val fill = if (isDark) Color.White.copy(alpha = 0.38f) else Color.White.copy(alpha = 0.58f)
+    return Modifier.drawBackdrop(
+        backdrop = backdrop,
+        shape = { shape },
+        effects = {
+            vibrancy()
+            blur(3f.dp.toPx())
+            // Short, punchy refraction. A small pane with a wide lens looks like a magnifier;
+            // this reads as a thin sheet of glass with bent edges.
+            lens(9f.dp.toPx(), 18f.dp.toPx(), true)
+        },
+        // Ambient rather than Default: a directional highlight on a pill that slides sideways
+        // keeps catching the light from a fixed angle, which betrays that it is a flat sprite.
+        highlight = { Highlight.Ambient },
+        // No drop shadow. A dark halo around a light pill sitting on light glass reads as a dent
+        // pressed into the dock, and it was fighting the fill above for the same few pixels.
+        onDrawSurface = { drawRect(fill) },
     )
-    return remember(fill, rim, shape) {
-        Modifier
-            .clip(shape)
-            .background(fill)
-            .border(0.8.dp, rim, shape)
-    }
 }
 
 /**
@@ -446,34 +464,27 @@ private fun TabRow(
     // At 900 the leading edge crossed a whole tab in about 90ms — faster than the trailing edge
     // could visibly lag behind it, so the capsule appeared to teleport between tabs with the
     // stretch happening inside two or three frames. Slow enough to watch is the entire point.
-    // Leading edge lands in ~120ms, trailing edge takes ~300ms to catch up. That gap IS the
-    // stretch. At 480/165 the trailing edge was so slow the capsule read as lagging behind the
-    // finger rather than being pulled by it; the leading edge has to feel welded to the thumb.
-    val leadingSpec = remember { spring<Float>(dampingRatio = 1f, stiffness = 1400f) }
-    val trailingSpec = remember { spring<Float>(dampingRatio = 0.9f, stiffness = 380f) }
+    val leadingSpec = remember { spring<Float>(dampingRatio = 1f, stiffness = 480f) }
+    val trailingSpec = remember { spring<Float>(dampingRatio = 0.85f, stiffness = 165f) }
     val settleSpec = remember {
         spring<Float>(dampingRatio = AquamorphicDampingRatio, stiffness = AquamorphicStiffness)
     }
 
-    // How far the capsule is inset from its tab slot, on all four sides.
-    val capsuleSidePadding = with(LocalDensity.current) { 12.dp.toPx() }
+    // Extra width the capsule carries beyond the tab's own measured content.
+    val capsuleSidePadding = with(LocalDensity.current) { 10.dp.toPx() }
 
     LaunchedEffect(pressed, hoverRoute) {
         val hover = hoverRoute?.let { bounds[it] } ?: return@LaunchedEffect
-        // Inset vertically as well as horizontally. A capsule the exact height of the tab row
-        // touches the dock's own rim top and bottom and stops looking like a separate object.
-        capsuleHeight.value = (hover.third - capsuleSidePadding).coerceAtLeast(0f)
+        capsuleHeight.value = hover.third
 
-        // One width for every tab, and it is the tab's own width because every tab is now an
-        // equal `weight(1f)` third of the row.
+        // One width for every tab, not each tab's own.
         //
-        // The previous model took the WIDEST tab's measured width. Tabs measured to their labels
-        // back then, so that was "Mood & Genres" — a slot nearly three times the width of "Home".
-        // Centred on Home the capsule spilled across half of Mood & Genres, which is the fat pale
-        // blob in the recording covering two tabs at once. Equal-weight tabs make the segmented
-        // model honest: the slot is exactly one tab, inset so the capsule reads as a pane resting
-        // inside the dock rather than a band filling it.
-        val slotWidth = (hover.second - capsuleSidePadding).coerceAtLeast(0f)
+        // The tabs measure to their labels, so "Home" is barely wider than its icon while
+        // "Mood & Genres" is nearly three times that. A capsule tracking those bounds is a small
+        // oval on one tab and a long pill on the next, and changes size as it travels for reasons
+        // that have nothing to do with the gesture. A segmented control has one slot width; this
+        // takes the widest tab and centres that on whichever tab is hovered.
+        val slotWidth = (bounds.values.maxOfOrNull { it.second } ?: hover.second) + capsuleSidePadding
         val center = hover.first + hover.second / 2f
         val targetLeft = center - slotWidth / 2f
         val targetRight = center + slotWidth / 2f
@@ -595,12 +606,10 @@ private fun TabRow(
                 .then(indicatorGlass),
         )
 
-        // SpaceEvenly sized every tab to its own label, which is what let the capsule change
-        // width as it travelled. Equal weights make the row a real segmented control: three
-        // identical slots, so the capsule has exactly one width and one height for its whole life.
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceEvenly,
         ) {
             tabs.forEach { screen ->
                 TabButton(
@@ -610,7 +619,7 @@ private fun TabRow(
                     selected = if (pressed) hoverRoute == screen.route else isSelected(screen),
                     pureBlack = pureBlack,
                     onClick = { onItemClick(screen, isSelected(screen)) },
-                    modifier = Modifier.weight(1f).onGloballyPositioned { coords ->
+                    modifier = Modifier.onGloballyPositioned { coords ->
                         val pos = coords.positionInParent()
                         val next = Triple(
                             pos.x,
@@ -823,16 +832,16 @@ private fun MiniPlayerPill(
  * committed query. It replaces the morphing A/B nav bar entirely on those routes (the host
  * disables the scroll-collapse logic there).
  *
- * The search field never leaves the bottom of the screen. Previously the results page put the
- * field back in the Scaffold's `topBar`, so committing a query threw the thing you were typing
- * into to the opposite end of the display and left your thumb pointing at nothing. Now the
- * field is docked at the bottom in every search state, and only its leading button and its
- * text change: a Home circle and the placeholder while browsing, a back circle and the live
- * query once results are on screen.
+ * The search field never leaves the bottom of the screen. The results page used to put the field
+ * back in the Scaffold's `topBar`, so committing a query threw the thing you were typing into to
+ * the opposite end of the display and left your thumb pointing at nothing. Now only the leading
+ * button and the text change: a Home circle and the placeholder while browsing, a back circle and
+ * the live query once results are on screen.
  *
- * Layout: two separate frosted pieces side by side — a standalone circular button on the left
- * in its own round pill, and the field in its own capsule beside it. The mini-player floats
- * directly ABOVE this row (handled by the host's sheet stack) and never merges into it.
+ * Layout: TWO separate frosted pieces side by side — a standalone circular button on the left in
+ * its own round frosted pill, and the search input field in its own capsule beside it. The
+ * mini-player floats directly ABOVE this row (handled by the host's sheet stack) and never merges
+ * into it.
  */
 @Composable
 fun SearchBottomBar(

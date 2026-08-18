@@ -212,6 +212,30 @@ object OplusLiveLyrics {
     }
 
     /**
+     * Returns a copy of this item whose displayed subtitle is [line], or [fallbackArtist] again
+     * when [line] is null.
+     *
+     * Both `artist` and `subtitle` are written because readers disagree about which one they
+     * take: Media3 maps `artist` to `METADATA_KEY_ARTIST` and `subtitle` to
+     * `METADATA_KEY_DISPLAY_SUBTITLE`, and the platform media control prefers the display key
+     * when it is present but falls back to the artist when it is not.
+     *
+     * `buildUpon` again, for the same reason as [withLyricInfo]: it keeps the local configuration
+     * and with it the `tag` that the whole app reads its own metadata from. The app therefore
+     * still shows the real artist everywhere — only the *session's* subtitle changes, which is
+     * exactly the field the lock screen renders.
+     */
+    fun MediaItem.withDisplayLine(line: String?, fallbackArtist: String?): MediaItem =
+        buildUpon()
+            .setMediaMetadata(
+                mediaMetadata.buildUpon()
+                    .setArtist(line ?: fallbackArtist)
+                    .setSubtitle(line ?: fallbackArtist)
+                    .build()
+            )
+            .build()
+
+    /**
      * The value written to `requestMetadata.mediaUri` to make a lyrics-only change visible to
      * Media3's session layer. See [MusicService.publishLiveLyrics] for why this is needed;
      * [revision] must differ from the previous publication for the same track.

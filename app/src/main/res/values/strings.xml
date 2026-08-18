@@ -945,6 +945,8 @@ Exhale will only extract your token, and everything else is stored locally.</str
     <string name="egg_breath_count">%1$s breaths</string>
     <string name="lock_screen_lyrics">Lock screen lyrics</string>
     <string name="lock_screen_lyrics_desc">Publish timed lyrics to Live Space on OxygenOS and ColorOS. Ignored on other systems.</string>
+    <string name="lyrics_on_media_card">Lyrics on the media card</string>
+    <string name="lyrics_on_media_card_desc">Show the line playing now under the song title on the lock screen and in the notification. Works on every phone, unlike Live Space. While this is on, the lyric replaces the artist name wherever playback is shown \u2014 including Bluetooth and Android Auto.</string>
     <string name="logout">Sign out</string>
     <!-- Account sheet. Distinct from logout_confirm_* above, which is Discord's. -->
     <string name="account_signout_title">Sign out?</string>
