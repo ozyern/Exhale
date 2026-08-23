@@ -460,14 +460,89 @@ svg {
   text-wrap: balance;
 }
 
-.device-hero {
+/* The phone is 660px in layout and scaled in the draw phase, so the wrapper
+   has to reserve the SCALED height or narrow screens get a column of dead
+   space under it. */
+.hero-fan {
+  position: relative;
   margin-top: clamp(52px, 8vw, 96px);
+  height: calc(660px * var(--phone-scale));
   display: flex;
   justify-content: center;
-  /* The phone is 660px in layout and scaled in the draw phase, so the wrapper
-     has to reserve the SCALED height or narrow screens get a column of dead
-     space under it. */
-  height: calc(660px * var(--phone-scale));
+}
+
+.device-hero {
+  position: relative;
+  z-index: 3;
+  display: flex;
+  justify-content: center;
+}
+
+.fan {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+
+/* Every offset is a multiple of a CARD's own size — a percentage in
+   `translate` resolves against the element, not its container — so the whole
+   arrangement scales with the phone instead of drifting apart on a wide screen
+   and piling up on a narrow one. */
+.fan-card {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  margin: 0;
+  width: calc(238px * var(--phone-scale));
+  aspect-ratio: 3 / 5;
+  border-radius: calc(24px * var(--phone-scale));
+  overflow: hidden;
+  background: #0a0a0c;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.08),
+    0 50px 90px -42px rgba(0, 0, 0, 1);
+  opacity: 0;
+  /* They start stacked behind the phone and fan outwards, which is the only
+     entrance that explains the arrangement: six cards sliding in from the
+     edges would read as six unrelated things arriving. */
+  transform: translate(-50%, -50%) scale(0.62);
+  transition:
+    opacity 0.9s var(--ease),
+    transform 1.15s var(--settle);
+  transition-delay: var(--d, 0ms);
+}
+
+.hero-fan.in .fan-card {
+  opacity: var(--o);
+  transform: translate(calc(-50% + var(--x)), calc(-50% + var(--y)))
+    rotate(var(--r)) scale(var(--s));
+}
+
+.fan-card img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: var(--crop, top center);
+}
+
+/* The ones furthest out sit deepest, so they read as behind rather than
+   merely smaller. */
+.fan-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.fan-card:nth-child(2)::after,
+.fan-card:nth-child(5)::after {
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.fan-card:nth-child(3)::after,
+.fan-card:nth-child(4)::after {
+  background: rgba(0, 0, 0, 0.08);
 }
 
 /* ================================================================ stage */
@@ -1196,18 +1271,49 @@ svg {
    and deliberately so. A gallery card is one statement you look at; these are
    five facts you compare, and comparing them means the sentences have to line
    up in a row of their own. */
+.build .lede,
+.build .subnote {
+  max-width: 54ch;
+  margin-inline: auto;
+  text-wrap: balance;
+}
+
+.build .lede {
+  margin-top: 22px;
+}
+
+/* The reference's small grey line under the lede: the caveat, at a size that
+   says it is a caveat. */
+.subnote {
+  margin-top: 14px;
+  font-size: clamp(14px, 1.2vw, 16px);
+  line-height: 1.45;
+  color: var(--grey-dim);
+}
+
+/* Four cards across the text column and the fifth breaking the right margin —
+   the row has to leave the shell to do that, so it is padded to the shell's
+   gutter rather than sitting inside it. */
 .cardrow {
-  margin-top: clamp(30px, 3.6vw, 46px);
-  display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: minmax(0, 1fr);
+  margin-top: clamp(34px, 4.4vw, 60px);
+  display: flex;
   gap: clamp(14px, 1.6vw, 20px);
   align-items: start;
+  padding-inline: max(22px, (100% - 1120px) / 2);
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scroll-padding-inline-start: max(22px, (100% - 1120px) / 2);
+  scrollbar-width: none;
+  text-align: left;
+}
+
+.cardrow::-webkit-scrollbar {
+  display: none;
 }
 
 .scard {
   margin: 0;
-  min-width: 0;
+  flex: 0 0 clamp(216px, 23vw, 266px);
   scroll-snap-align: start;
 }
 
@@ -1223,8 +1329,8 @@ svg {
 }
 
 .scard figcaption {
-  margin-top: 14px;
-  font-size: 13.5px;
+  margin-top: 15px;
+  font-size: 14px;
   line-height: 1.45;
   color: var(--grey);
 }
@@ -2235,17 +2341,18 @@ svg {
     margin-bottom: 8px;
   }
 
-  /* Five cards side by side at phone width is five columns of nothing. The
-     row becomes a rail. */
-  .cardrow {
-    grid-auto-columns: minmax(200px, 74vw);
-    overflow-x: auto;
-    scroll-snap-type: x mandatory;
-    scrollbar-width: none;
-    padding-bottom: 4px;
+  /* Four across is four columns of nothing at phone width. */
+  .scard {
+    flex: 0 0 min(74vw, 260px);
   }
 
-  .cardrow::-webkit-scrollbar {
+  /* The outer pair of the fan are off the screen entirely by this width, and
+     the next pair are mostly off it — which leaves a crowded edge rather than
+     an arrangement. Two cards, closer in. */
+  .fan-card:nth-child(1),
+  .fan-card:nth-child(2),
+  .fan-card:nth-child(5),
+  .fan-card:nth-child(6) {
     display: none;
   }
 

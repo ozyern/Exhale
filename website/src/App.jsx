@@ -95,13 +95,34 @@ function Bars({ active, onSelect }) {
 /* ----------------------------------------------------------- hero device */
 
 /**
- * The device under the headline, cycling on its own.
+ * The screens either side of the phone.
  *
- * The reference pins its statement and rotates the hardware underneath it —
- * iPhone, then Watch, then iPad, each scaling in while the words stay put.
- * Exhale is one app on one device, so what rotates here is the app's screens
- * instead: Home, the player, the lyrics. Same idea — the copy makes one claim
- * and the thing below it shows you three proofs of it without being asked.
+ * `x` and `y` are multiples of a CARD's own size, not the container's, so the
+ * arrangement holds its proportions at every width — the phone shrinks, the
+ * cards shrink with it, and the fan keeps its shape instead of collapsing into
+ * the middle on a laptop and flying apart on a desktop.
+ *
+ * The outer pair are deliberately the two screens that are least like a player
+ * (an artist page, the About screen), because a fan of five near-identical
+ * now-playing screens reads as one screenshot printed five times.
+ */
+const FAN = [
+  { shot: SHOT.about, x: '-186%', y: '10%', r: '-9deg', s: 0.58, o: 0.5, crop: 'top center', d: 620 },
+  { shot: SHOT.artist, x: '-130%', y: '3%', r: '-5.5deg', s: 0.76, o: 0.76, crop: '50% 18%', d: 540 },
+  { shot: SHOT.lyrics, x: '-72%', y: '-2%', r: '-2.5deg', s: 0.95, o: 0.96, crop: '50% 30%', d: 460 },
+  { shot: SHOT.player, x: '72%', y: '-2%', r: '2.5deg', s: 0.95, o: 0.96, crop: '50% 72%', d: 460 },
+  { shot: SHOT.home, x: '130%', y: '3%', r: '5.5deg', s: 0.76, o: 0.76, crop: '50% 78%', d: 540 },
+  { shot: SHOT.about, x: '186%', y: '10%', r: '9deg', s: 0.58, o: 0.5, crop: '50% 44%', d: 620 },
+]
+
+/**
+ * The device under the headline, cycling on its own, flanked by the rest.
+ *
+ * The reference pins its statement and puts one device in the middle with a
+ * spread of the things it can do fanned out behind it — so the claim above is
+ * made once and answered six ways at a glance, before you have scrolled at
+ * all. Exhale is one app on one device, so what fans out here is its own
+ * screens: the phone cycles them, and the cards hold them still.
  *
  * It answers the hero's pause button, because a viewer who stopped the light
  * at the top of the page meant "stop moving", not "stop that one element".
@@ -121,8 +142,33 @@ function HeroDevice({ running }) {
   }, [awake])
 
   return (
-    <div className="device-hero reveal" ref={ref} style={{ '--d': '360ms' }}>
-      <Phone shots={SHOTS} index={index} />
+    <div className="hero-fan reveal" ref={ref} style={{ '--d': '360ms' }}>
+      {/* Decorative: the phone in the middle carries all five of these in
+          turn, with the alt text, so announcing them again would read the
+          same app to a screen reader six times. */}
+      <div className="fan" aria-hidden="true">
+        {FAN.map((card, i) => (
+          <figure
+            className="fan-card"
+            key={`${card.shot}-${i}`}
+            style={{
+              '--x': card.x,
+              '--y': card.y,
+              '--r': card.r,
+              '--s': card.s,
+              '--o': card.o,
+              '--crop': card.crop,
+              '--d': `${card.d}ms`,
+            }}
+          >
+            <img src={SHOTS[card.shot].src} alt="" loading="lazy" decoding="async" />
+          </figure>
+        ))}
+      </div>
+
+      <div className="device-hero">
+        <Phone shots={SHOTS} index={index} />
+      </div>
     </div>
   )
 }
@@ -340,19 +386,27 @@ export default function App() {
           <Gallery items={FEATURES} />
         </section>
 
-        <section className="block" id="build">
-          <div className="shell">
+        {/* Centred kicker, a two-line headline, a grey lede and a smaller grey
+            line under it — then the cards, running off the right edge of the
+            window rather than stopping at the text column. */}
+        <section className="block build" id="build">
+          <div className="shell center">
             <p className="kicker reveal">The build</p>
-            <h2 className="headline-sm reveal" style={{ '--d': '80ms' }}>
-              Open source, and specific about it.
+            <h2 className="headline reveal" style={{ '--d': '80ms' }}>
+              Yours to read.
+              <br />
+              Yours to compile.
             </h2>
             <p className="lede reveal" style={{ '--d': '160ms' }}>
-              None of this is a marketing number. Every figure below comes out
-              of the same <code>build.gradle.kts</code> the release APK is
-              compiled from.
+              Every figure below comes out of the same{' '}
+              <code>build.gradle.kts</code> the release APK is built from.
+              Nothing here is rounded, and nothing is a plan.
             </p>
-            <Specs items={SPECS} />
+            <p className="subnote reveal" style={{ '--d': '220ms' }}>
+              Split per architecture. No store, no account, nothing phoning home.
+            </p>
           </div>
+          <Specs items={SPECS} />
         </section>
 
         <section className="block-tight" id="download">
