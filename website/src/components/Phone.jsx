@@ -1,3 +1,6 @@
+import { useEffect, useRef } from 'react'
+import { prefersReducedMotion } from '../hooks.js'
+
 /**
  * The device — a frame around real screenshots.
  *
@@ -13,7 +16,52 @@
  * Every screen is mounted and cross-fades on `data-on`, so the frame never
  * resizes between beats and the device never jumps while it is pinned.
  */
-export default function Phone({ shots, index }) {
+
+/**
+ * A screen recording, layered over the stills.
+ *
+ * Some things a still cannot show. Lyrics land word by word, and the whole
+ * claim is in the timing — a frozen frame of it is just text with one word
+ * lit, which proves nothing about when it lit up.
+ *
+ * It only plays while its beat owns the device and the page is not paused,
+ * and it rewinds when it loses the beat, so scrolling back to it starts the
+ * line again rather than joining halfway.
+ */
+function PhoneVideo({ src, poster, on, running }) {
+  const ref = useRef(null)
+
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    if (on && running && !prefersReducedMotion()) {
+      // Autoplay can still be refused (a data saver, a strict setting); the
+      // poster is a real frame, so a refusal degrades to a screenshot.
+      const started = el.play()
+      if (started?.catch) started.catch(() => {})
+    } else {
+      el.pause()
+      if (!on) el.currentTime = 0
+    }
+  }, [on, running])
+
+  return (
+    <video
+      ref={ref}
+      className="phone-shot"
+      data-on={on}
+      src={src}
+      poster={poster}
+      muted
+      loop
+      playsInline
+      preload="metadata"
+      aria-hidden="true"
+    />
+  )
+}
+
+export default function Phone({ shots, index, video }) {
   return (
     <div className="phone">
       <div className="phone-screen">
@@ -21,7 +69,7 @@ export default function Phone({ shots, index }) {
           <img
             key={shot.src}
             className="phone-shot"
-            data-on={i === index}
+            data-on={i === index && !video?.on}
             src={shot.src}
             alt={i === index ? shot.alt : ''}
             aria-hidden={i !== index}
@@ -31,6 +79,8 @@ export default function Phone({ shots, index }) {
             decoding="async"
           />
         ))}
+
+        {video ? <PhoneVideo {...video} /> : null}
       </div>
     </div>
   )

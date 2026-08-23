@@ -40,7 +40,12 @@ jobs:
       - run: npm ci
       - run: npm run build
 
+      # `enablement` turns Pages on AND sets its source to this workflow. Without
+      # it a repository whose Pages source is still "deploy from a branch" keeps
+      # serving Jekyll's rendering of README.md no matter how often this runs.
       - uses: actions/configure-pages@v5
+        with:
+          enablement: true
 
       - uses: actions/upload-pages-artifact@v3
         with:

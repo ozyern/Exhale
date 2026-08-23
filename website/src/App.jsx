@@ -9,6 +9,7 @@ import Specs from './components/Specs.jsx'
 import {
   ABOUT_FACTS,
   FEATURES,
+  LYRICS_VIDEO,
   MAINTAINER,
   RELEASES,
   REPO,
@@ -183,7 +184,7 @@ function HeroDevice({ running }) {
  * shows. Scroll only picks a state — the state changes are springs, which is
  * why flicking past three beats at once still resolves cleanly.
  */
-function Stage() {
+function Stage({ running }) {
   const [beat, setBeat] = useState(0)
   const [dock, setDock] = useState(0)
   const beatsRef = useRef(null)
@@ -212,7 +213,14 @@ function Stage() {
   return (
     <div className="stage shell">
       <div className="stage-device reveal">
-        <Phone shots={SHOTS} index={shown} />
+        {/* The lyrics beat gets the recording rather than the still: the whole
+            claim is in the timing, and a frozen frame of it is just text with
+            one word lit. */}
+        <Phone
+          shots={SHOTS}
+          index={shown}
+          video={{ ...LYRICS_VIDEO, on: beat === 1, running }}
+        />
       </div>
 
       <div className="stage-beats" ref={beatsRef}>
@@ -256,6 +264,9 @@ function Stage() {
             The active line lifts and sharpens a beat before it lands, and the
             lines around it fall away by distance. Cached for offline, and
             adjustable per track when a file runs early.
+          </p>
+          <p className="footnote credit">
+            Above: a screen recording of the shipping build, at normal speed.
           </p>
         </section>
 
@@ -369,7 +380,7 @@ export default function App() {
         </section>
 
         <div className="block-tight">
-          <Stage />
+          <Stage running={ambient} />
         </div>
 
         {/* The eight features, as a gallery of large cards that runs itself.

@@ -81,6 +81,18 @@ export const SHOTS = [
 
 export const SHOT = { home: 0, player: 1, lyrics: 2, artist: 3, about: 4 }
 
+/**
+ * The lyrics recording.
+ *
+ * A screen capture of the shipping build, re-encoded for the web: no audio
+ * track (it autoplays, so it has to be silent anyway), 30fps, and small enough
+ * that it costs less than the screenshot beside it.
+ */
+export const LYRICS_VIDEO = {
+  src: '/media/lyrics.mp4',
+  poster: '/media/lyrics-poster.jpg',
+}
+
 /** Placeholder words, written for the demo — nobody's lyrics but ours. */
 export const LYRICS = [
   'and the room goes quiet',

@@ -1749,6 +1749,20 @@ svg {
   transform: none;
 }
 
+/* A <video> is replaced content with its own intrinsic size, so without this
+   it lays out at its own aspect ratio inside the screen instead of filling it
+   the way the stills do. */
+video.phone-shot {
+  display: block;
+  background: #050507;
+}
+
+.credit {
+  margin-top: 10px;
+  font-size: 13px;
+  color: var(--grey-dim);
+}
+
 .phone-view {
   position: relative;
   z-index: 2;
