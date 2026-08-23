@@ -110,3 +110,10 @@ core.*
 /.github/copilot-instructions.md
 # Local reverse-engineering / scratch tooling
 .tools/
+
+# Release signing. The keystore is the app's identity: publish an update signed
+# with a different key and no existing install can accept it. It lives here for
+# local release builds and in repository secrets for CI, and it is never in git.
+/app/keystore/
+*.keystore
+*.jks

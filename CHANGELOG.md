@@ -7,7 +7,7 @@ Release notes for the build you are running are also bundled into the app itself
 **Settings → Updates → Changelog**. Every later version's notes are pulled from this repository's
 [GitHub releases](https://github.com/ozyern/Exhale/releases).
 
-## [1.0.102] — 2026-08-15
+## [1.0.102] — 2026-08-23
 
 First public release.
 
@@ -195,7 +195,23 @@ stack of elevated cards with shadows, shimmer sweeps and fake hover states.
 **Spelling is American throughout.** "Colours follow the album art" is now "Colors", and the site
 and these notes match — one spelling, everywhere the app writes a word.
 
+**Releases are signed, named, and built by tag.** Pushing `v1.0.103` builds all five
+architectures, signs them with the release key and publishes them, with the notes taken from
+this file so the release page, the site and the in-app changelog cannot disagree. The APK the
+updater downloads is `Exhale-universal.apk`.
+
 ### Fixed
+
+**Update notifications could point backwards.**
+
+- The background check asked whether the newest release *differed* from the installed build,
+  not whether it was newer. Anyone running a build ahead of the newest release — every
+  developer, and anyone on a pre-release — was told to "update" to an older version, and any
+  tag outside the 1.x line could trigger the same. Both the worker and the notification gate
+  now use the same strictly-newer, same-major comparison the Updates screen already used.
+
+- Release builds were never signed at all: the signing config existed but nothing referenced
+  it, so `assembleRelease` produced an unsigned APK that no device would install.
 
 **The bottom dock was never actually glass.**
 

@@ -142,12 +142,38 @@ android {
         }
     }
 
+    // The release keystore is the app's identity. An update signed with a different
+    // key is not an update — the installer refuses it — so this block deliberately
+    // does NOT invent a key when the real one is absent. It either signs properly or
+    // it falls back to the debug key and says so, and a debug-signed APK is for
+    // testing on your own device, never for a release page.
+    val releaseStore = file("keystore/release.keystore")
+    val releaseStorePassword: String? = System.getenv("STORE_PASSWORD")
+    val releaseKeyAlias: String? = System.getenv("KEY_ALIAS")
+    val releaseKeyPassword: String? = System.getenv("KEY_PASSWORD")
+    val canSignRelease =
+        releaseStore.exists() &&
+            !releaseStorePassword.isNullOrBlank() &&
+            !releaseKeyAlias.isNullOrBlank() &&
+            !releaseKeyPassword.isNullOrBlank()
+
     signingConfigs {
-        create("release") {
-            storeFile = file("keystore/release.keystore")
-            storePassword = System.getenv("STORE_PASSWORD")
-            keyAlias = System.getenv("KEY_ALIAS")
-            keyPassword = System.getenv("KEY_PASSWORD")
+        if (canSignRelease) {
+            create("release") {
+                storeFile = releaseStore
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+
+                // v3 matters on a FIRST release and cannot be added retroactively in a
+                // way that helps: it is the scheme that carries a proof-of-rotation
+                // record, so it is the only route from this key to a replacement one
+                // if it is ever compromised. Without it the key is the app forever.
+                // v1 is dead weight — it only exists for API < 24 and this app is 33+.
+                enableV1Signing = false
+                enableV2Signing = true
+                enableV3Signing = true
+            }
         }
     }
 
@@ -159,6 +185,19 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            // Without this the release variant was never signed at all: the config
+            // existed but nothing referenced it, so `assembleRelease` produced
+            // `*-unsigned.apk` that no device will install.
+            signingConfig =
+                if (canSignRelease) {
+                    signingConfigs.getByName("release")
+                } else {
+                    logger.warn(
+                        "Exhale: no release keystore (or STORE_PASSWORD/KEY_ALIAS/KEY_PASSWORD " +
+                            "unset) — signing the release build with the DEBUG key. Do not publish this."
+                    )
+                    signingConfigs.getByName("debug")
+                }
         }
         debug {
             // No `.debug` suffix: debug and release share one applicationId, so the package is

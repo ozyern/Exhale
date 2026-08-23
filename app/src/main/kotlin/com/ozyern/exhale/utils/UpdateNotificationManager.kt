@@ -128,7 +128,10 @@ object UpdateNotificationManager {
             val dataStore = context.dataStore
             val lastNotified = dataStore.data.map { it[LastNotifiedVersionKey] ?: "" }.first()
 
-            if (latestVersion != lastNotified && !Updater.isSameVersion(latestVersion, BuildConfig.VERSION_NAME)) {
+            // Same reasoning as the worker: only a strictly newer version in this
+            // major line is an update. This is the last gate before a notification,
+            // so it repeats the check rather than trusting its caller.
+            if (latestVersion != lastNotified && Updater.hasUpdate(latestVersion, BuildConfig.VERSION_NAME)) {
                 showUpdateNotification(context, latestVersion)
                 dataStore.edit { it[LastNotifiedVersionKey] = latestVersion }
             }

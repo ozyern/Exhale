@@ -70,7 +70,7 @@ data class NightlyInfo(
  *
  * @param tagName        Tag del release en GitHub (ej. "v1.4.2")
  * @param versionName    Versión normalizada sin prefijo "v" (ej. "1.4.2")
- * @param downloadUrl    URL directa a `app-universal-release.apk` del release
+ * @param downloadUrl    Direct URL to the release's universal APK
  * @param releasePageUrl URL de la página HTML del release en GitHub
  * @param releaseNotes   Changelog / body del release (puede ser null)
  * @param publishedAt    Fecha de publicación en ISO 8601
@@ -104,7 +104,28 @@ data class DownloadProgress(
         }
 }
 
-private const val APK_ASSET_NAME = "app-universal-release.apk"
+/**
+ * The release asset the updater downloads.
+ *
+ * Deliberately version-free: `releases/latest/download/<name>` only resolves when the
+ * name is identical in every release, so putting the version in it would break the
+ * one URL that always points at the newest build. The release workflow renames
+ * Gradle's `app-universal-release.apk` to this before uploading.
+ */
+private const val APK_ASSET_NAME = "Exhale-universal.apk"
+
+/**
+ * Anything that would also do.
+ *
+ * The exact name above is what we publish, but an updater that can only recognise one
+ * spelling breaks the day someone renames an asset — and the app in the field is the
+ * copy that cannot be fixed. So resolution degrades: exact name, then any universal
+ * APK, then any APK at all.
+ */
+private fun isUniversalApkAsset(name: String): Boolean =
+    name.endsWith(".apk", ignoreCase = true) && name.contains("universal", ignoreCase = true)
+
+private fun isApkAsset(name: String): Boolean = name.endsWith(".apk", ignoreCase = true)
 
 /** 64 KB reads — large enough that the syscall overhead disappears against network latency. */
 private const val DOWNLOAD_BUFFER_BYTES = 64 * 1024
@@ -484,9 +505,16 @@ object Updater {
     }
 
     /**
-     * Consulta los assets del release [tagName] y devuelve la URL de descarga
-     * de `app-universal-release.apk`. Si la llamada falla o el asset no está listado,
-     * usa la URL canónica de GitHub como fallback.
+     * Finds the APK attached to the release tagged [tagName].
+     *
+     * Three passes, in order of confidence: the exact asset name we publish, then any
+     * universal APK, then any APK. The looser passes exist because this code ships
+     * inside the build being replaced — if a future release names its asset something
+     * else, the copy already on someone's phone still has to find it, and that copy
+     * can no longer be edited.
+     *
+     * If the call fails entirely, the canonical GitHub download URL is used, which is
+     * correct whenever the asset does carry the expected name.
      */
     private suspend fun resolveApkDownloadUrl(tagName: String): String {
         val fallback =
@@ -504,13 +532,18 @@ object Updater {
 
             val assets = JSONObject(response).optJSONArray("assets") ?: return@runCatching fallback
 
+            val names = ArrayList<Pair<String, String>>(assets.length())
             for (i in 0 until assets.length()) {
                 val asset = assets.getJSONObject(i)
-                if (asset.optString("name").equals(APK_ASSET_NAME, ignoreCase = true)) {
-                    return@runCatching asset.optString("browser_download_url", fallback)
-                }
+                val name = asset.optString("name")
+                val url = asset.optString("browser_download_url")
+                if (name.isNotBlank() && url.isNotBlank()) names.add(name to url)
             }
-            fallback
+
+            names.firstOrNull { it.first.equals(APK_ASSET_NAME, ignoreCase = true) }?.second
+                ?: names.firstOrNull { isUniversalApkAsset(it.first) }?.second
+                ?: names.firstOrNull { isApkAsset(it.first) }?.second
+                ?: fallback
         }.getOrDefault(fallback)
     }
 

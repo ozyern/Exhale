@@ -1,0 +1,128 @@
+name: Release
+
+# Push a tag and the release builds itself.
+#
+#   git tag v1.0.103 && git push origin v1.0.103
+#
+# The tag is the source of truth for the version: the job refuses to build if the
+# tag and `versionName` in app/build.gradle.kts disagree, because a release whose
+# tag says 1.0.103 and whose APK reports 1.0.102 will never stop offering itself as
+# an update to its own users.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to build and publish (e.g. v1.0.103)'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve the tag
+        id: tag
+        run: |
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Check the tag against versionName
+        run: |
+          GRADLE_VERSION=$(grep -oP 'versionName\s*=\s*"\K[^"]+' app/build.gradle.kts | head -1)
+          echo "tag=${{ steps.tag.outputs.version }}  gradle=$GRADLE_VERSION"
+          if [ "${{ steps.tag.outputs.version }}" != "$GRADLE_VERSION" ]; then
+            echo "::error::Tag v$GRADLE_VERSION expected — the tag and versionName must match."
+            exit 1
+          fi
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      # The keystore lives in secrets, never in the repository. Without it the build
+      # would silently fall back to the debug key (see app/build.gradle.kts), so this
+      # step fails loudly instead — a debug-signed APK on a release page cannot be
+      # replaced later by a properly signed one.
+      - name: Restore the signing keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::error::KEYSTORE_BASE64 is not set. Add the three signing secrets before tagging a release."
+            exit 1
+          fi
+          mkdir -p app/keystore
+          echo "$KEYSTORE_BASE64" | base64 -d > app/keystore/release.keystore
+
+      - name: Build the release APKs
+        env:
+          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon \
+            assembleUniversalRelease \
+            assembleArm64Release \
+            assembleArmeabiRelease \
+            assembleX86Release \
+            assembleX86_64Release
+
+      # Gradle names these after the module. `Exhale-universal.apk` is what the
+      # in-app updater looks for, and it is version-free on purpose: the
+      # `releases/latest/download/<name>` URL only works when the name never changes.
+      - name: Collect and name the APKs
+        run: |
+          mkdir -p out
+          cp app/build/outputs/apk/universal/release/app-universal-release.apk out/Exhale-universal.apk
+          cp app/build/outputs/apk/arm64/release/app-arm64-release.apk       out/Exhale-arm64.apk
+          cp app/build/outputs/apk/armeabi/release/app-armeabi-release.apk   out/Exhale-arm32.apk
+          cp app/build/outputs/apk/x86/release/app-x86-release.apk           out/Exhale-x86.apk
+          cp app/build/outputs/apk/x86_64/release/app-x86_64-release.apk     out/Exhale-x86_64.apk
+          cd out && sha256sum *.apk > SHA256SUMS.txt && cat SHA256SUMS.txt
+
+      # The notes come out of CHANGELOG.md so the release page, the website and the
+      # app's own changelog screen cannot disagree about what shipped.
+      - name: Extract the release notes
+        run: |
+          python3 - <<'PY' > out/NOTES.md
+          import re, io
+          version = "${{ steps.tag.outputs.version }}"
+          text = io.open('CHANGELOG.md', encoding='utf-8').read()
+          start = text.find(f'## [{version}]')
+          if start == -1:
+              print(f'Exhale {version}.')
+          else:
+              body = text[start:]
+              nxt = re.search(r'\n## \[', body[1:])
+              print(body[: nxt.start() + 1] if nxt else body)
+          PY
+          head -20 out/NOTES.md
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ steps.tag.outputs.tag }}" \
+            --repo "${{ github.repository }}" \
+            --title "Exhale ${{ steps.tag.outputs.version }}" \
+            --notes-file out/NOTES.md \
+            out/Exhale-universal.apk \
+            out/Exhale-arm64.apk \
+            out/Exhale-arm32.apk \
+            out/Exhale-x86.apk \
+            out/Exhale-x86_64.apk \
+            out/SHA256SUMS.txt

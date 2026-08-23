@@ -39,7 +39,11 @@ class UpdateCheckWorker(
             if (updateChannel == UpdateChannel.NIGHTLY) return Result.success()
 
             Updater.getLatestVersionName().onSuccess { latestVersion ->
-                if (!Updater.isSameVersion(latestVersion, BuildConfig.VERSION_NAME)) {
+                // `hasUpdate`, not "differs from". A release that merely has a
+                // different version string can be an OLDER one — anyone running a
+                // build newer than the newest release, which is every developer and
+                // anyone on a pre-release, was being told to "update" backwards.
+                if (Updater.hasUpdate(latestVersion, BuildConfig.VERSION_NAME)) {
                     UpdateNotificationManager.notifyIfNewVersion(applicationContext, latestVersion)
                 }
             }
