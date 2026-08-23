@@ -96,7 +96,7 @@ fun PlayerSettings(
     )
     val (networkMetered, onNetworkMeteredChange) = rememberPreference(
         NetworkMeteredKey,
-        defaultValue = true
+        defaultValue = false
     )
     val (persistentQueue, onPersistentQueueChange) = rememberPreference(
         PersistentQueueKey,

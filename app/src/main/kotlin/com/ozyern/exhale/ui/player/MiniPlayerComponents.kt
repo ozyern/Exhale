@@ -66,6 +66,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.geometry.Offset
@@ -79,6 +80,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.media3.common.Player
 import androidx.navigation.NavController
@@ -101,6 +103,7 @@ import com.ozyern.exhale.utils.rememberHaptic
 import com.ozyern.exhale.utils.rememberPreference
 import kotlin.math.absoluteValue
 import kotlin.math.roundToInt
+import androidx.compose.foundation.layout.BoxScope
 
 
 @Composable
@@ -113,6 +116,10 @@ fun SwipeableMiniPlayerBox(
     coroutineScope: CoroutineScope,
     pureBlack: Boolean = false,
     useLegacyBackground: Boolean = false,
+    // The pill draws shorter than its slot; the slot itself keeps [MiniPlayerHeight] because the
+    // sheet's collapsed bound is captured once and cannot change per route. See
+    // [com.ozyern.exhale.constants.CompactMiniPlayerHeight].
+    compact: Boolean = false,
     content: @Composable (Float) -> Unit
 ) {
     val offsetXAnimatable = remember { Animatable(0f) }
@@ -230,7 +237,11 @@ fun SwipeableMiniPlayerBox(
                 } else {
                     baseModifier
                 }
-            }
+            },
+        // Centres the pill in its slot, which only matters when it is shorter than the slot. The
+        // swipe indicators below place themselves with an explicit `align`, so nothing else in
+        // here changes.
+        contentAlignment = Alignment.Center,
     ) {
         content(offsetXAnimatable.value)
 
@@ -262,6 +273,8 @@ fun RowScope.MiniPlayerInfo(
     // Non-null when the current track has an artist worth opening. The artist line becomes the
     // navigation affordance, replacing the separate person button that used to sit in the row.
     onArtistClick: (() -> Unit)? = null,
+    // Drops one type step so two lines still fit the slim pill without the artist clipping.
+    compact: Boolean = false,
 ) {
     Column(
         modifier = Modifier
@@ -276,7 +289,8 @@ fun RowScope.MiniPlayerInfo(
         ) { title ->
             Text(
                 text = title,
-                style = MaterialTheme.typography.titleSmall,
+                style = if (compact) MaterialTheme.typography.bodyMedium
+                else MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
@@ -294,10 +308,16 @@ fun RowScope.MiniPlayerInfo(
         ) { artists ->
             Text(
                 text = artists.joinToString { it.name },
-                style = MaterialTheme.typography.bodySmall,
+                style = if (compact) MaterialTheme.typography.labelSmall
+                else MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
+                // Ellipsis, not marquee. Two independently scrolling lines 1dp apart is two
+                // things moving in the corner of the eye at all times, and the artist is the
+                // line you least need to read to the end — the screenshot that prompted this was
+                // caught mid-loop, showing the tail of one pass, a gap, and the head of the next,
+                // which reads as a layout fault rather than as a long name.
                 modifier = Modifier
                     .then(
                         if (onArtistClick != null) {
@@ -310,7 +330,6 @@ fun RowScope.MiniPlayerInfo(
                             Modifier
                         },
                     )
-                    .basicMarquee()
             )
         }
     }
@@ -320,21 +339,45 @@ fun RowScope.MiniPlayerInfo(
 private fun MiniPlayerArtwork(
     mediaMetadata: MediaMetadata?,
     isLoading: Boolean,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    size: Dp = 48.dp,
 ) {
-    // A rounded square, matching every other piece of artwork in the app. The disc-in-a-ring
-    // this replaced spent 8dp of a 44dp box on a progress indicator, so the actual album art
-    // was 36dp and cropped to a circle — the least legible way to show a square image.
-    val shape = RoundedCornerShape(14.dp)
+    // A disc.
+    //
+    // This was a rounded square, on the argument that cropping a square cover to a circle throws
+    // away its corners. True, and it stops mattering at 48dp: at that size the corners of an
+    // album cover carry almost nothing, and what the shape is really doing is saying which of the
+    // objects at the bottom of the screen is the record. The pill now only appears on Home —
+    // everywhere else the player is the island at the top — so it sits directly above a dock full
+    // of rounded-square glyphs, and being the one round thing in that stack is worth more than
+    // four corners of a thumbnail.
+    val shape = CircleShape
     Box(
         contentAlignment = Alignment.Center,
         modifier = modifier
-            .size(46.dp)
+            .size(size)
+            // A real shadow under the art. The pill is a pane of glass and the row on it was
+            // uniformly flat — every element sitting at exactly the same depth is what made the
+            // whole thing read as a printed strip rather than as objects on a surface. The art
+            // is the one thing in the row that is an image, so it is the one that should have
+            // physical thickness.
+            .shadow(
+                elevation = 5.dp,
+                shape = shape,
+                clip = false,
+                ambientColor = Color.Black,
+                spotColor = Color.Black,
+            )
             .clip(shape)
             .background(MaterialTheme.colorScheme.surfaceVariant)
+            // A light rim, not an `outline` stroke. The pill is a pane of glass and everything
+            // on it is lit from above; a flat grey border drawn at full strength on all four
+            // sides is the one element that read as a Material list thumbnail pasted onto it.
             .border(
                 width = 1.dp,
-                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.18f),
+                brush = Brush.verticalGradient(
+                    listOf(Color.White.copy(alpha = 0.22f), Color.White.copy(alpha = 0.04f)),
+                ),
                 shape = shape,
             )
     ) {
@@ -352,7 +395,7 @@ private fun MiniPlayerArtwork(
             Image(
                 painter = painterResource(R.drawable.exhale),
                 contentDescription = null,
-                modifier = Modifier.size(24.dp)
+                modifier = Modifier.size(size * 0.5f)
             )
         }
 
@@ -378,20 +421,23 @@ private fun MiniPlayerArtwork(
 /**
  * The State-A mini player: the wide pill that floats above the dock.
  *
- * Rebuilt. What was here before crammed five separate controls into a 64dp capsule — a circular
- * thumbnail wearing a circular progress ring, title, artist, a person button, a like button and a
- * stock filled play button — so nothing in it had any weight and the whole row read as a toolbar
- * rather than as the thing that is playing. Three changes carry the redesign:
+ * Three decisions carry it, all of them about hierarchy:
  *
- *  * **Artwork is a rounded square again.** Every other piece of album art in the app is a rounded
- *    rectangle; only this one was a disc, and it was wrapped in a progress ring that fought the
- *    thumbnail for the same 44dp. Progress moved to a hairline that runs along the bottom of the
- *    pill, where it is both more legible and out of the way.
- *  * **The artist line navigates.** The separate person button existed only to open the artist;
- *    tapping the artist's name does that now, which is the affordance people already try, and the
- *    row gets a whole 40dp slot back.
- *  * **Play/pause is the loudest thing in the pill**, which is the one control the pill exists for.
- *    See [MiniPlayerPlayPauseButton].
+ *  * **Artwork is a rounded square**, like every other piece of album art in the app. It used to
+ *    be a disc wearing a circular progress ring, so the actual thumbnail got 36dp of a 44dp box
+ *    and was cropped to a circle - the least legible way to show a square image.
+ *  * **The artist line navigates**, which is the affordance people already try, so the separate
+ *    person button that existed only to do that is gone and the row got a 40dp slot back.
+ *  * **Play/pause is the loudest thing in the pill**, because it is the one control the pill
+ *    exists for. See [MiniPlayerPlayPauseButton].
+ *
+ * Progress is a hairline along the bottom rather than a ring around the artwork: more legible,
+ * out of the way of the thing it describes, and drawn rather than laid out, so ticking it forward
+ * costs one draw pass and no recomposition of the row above it.
+ *
+ * @param compact the slim layout for surfaces whose bottom row is the search bar. Everything
+ *   scales down one step and the like button drops out - at that width it was the least-used
+ *   control competing with the most-used one for the same edge of the pill.
  */
 @Composable
 fun NewMiniPlayerContent(
@@ -400,7 +446,8 @@ fun NewMiniPlayerContent(
     duration: Long,
     playerConnection: PlayerConnection,
     navController: NavController,
-    state: BottomSheetState
+    state: BottomSheetState,
+    compact: Boolean = false,
 ) {
     val isPlaying by playerConnection.isPlaying.collectAsState()
     val playbackState by playerConnection.playbackState.collectAsState()
@@ -414,16 +461,45 @@ fun NewMiniPlayerContent(
     val progressColor = MaterialTheme.colorScheme.primary
     val progressTrackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f)
 
+    val artworkSize = if (compact) 38.dp else 48.dp
+    // 34dp, not 40. In a 56dp pill a 40dp button is over two thirds of the height, filled with a
+    // solid accent — it stopped being the loudest thing in the row and became the only thing in
+    // it. The wide pill keeps 48dp because it has 64dp to spend and a like button to out-rank.
+    val buttonSize = if (compact) 34.dp else 48.dp
+
     Box(modifier = Modifier.fillMaxSize()) {
+        // Progress first, so it is *under* the row rather than painted across it.
+        //
+        // It used to be the last child, inset 22dp from each end and lifted 7dp off the bottom.
+        // On a 64dp pill that puts the line at y=54..57 — squarely inside the 48dp artwork's own
+        // band, which starts at y=8 — and being drawn last put it on top. The visible result was
+        // a short accent-coloured stub apparently glued to the bottom-left corner of the album
+        // art, which is what a progress bar looks like when it is a few percent through a song
+        // and has been laid over the one opaque object in the row. Nothing about it read as
+        // progress.
+        //
+        // Now it sits in the 8dp margin *below* the artwork and behind everything. The end inset
+        // is what the capsule's own curve allows at that height: 3dp up from the bottom of a 32dp
+        // radius leaves ±13.5dp of chord about each end centre, so anything less than ~19dp of
+        // inset gets clipped to a stub by the pill itself.
+        MiniPlayerProgress(
+            position = position,
+            duration = duration,
+            compact = compact,
+            trackColor = progressTrackColor,
+            progressColor = progressColor,
+        )
+
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
                 .fillMaxSize()
-                .padding(start = 9.dp, end = 9.dp),
+                .padding(horizontal = 8.dp),
         ) {
             MiniPlayerArtwork(
                 mediaMetadata = mediaMetadata,
                 isLoading = isLoading,
+                size = artworkSize,
             )
 
             Spacer(modifier = Modifier.width(12.dp))
@@ -431,6 +507,7 @@ fun NewMiniPlayerContent(
             mediaMetadata?.let {
                 MiniPlayerInfo(
                     mediaMetadata = it,
+                    compact = compact,
                     onArtistClick = {
                         val artistId = it.artists.firstOrNull()?.id
                         if (!artistId.isNullOrBlank()) {
@@ -459,92 +536,115 @@ fun NewMiniPlayerContent(
                 }
             }
 
-            Spacer(modifier = Modifier.width(4.dp))
+            // Like. A quiet glyph beside a loud filled button, so the hierarchy in the pill is
+            // unambiguous instead of two same-sized circles competing. Dropped entirely in the
+            // compact layout, where there is not enough width for a second control to be quiet.
+            if (!compact) {
 
-            // Like. A quiet 38dp glyph beside a loud 46dp play button, so the hierarchy in the
-            // pill is unambiguous instead of two same-sized circles competing.
-            val heartScale by animateFloatAsState(
-                targetValue = if (isLiked) 1.2f else 1f,
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                    stiffness = Spring.StiffnessMedium,
-                ),
-                label = "heartScale",
-            )
-            Box(
-                contentAlignment = Alignment.Center,
-                modifier = Modifier
-                    .size(38.dp)
-                    .clip(CircleShape)
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = { playerConnection.toggleLike() },
+                val heartScale by animateFloatAsState(
+                    targetValue = if (isLiked) 1.2f else 1f,
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                        stiffness = Spring.StiffnessMedium,
                     ),
-            ) {
-                Icon(
-                    painter = painterResource(
-                        if (isLiked) R.drawable.favorite else R.drawable.favorite_border
-                    ),
-                    contentDescription = null,
-                    tint = if (isLiked) MaterialTheme.colorScheme.error
-                    else MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier
-                        .size(20.dp)
-                        .graphicsLayer {
-                            scaleX = heartScale
-                            scaleY = heartScale
-                        },
+                    label = "heartScale",
                 )
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .size(34.dp)
+                        .clip(CircleShape)
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = { playerConnection.toggleLike() },
+                        ),
+                ) {
+                    Icon(
+                        painter = painterResource(
+                            if (isLiked) R.drawable.favorite else R.drawable.favorite_border
+                        ),
+                        contentDescription = null,
+                        tint = if (isLiked) MaterialTheme.colorScheme.error
+                        else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+                        modifier = Modifier
+                            .size(20.dp)
+                            .graphicsLayer {
+                                scaleX = heartScale
+                                scaleY = heartScale
+                            },
+                    )
+                }
             }
 
-            Spacer(modifier = Modifier.width(2.dp))
+            Spacer(modifier = Modifier.width(4.dp))
 
             MiniPlayerPlayPauseButton(
                 isPlaying = isPlaying,
                 isLoading = isLoading,
-                playerConnection = playerConnection
+                playerConnection = playerConnection,
+                size = buttonSize,
             )
         }
 
-        // Progress hairline hugging the bottom of the capsule. Inset from the rounded ends so it
-        // never pokes out of the pill, and drawn — not laid out — so ticking it forward every
-        // second costs one draw and no recomposition of the row above it.
-        Canvas(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                // Inset to clear the capsule's own 32dp corner radius, so the line stops where
-                // the pill starts curving rather than running out to a point.
-                .padding(start = 30.dp, end = 30.dp, bottom = 7.dp)
-                .height(2.5.dp),
-        ) {
-            val fraction =
-                if (duration > 0) (position.toFloat() / duration).coerceIn(0f, 1f) else 0f
-            val stroke = size.height
-            val y = size.height / 2f
+    }
+}
+
+/**
+ * The hairline along the bottom of the pill.
+ *
+ * Drawn, not laid out: ticking it forward every second costs one draw pass and never recomposes
+ * or re-measures the row above it. See the call site for why it is inset the way it is.
+ */
+@Composable
+private fun BoxScope.MiniPlayerProgress(
+    position: Long,
+    duration: Long,
+    compact: Boolean,
+    trackColor: Color,
+    progressColor: Color,
+) {
+    Canvas(
+        modifier = Modifier
+            .align(Alignment.BottomCenter)
+            .fillMaxWidth()
+            // Inset far enough in from both ends that the capsule's own curve never clips the
+            // line into a stub, and lifted far enough off the bottom that the rounded cap does
+            // not ride the rim. At 2dp up on a 28dp radius the chord is only ~25dp wide of the
+            // 39dp the old inset assumed, so both ends were being shaved by the pill itself and
+            // the fill looked like a stray mark rather than a progress bar.
+            .padding(
+                start = if (compact) 22.dp else 26.dp,
+                end = if (compact) 22.dp else 26.dp,
+                bottom = if (compact) 4.dp else 5.dp,
+            )
+            .height(3.dp),
+    ) {
+        val fraction =
+            if (duration > 0) (position.toFloat() / duration).coerceIn(0f, 1f) else 0f
+        val stroke = size.height
+        val y = size.height / 2f
+        drawLine(
+            color = trackColor,
+            start = Offset(0f, y),
+            end = Offset(size.width, y),
+            strokeWidth = stroke,
+            cap = StrokeCap.Round,
+        )
+        if (fraction > 0f) {
+            // Fades in from the left rather than starting at full strength, so a track that has
+            // barely begun does not put a hard accent dot under the artwork.
             drawLine(
-                color = progressTrackColor,
+                brush = Brush.horizontalGradient(
+                    colors = listOf(progressColor.copy(alpha = 0.45f), progressColor),
+                    startX = 0f,
+                    endX = (size.width * fraction).coerceAtLeast(1f),
+                ),
                 start = Offset(0f, y),
-                end = Offset(size.width, y),
+                end = Offset(size.width * fraction, y),
                 strokeWidth = stroke,
                 cap = StrokeCap.Round,
             )
-            if (fraction > 0f) {
-                // Fades in from the left rather than starting at full strength, so a track that
-                // has barely begun does not put a hard accent dot under the artwork.
-                drawLine(
-                    brush = Brush.horizontalGradient(
-                        colors = listOf(progressColor.copy(alpha = 0.45f), progressColor),
-                        startX = 0f,
-                        endX = (size.width * fraction).coerceAtLeast(1f),
-                    ),
-                    start = Offset(0f, y),
-                    end = Offset(size.width * fraction, y),
-                    strokeWidth = stroke,
-                    cap = StrokeCap.Round,
-                )
-            }
         }
     }
 }
@@ -572,14 +672,17 @@ private fun MiniPlayerPlayPauseButton(
     isPlaying: Boolean,
     isLoading: Boolean,
     playerConnection: PlayerConnection,
+    size: Dp = 48.dp,
 ) {
     val (enableHaptic) = rememberPreference(EnableHapticFeedbackKey, true)
     val haptic = rememberHaptic(enabled = enableHaptic)
 
-    // 23dp of a 46dp box is exactly a circle; 15dp is the squircle. The spring is deliberately
-    // under-damped — the overshoot is what makes the press feel answered.
+    // Half the box is exactly a circle; ~a third of it is the squircle. Expressed as fractions of
+    // [size] so the compact button morphs through the same *shape*, not the same absolute radius.
+    // The spring is deliberately under-damped - the overshoot is what makes the press feel
+    // answered.
     val corner by animateDpAsState(
-        targetValue = if (isPlaying) 15.dp else 23.dp,
+        targetValue = if (isPlaying) size * 0.32f else size / 2f,
         animationSpec = spring(
             dampingRatio = 0.55f,
             stiffness = Spring.StiffnessMediumLow,
@@ -594,20 +697,24 @@ private fun MiniPlayerPlayPauseButton(
             listOf(accent, accent.copy(alpha = 0.80f)),
         )
     }
-    val rim = remember {
-        Brush.verticalGradient(
-            listOf(Color.White.copy(alpha = 0.32f), Color.White.copy(alpha = 0.06f)),
-        )
-    }
-
+    // A soft accent glow under the button instead of a white rim around it. On glass a hard
+    // 1dp highlight reads as a plastic chip laid on the pane; a coloured shadow reads as the
+    // button sitting *in* it, and it is the only element in the pill that casts one, which is
+    // exactly the hierarchy this control should have.
     Box(
         contentAlignment = Alignment.Center,
         modifier = Modifier
-            .size(46.dp)
+            .size(size)
             .pressScaleContainer()
+            .shadow(
+                elevation = 6.dp,
+                shape = shape,
+                clip = false,
+                ambientColor = accent,
+                spotColor = accent,
+            )
             .clip(shape)
             .background(fill)
-            .border(width = 1.dp, brush = rim, shape = shape)
             .clickable(
                 enabled = !isLoading,
                 interactionSource = remember { MutableInteractionSource() },
@@ -645,7 +752,7 @@ private fun MiniPlayerPlayPauseButton(
                     painter = painterResource(if (playing) R.drawable.pause else R.drawable.play),
                     contentDescription = stringResource(if (playing) R.string.pause else R.string.play),
                     tint = MaterialTheme.colorScheme.onPrimary,
-                    modifier = Modifier.size(22.dp),
+                    modifier = Modifier.size(size * 0.46f),
                 )
             }
         }

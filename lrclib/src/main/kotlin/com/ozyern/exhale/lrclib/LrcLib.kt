@@ -23,6 +23,8 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.serialization.json.Json
 import kotlin.math.abs
+import com.ozyern.exhale.lrclib.models.identityScore
+import com.ozyern.exhale.lrclib.models.normalizeForMatch
 
 object LrcLib {
     private val client by lazy {
@@ -70,14 +72,11 @@ object LrcLib {
     ) = runCatching {
         val tracks = queryLyrics(artist, title, album)
 
-        val res = when {
-            duration == -1 -> {
-                tracks.bestMatchingFor(duration, title, artist)?.syncedLyrics?.let(LrcLib::Lyrics)
-            }
-            else -> {
-                tracks.bestMatchingFor(duration)?.syncedLyrics?.let(LrcLib::Lyrics)
-            }
-        }
+        // Title and artist on BOTH branches. The `else` used to drop them, which meant the
+        // path every real playback takes matched on length alone - see `bestMatchingFor`.
+        val res = tracks.bestMatchingFor(duration, title, artist)
+            ?.syncedLyrics
+            ?.let(LrcLib::Lyrics)
 
         if (res != null) {
             return@runCatching res.text
@@ -112,7 +111,14 @@ object LrcLib {
                 }
             }
             else -> {
-                tracks.sortedBy { abs(it.duration.toInt() - duration) }
+                // Same fix as the single-result path: length alone was deciding which
+                // alternatives the "pick a different version" list offered, so that list could
+                // be four different songs that happen to run three minutes.
+                val wantedTitle = normalizeForMatch(title)
+                val wantedArtist = normalizeForMatch(artist)
+                tracks
+                    .filter { identityScore(it, wantedTitle, wantedArtist) >= 0.5 }
+                    .sortedBy { abs(it.duration.toInt() - duration) }
             }
         }
 

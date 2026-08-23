@@ -122,6 +122,7 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.hapticfeedback.HapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -194,6 +195,9 @@ import com.ozyern.exhale.constants.MiniPlayerBottomSpacing
 import com.ozyern.exhale.constants.MiniPlayerHeight
 import com.ozyern.exhale.constants.MiniPlayerLastAnchorKey
 import com.ozyern.exhale.constants.MiniPlayerPillCornerRadius
+import com.ozyern.exhale.constants.CompactMiniPlayerHeight
+import com.ozyern.exhale.constants.CompactMiniPlayerPillCornerRadius
+import com.ozyern.exhale.constants.CompactMiniPlayerTopInset
 import com.ozyern.exhale.constants.MiniPlayerPillHorizontalInset
 import com.ozyern.exhale.constants.NavBarPillCornerRadius
 import com.ozyern.exhale.constants.NavBarPillHeight
@@ -748,6 +752,10 @@ class MainActivity : ComponentActivity() {
                     // guessing separately.
                     val windowsInsets = WindowInsets.systemBars.union(WindowInsets.displayCutout)
                     val bottomInset = with(density) { windowsInsets.getBottom(density).toDp() }
+                    // The status bar plus any cutout, i.e. the first row of pixels the top-docked
+                    // island is allowed to occupy.
+                    val topInset = with(density) { windowsInsets.getTop(density).toDp() }
+                    val screenWidthDp = LocalConfiguration.current.screenWidthDp.dp
                     val bottomInsetDp = windowsInsets.asPaddingValues().calculateBottomPadding()
                     // Shared by the floating bars, the mini-player pill and the morph target that
                     // has to land on them — see `safeHorizontalChromeInset` for why it is a single
@@ -878,6 +886,19 @@ class MainActivity : ComponentActivity() {
                     // content padded for it exactly like a tab route does.
                     val isSearchResultsRoute =
                         navBackStackEntry?.destination?.route?.startsWith("search/") == true
+
+                    // Everywhere except Home, the collapsed player is the *slim* pill rather
+                    // than the full-height one.
+                    //
+                    // Home is where you start something: the dock is right underneath, and the
+                    // wide pill's swipe-to-skip and like button earn the strip of screen they
+                    // cost. Everywhere else you are reading, and the player is a status line you
+                    // occasionally reach for.
+                    //
+                    // A null route counts as Home: it is the start destination, and a pill that
+                    // changes height for one frame of the first composition is worse than one
+                    // that is briefly the wrong size.
+                    val useCompactPlayer = currentRoute != null && currentRoute != Screens.Home.route
 
                     val shouldShowNavigationBar =
                         remember(navBackStackEntry, active, isSearchResultsRoute) {
@@ -1040,7 +1061,14 @@ class MainActivity : ComponentActivity() {
                         ) {
                             var bottom = bottomInset
                             if (shouldShowNavigationBar && !useRail) bottom += getBottomNavPadding()
-                            if (!playerBottomSheetState.isDismissed) bottom += MiniPlayerHeight
+                            // Always the full slot, even for the slim pill: the compact layout is
+                            // drawn *inside* an unchanged `MiniPlayerHeight` slot rather than
+                            // shortening it, because the sheet's collapsed bound is captured once
+                            // in `rememberBottomSheetState` and cannot be re-derived per route
+                            // without resetting the sheet.
+                            if (!playerBottomSheetState.isDismissed) {
+                                bottom += MiniPlayerHeight
+                            }
                             windowsInsets
                                 .only((if(useRail) {
                                     WindowInsetsSides.Right
@@ -1476,7 +1504,10 @@ class MainActivity : ComponentActivity() {
                                                         Box(
                                                             modifier = Modifier
                                                                 .size(38.dp)
-                                                                .bounceClick(onClick = { showAccountDialog = true })
+                                                                .bounceClick(
+                                                                    onClick = { showAccountDialog = true },
+                                                                    shape = CircleShape,
+                                                                )
                                                                 .liquidGlassSurface(CircleShape),
                                                             contentAlignment = Alignment.Center,
                                                         ) {
@@ -1848,6 +1879,14 @@ class MainActivity : ComponentActivity() {
                                         // the morph layer is not even composed.
                                         val mergeIntoNavBar =
                                             bottomBarCollapsed && nowPlayingMetadata != null && !useRail
+
+                                        // The slim pill is drawn inside the standard slot with
+                                        // `CompactMiniPlayerTopInset` of air above it, so the
+                                        // morph has to land on the *drawn* rectangle and not on
+                                        // the slot. State B is excluded because there the player
+                                        // is not a standalone pill at all — it is inside the nav
+                                        // bar capsule.
+                                        val useCompactPill = useCompactPlayer && !mergeIntoNavBar
                                         val morphPillTopOffset =
                                             if (mergeIntoNavBar) {
                                                 (playerBottomSheetState.collapsedBound -
@@ -1863,22 +1902,37 @@ class MainActivity : ComponentActivity() {
                                                 navController = navController,
                                                 pureBlack = pureBlack,
                                                 lyricsSyncOffset = lyricsSyncOffset,
-                                                hideMiniPlayer = bottomBarCollapsed && nowPlayingMetadata != null,
-                                                morphPillHeight =
-                                                    if (mergeIntoNavBar) NavBarPillHeight else MiniPlayerHeight,
+                                                hideMiniPlayer = mergeIntoNavBar,
+                                                compactMiniPlayer = useCompactPill,
+                                                morphPillHeight = when {
+                                                    mergeIntoNavBar -> NavBarPillHeight
+                                                    useCompactPill -> CompactMiniPlayerHeight
+                                                    else -> MiniPlayerHeight
+                                                },
                                                 // Both branches carry `safeChromeInset` because
                                                 // both targets are padded by it — the nav bar via
                                                 // `chromeHorizontalPadding`, the mini-player pill
                                                 // via the same helper inside `MiniPlayer`. Drop it
                                                 // from either side and the morph lands off-centre
                                                 // on a cutout device.
-                                                morphPillHorizontalInset = safeChromeInset +
-                                                    if (mergeIntoNavBar) NavBarPillSideSlot
-                                                    else MiniPlayerPillHorizontalInset,
-                                                morphPillCornerRadius =
-                                                    if (mergeIntoNavBar) NavBarPillCornerRadius
-                                                    else MiniPlayerPillCornerRadius,
-                                                morphPillTopOffset = morphPillTopOffset,
+                                                morphPillHorizontalInset = when {
+                                                    mergeIntoNavBar ->
+                                                        safeChromeInset + NavBarPillSideSlot
+                                                    else ->
+                                                        safeChromeInset + MiniPlayerPillHorizontalInset
+                                                },
+                                                morphPillCornerRadius = when {
+                                                    mergeIntoNavBar -> NavBarPillCornerRadius
+                                                    useCompactPill -> CompactMiniPlayerPillCornerRadius
+                                                    else -> MiniPlayerPillCornerRadius
+                                                },
+                                                morphPillTopOffset = when {
+                                                    // The slim pill sits centred in the standard
+                                                    // slot, so the morph window has to stop that
+                                                    // much short of the top of it.
+                                                    useCompactPill -> CompactMiniPlayerTopInset
+                                                    else -> morphPillTopOffset
+                                                },
                                             )
                                         }
 
@@ -1928,10 +1982,24 @@ class MainActivity : ComponentActivity() {
                                                 // pages, so the field stays under the thumb for the
                                                 // whole search flow instead of relocating to the
                                                 // top bar the moment results arrive.
+                                                // Decoded, because the route argument is what
+                                                // `URLEncoder.encode` produced when the search was
+                                                // committed — and that encodes a space as `+`. The
+                                                // field was showing people `Sabrina+carpenter+`
+                                                // and then handing the same string back as the
+                                                // starting text when they tapped it to refine.
+                                                // Navigation percent-decodes `%XX` on the way out
+                                                // but leaves `+` alone, so this is the only place
+                                                // it can be undone.
                                                 val committed = if (isSearchResultsRoute) {
                                                     navBackStackEntry?.arguments
                                                         ?.getString("query")
                                                         ?.takeIf { it.isNotEmpty() }
+                                                        ?.let {
+                                                            runCatching {
+                                                                URLDecoder.decode(it, "UTF-8")
+                                                            }.getOrDefault(it)
+                                                        }
                                                 } else {
                                                     null
                                                 }
@@ -1968,13 +2036,29 @@ class MainActivity : ComponentActivity() {
                                                         }
                                                         onActiveChange(true)
                                                     },
+                                                    // The same band the dock occupies on every
+                                                    // other route, not a shorter row resting at
+                                                    // the bottom of it.
+                                                    //
+                                                    // The sheet's collapsed bound reserves a full
+                                                    // `getBottomNavPadding()` of chrome, and it is
+                                                    // captured once — it cannot be re-derived per
+                                                    // route without resetting the sheet. So a 48dp
+                                                    // row pinned to the bottom of a 64dp reservation
+                                                    // left the surplus as a band of dead space
+                                                    // *above* it, and the mini player floated over
+                                                    // the search field with a visible hole between
+                                                    // the two. Filling the band and centring in it
+                                                    // splits that surplus in half and puts the row
+                                                    // where the eye expects the dock to be.
                                                     modifier = Modifier
                                                         .align(Alignment.BottomCenter)
                                                         .padding(
                                                             start = chromeHorizontalPadding,
                                                             end = chromeHorizontalPadding,
                                                             bottom = bottomInset + floatingBarsBottomPadding,
-                                                        ),
+                                                        )
+                                                        .height(navVisibleHeight),
                                                 )
                                             } else {
                                             LiquidGlassBottomBar(

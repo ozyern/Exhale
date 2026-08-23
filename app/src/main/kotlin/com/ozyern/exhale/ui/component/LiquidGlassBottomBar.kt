@@ -107,6 +107,31 @@ import kotlin.math.abs
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import androidx.compose.animation.core.EaseOut
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.util.fastCoerceIn
+import androidx.compose.ui.util.lerp
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberCombinedBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
+import com.kyant.backdrop.isRuntimeShaderSupported
+import com.kyant.backdrop.shadow.InnerShadow
+import com.ozyern.exhale.ui.component.liquid.DampedDragAnimation
+import kotlin.math.sign
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.ui.graphics.TransformOrigin
 
 /**
  * The app's floating "liquid glass" bottom bar. Presentation-only: it reads live playback
@@ -151,6 +176,18 @@ fun LiquidGlassBottomBar(
         onMiniPlayerClick()
     }
 
+    // The morph's physics, hoisted so the two states cannot drift apart: whatever leaves has to
+    // leave the way the thing replacing it arrives, or the bar looks like it changes its mind
+    // halfway through. `morphFast` is only for opacity — a piece that is still fading while it has
+    // already finished travelling looks like it is stuck to the glass.
+    val morphSpring = remember {
+        spring<Float>(dampingRatio = AquamorphicDampingRatio, stiffness = AquamorphicStiffness)
+    }
+    val morphFast = remember { spring<Float>(dampingRatio = 1f, stiffness = 900f) }
+    val morphOffset = remember {
+        spring<IntOffset>(dampingRatio = AquamorphicDampingRatio, stiffness = AquamorphicStiffness)
+    }
+
     Row(
         // Fixed height (all children are 64dp) instead of IntrinsicSize.Min — this drops the
         // intrinsic-measurement pass the morph used to trigger on every animation frame.
@@ -161,30 +198,28 @@ fun LiquidGlassBottomBar(
         AnimatedContent(
             targetState = collapsed,
             transitionSpec = {
-                // Smooth spring-based morph: fade + slide + scale for fluid transition — all of
-                // which run on the GPU via graphicsLayer (alpha/scale) and placement (slide),
-                // NOT by remeasuring layout.
-                val spring = spring<Float>(
-                    dampingRatio = AquamorphicDampingRatio,
-                    stiffness = AquamorphicStiffness
-                )
-                val intSpring = spring<IntOffset>(
-                    dampingRatio = AquamorphicDampingRatio,
-                    stiffness = AquamorphicStiffness
-                )
-
-                // PERF: `using SizeTransform { snap() }` makes the container jump to the target
-                // size instantly instead of animating its width every frame. Animating the size
-                // forced a full layout pass (and re-measured the expensive frosted-glass
-                // backdrops) ~60×/s during the A/B morph — the heavy frame drops. With clip=false
-                // the cross-fading/scaling children mask the instant size change, so the morph
-                // still reads as fluid but is now purely GPU-composited.
-                (fadeIn(spring) +
-                    slideInHorizontally(intSpring) { if (targetState) it / 4 else -it / 4 } +
-                    scaleIn(spring, initialScale = 0.92f)) togetherWith
-                    (fadeOut(spring) +
-                        slideOutHorizontally(intSpring) { if (targetState) -it / 4 else it / 4 } +
-                        scaleOut(spring, targetScale = 0.92f))
+                // Nothing on the container. Every piece of the dock animates itself.
+                //
+                // The old spec faded, slid and scaled the *whole row* in both directions, which
+                // costs two things. The obvious one is that it reads as a slide show: two complete
+                // docks crossing over, each of them a ghost for the length of the transition. The
+                // subtle one is that the search circle is at the same place and the same size in
+                // both states — and cross-fading it against itself made the one element that
+                // should have been nailed down flicker through half opacity every single time the
+                // bar collapsed.
+                //
+                // With `None` here, a child that does not animate is simply opaque for the whole
+                // transition, so that circle is now a shared element for free. The pieces that
+                // really do change carry their own motion instead, and they can each move the way
+                // their own geometry implies: the tab strip folds down into its left edge, which
+                // is where the home circle is about to be, and the home circle and the pill arrive
+                // from the outside of the bar.
+                //
+                // `SizeTransform` still snaps — animating the container's width would remeasure
+                // the frosted backdrops every frame, which is what the morph used to cost — and
+                // `clip = false` keeps the springs' overshoot from being sheared off at the bounds.
+                (EnterTransition.None togetherWith ExitTransition.None)
+                    .using(SizeTransform(clip = false) { _, _ -> snap() })
             },
             label = "bottomBarState",
             modifier = Modifier.weight(1f),
@@ -196,14 +231,25 @@ fun LiquidGlassBottomBar(
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    FrostedPill(modifier = Modifier.weight(1f, fill = false).widthIn(max = 420.dp)) {
-                        TabRow(
-                            tabs = tabs,
-                            pureBlack = pureBlack,
-                            isSelected = isSelected,
-                            onItemClick = onItemClickHaptic,
-                        )
-                    }
+                    LiquidTabBar(
+                        tabs = tabs,
+                        pureBlack = pureBlack,
+                        isSelected = isSelected,
+                        onItemClick = onItemClickHaptic,
+                        modifier = Modifier
+                            .weight(1f, fill = false)
+                            .widthIn(max = 420.dp)
+                            // Grows out of, and collapses back into, its left edge — which is
+                            // exactly where the home circle sits in the collapsed state, so the
+                            // strip reads as folding down into that circle rather than as a
+                            // second widget fading over the top of it.
+                            .animateEnterExit(
+                                enter = fadeIn(morphSpring) +
+                                    scaleIn(morphSpring, 0.90f, TransformOrigin(0f, 0.5f)),
+                                exit = fadeOut(morphFast) +
+                                    scaleOut(morphSpring, 0.90f, TransformOrigin(0f, 0.5f)),
+                            ),
+                    )
                     if (searchScreen != null) {
                         val searchActive = isSelected(searchScreen)
                         FrostedCircle(
@@ -228,6 +274,16 @@ fun LiquidGlassBottomBar(
                     if (homeTab != null) {
                         FrostedCircle(
                             onClick = { onItemClickHaptic(homeTab, isSelected(homeTab)) },
+                            // In from the outside edge and up from nothing, because that is where
+                            // it comes from: it is the piece the tab strip just folded into.
+                            modifier = Modifier.animateEnterExit(
+                                enter = fadeIn(morphFast) +
+                                    slideInHorizontally(morphOffset) { -it } +
+                                    scaleIn(morphSpring, 0.55f),
+                                exit = fadeOut(morphFast) +
+                                    slideOutHorizontally(morphOffset) { -it } +
+                                    scaleOut(morphSpring, 0.55f),
+                            ),
                         ) {
                             NavGlyph(
                                 iconRes = if (isSelected(homeTab)) homeTab.iconIdActive else homeTab.iconIdInactive,
@@ -238,7 +294,17 @@ fun LiquidGlassBottomBar(
                         }
                     }
 
-                    FrostedPill(modifier = Modifier.weight(1f)) {
+                    FrostedPill(
+                        modifier = Modifier
+                            .weight(1f)
+                            // Swells rather than slides. It is the widest thing in the collapsed
+                            // bar and the only one that has no edge to come from, so it takes the
+                            // space it is given from the middle out.
+                            .animateEnterExit(
+                                enter = fadeIn(morphSpring) + scaleIn(morphSpring, 0.86f),
+                                exit = fadeOut(morphFast) + scaleOut(morphSpring, 0.86f),
+                            ),
+                    ) {
                         if (hasNowPlaying) {
                             MiniPlayerPill(pureBlack = pureBlack, onExpand = onMiniPlayerClickHaptic)
                         } else if (activeTab != null) {
@@ -280,8 +346,41 @@ fun LiquidGlassBottomBar(
 /* Frosted glass containers (share the app-wide 56dp / transparent / 0.20 tint look) */
 /* ----------------------------------------------------------------------- */
 
+/**
+ * How much opacity the dock adds over the base chrome tint, and how far it blurs.
+ *
+ * These are the dock's material, and they are deliberately *one* pair of numbers rather than one
+ * per state. The bar's two states are supposed to be the same pane of glass caught mid-morph, so
+ * the moment State A and State B disagree about their tint the morph stops being a shape change
+ * and becomes a cross-fade between two different materials.
+ *
+ * They went up because the dock is the one surface in the app that is never over a background of
+ * its own choosing: at the top of Home it sits over album art, over a grid of thumbnails, over
+ * whatever the row underneath happens to be, and at the old strength a 10sp tab label over a busy
+ * cover was genuinely hard to read. The extra blur is doing most of that work — it is what
+ * destroys the *detail* behind the pane, and detail is what competes with small type — with the
+ * tint only there to stop the result going transparent again over a light photo.
+ *
+ * It stays a pane and not a slab because the dock is 64dp tall. The same numbers on the 48dp
+ * search row read as solid, which is why that row keeps its own, lighter pair.
+ */
+private const val DockGlassExtraTint = 0.07f
+private val DockGlassBlurRadius = 68.dp
+
 @Composable
-private fun frostedGlassModifier(shape: androidx.compose.ui.graphics.Shape): Modifier {
+private fun frostedGlassModifier(
+    shape: androidx.compose.ui.graphics.Shape,
+    /**
+     * Extra opacity for chrome that has to stay readable over *anything*.
+     *
+     * Every piece of dock chrome takes the defaults — see [DockGlassExtraTint]. The parameters
+     * exist for the search row, which is half the dock's height and therefore cannot carry the
+     * dock's opacity without reading as a solid slab. A difference of degree, not a second
+     * material.
+     */
+    extraTint: Float = DockGlassExtraTint,
+    blurRadius: Dp = DockGlassBlurRadius,
+): Modifier {
     // Real backdrop blur of the app content scrolling underneath. The bar lives in the
     // Scaffold's bottomBar slot — a sibling of the NavHost, drawn over it — so reading the
     // NavHost's haze source here is safe and not a re-entrant layer draw.
@@ -296,8 +395,8 @@ private fun frostedGlassModifier(shape: androidx.compose.ui.graphics.Shape): Mod
         dark = isDark,
         // Apple Music's dock is milky enough to read white-on-glass labels at any scroll
         // position. Under a real blur this is a tint, not a substitute for one.
-        tintAlpha = if (isDark) 0.30f else 0.26f,
-        blurRadius = 52.dp,
+        tintAlpha = (if (isDark) 0.30f else 0.26f) + extraTint,
+        blurRadius = blurRadius,
         // The dock sits over a scrolling list, so its blur is recomputed every frame the
         // user scrolls. Half-resolution is invisible at this radius and halves that cost.
         quality = 0.5f,
@@ -308,13 +407,15 @@ private fun frostedGlassModifier(shape: androidx.compose.ui.graphics.Shape): Mod
 private fun FrostedPill(
     modifier: Modifier = Modifier,
     height: Dp = 64.dp,
+    extraTint: Float = DockGlassExtraTint,
+    blurRadius: Dp = DockGlassBlurRadius,
     content: @Composable () -> Unit,
 ) {
     val shape = RoundedCornerShape(percent = 50)
     Box(
         modifier = modifier
             .height(height)
-            .then(frostedGlassModifier(shape)),
+            .then(frostedGlassModifier(shape, extraTint, blurRadius)),
         contentAlignment = Alignment.Center,
     ) { content() }
 }
@@ -324,12 +425,17 @@ private fun FrostedCircle(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     size: Dp = 64.dp,
+    extraTint: Float = DockGlassExtraTint,
+    blurRadius: Dp = DockGlassBlurRadius,
     content: @Composable () -> Unit,
 ) {
     var pressed by remember { mutableStateOf(false) }
     val pressScale by animateFloatAsState(
-        targetValue = if (pressed) 0.90f else 1f,
-        animationSpec = spring(dampingRatio = 0.8f, stiffness = 300f),
+        targetValue = if (pressed) 0.88f else 1f,
+        // Underdamped and stiff. At 0.8/300 the circle sank under the finger and eased back like
+        // a button on a lift; the capsule beside it is a droplet that overshoots and wobbles, and
+        // two press physics on one bar is one too many.
+        animationSpec = spring(dampingRatio = 0.55f, stiffness = 900f),
         label = "circlePress",
     )
     val interactionSource = remember { MutableInteractionSource() }
@@ -338,7 +444,7 @@ private fun FrostedCircle(
         modifier = modifier
             .size(size)
             .scale(pressScale)
-            .then(frostedGlassModifier(CircleShape))
+            .then(frostedGlassModifier(CircleShape, extraTint, blurRadius))
             .pointerInput(Unit) {
                 awaitEachGesture {
                     awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
@@ -372,265 +478,454 @@ private fun NavGlyph(iconRes: Int, contentDescription: String?, tint: Color) {
 /* ----------------------------------------------------------------------- */
 
 /**
- * Glass selection capsule that slides between tabs — the AndroidLiquidGlass demo's tab bar.
+ * The dock's tab strip: a permanent glass lens riding on the selected tab, dragged like a
+ * physical object.
  *
- * It is a second pane of glass floating *inside* the dock pill: it refracts the same app
- * content the dock does, so as it travels the icons and artwork underneath visibly bend
- * through it. Safe to consume [LocalAppBackdrop] here for the same reason the dock itself is
- * (see `rememberChromeGlassModifier`): the bar is a Scaffold slot drawn over the NavHost, not
- * a descendant of the recorded layer.
+ * ### Why the selected tab is not simply painted in the accent colour
+ *
+ * It is — on a *hidden* copy of the row. The strip is composed in four pieces:
+ *
+ *  1. a bare glass plate, no content on it, recorded into `glassBackdrop`;
+ *  2. the visible row of tabs in the resting colour, drawn over that plate;
+ *  3. an invisible twin (`alpha = 0`) of the same row in the **accent** colour with filled icons,
+ *     recorded into `tabsBackdrop` — no glass of its own, just glyphs on nothing;
+ *  4. the capsule, which draws `plate + twin` through a lens.
+ *
+ * So the blue icon and label of the selected tab are not a tint applied to a widget: they are the
+ * hidden layer *seen through the glass*. Everything the lens does to the pixels underneath — the
+ * magnification, the edge refraction, the chromatic fringe as it accelerates — happens to the
+ * icon and the label too, because as far as the shader is concerned they are just more backdrop.
+ * A capsule drawn over an already-blue tab can only ever look like a sticker on top of it; this
+ * looks like the tab is *inside* the glass, which is the entire effect being copied.
+ *
+ * ### Why it is split that way, and not the obvious way
+ *
+ * The obvious build is two full copies of the dock — glass and all — with the capsule sampling
+ * the app content plus the accent copy. That is what this was, and it cost three backdrop passes
+ * per frame: the visible dock blurring and refracting the whole NavHost recording, the twin doing
+ * the identical work again a pixel underneath, and the capsule compositing the app layer a third
+ * time. At 120Hz over a 64dp strip that is what the dragging felt like.
+ *
+ * Splitting the plate away from the content means the expensive pass — vibrancy, a 13dp blur and
+ * a lens over live app pixels — happens exactly **once**, and the other two layers are recordings
+ * of already-drawn content, which cost a `RenderNode` draw each. The plate has to be contentless
+ * for this to work: if the recording contained the resting icons, the capsule would show them
+ * *and* the accent ones stacked as a double image.
+ *
+ * ### The drag drives a float, not a spring
+ *
+ * While a finger is down the capsule's position is a plain `mutableFloatStateOf` written straight
+ * from the pointer callback. It used to call `updateValue` per frame, and `updateValue` cancels a
+ * job and launches a coroutine that takes `Animatable`'s mutex — 240 of those a second at 120Hz,
+ * to compute a spring toward a target that the finger had already moved past. The spring only
+ * earns its keep once the finger is gone, so that is the only time it runs: [settleFrom] snaps to
+ * where the gesture ended and springs to the tab it landed on, in one coroutine, once per
+ * gesture. Same for velocity — the stretch reads an exponentially smoothed float rather than a
+ * `VelocityTracker`, which fits a polynomial over its sample history every time it is asked.
+ *
+ * Press swells it (78dp of travel space for a 56dp pill); drag and it follows the finger
+ * continuously rather than hopping tab to tab, stretching along its direction of travel and
+ * squashing vertically in proportion to its own velocity, exactly as a droplet under acceleration
+ * would. Release and it rounds to the nearest tab. Pushing past either end rubber-bands the whole
+ * panel a few pixels and lets it spring back. The commit only happens on release, so a drag that
+ * changes its mind costs nothing.
+ *
+ * Falls back to a flat accent wash on devices with no `RuntimeShader`, where there is no lens to
+ * see the hidden layer through and the selected tab therefore has to colour itself.
  */
 @Composable
-private fun indicatorGlassModifier(shape: androidx.compose.ui.graphics.Shape): Modifier {
-    val backdrop = LocalAppBackdrop.current
-    val isDark = isSystemInDarkTheme()
-
-    // The capsule has to end up BRIGHTER than the dock it sits on, and that is not automatic here.
-    // The dock paints a 0.30 milky tint over its own blur; the capsule samples the raw backdrop
-    // underneath, which at the bottom of the screen is dark album art and darker page. At the old
-    // 0.16 the result was a lozenge *darker* than its surroundings — it read as a hole punched in
-    // the dock rather than a pane lifted off it, which is exactly the flat grey blob in the
-    // recording. It needs to clear the dock's own tint, not sit under it.
-    val fill = if (isDark) Color.White.copy(alpha = 0.38f) else Color.White.copy(alpha = 0.58f)
-    return Modifier.drawBackdrop(
-        backdrop = backdrop,
-        shape = { shape },
-        effects = {
-            vibrancy()
-            blur(3f.dp.toPx())
-            // Short, punchy refraction. A small pane with a wide lens looks like a magnifier;
-            // this reads as a thin sheet of glass with bent edges.
-            lens(9f.dp.toPx(), 18f.dp.toPx(), true)
-        },
-        // Ambient rather than Default: a directional highlight on a pill that slides sideways
-        // keeps catching the light from a fixed angle, which betrays that it is a flat sprite.
-        highlight = { Highlight.Ambient },
-        // No drop shadow. A dark halo around a light pill sitting on light glass reads as a dent
-        // pressed into the dock, and it was fighting the fill above for the same few pixels.
-        onDrawSurface = { drawRect(fill) },
-    )
-}
-
-/**
- * The tab row, with the reference's **swipe-to-switch** gesture.
- *
- * At rest there is deliberately no capsule: the active tab is a filled icon in the accent
- * colour, nothing more. The glass capsule is a *touch* affordance, not a permanent indicator —
- * it materialises under your finger the moment you press, and dissolves once the gesture ends.
- *
- * Press and drag sideways and the capsule does not slide as a rigid pill; it **stretches**, because
- * its leading edge is sprung stiff and its trailing edge soft, so the pill elongates while moving
- * and snaps back to tab width the moment it settles. Each tab it crosses
- * lights up as you pass it, so the selection previews live under your thumb and only commits on
- * release. A plain tap is the degenerate case of the same gesture and still goes through
- * [TabButton]'s own `clickable`, which is what keeps the tab semantics and accessibility intact.
- *
- * The gesture observes on [PointerEventPass.Initial] and consumes nothing, so it can watch the
- * drag without stealing taps from the buttons underneath it.
- */
-@Composable
-private fun TabRow(
+private fun LiquidTabBar(
     tabs: List<Screens>,
     pureBlack: Boolean,
     isSelected: (Screens) -> Boolean,
     onItemClick: (Screens, Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+    height: Dp = 64.dp,
 ) {
+    if (tabs.isEmpty()) return
+
+    val density = LocalDensity.current
+    val isLtr = LocalLayoutDirection.current == LayoutDirection.Ltr
+    val scope = rememberCoroutineScope()
     val haptic = LocalHapticFeedback.current
+    val shape = remember { RoundedCornerShape(percent = 50) }
+    val accent = MaterialTheme.colorScheme.primary
+    val restColor = itemContentColor(pureBlack)
+    val glassy = remember { isRuntimeShaderSupported() }
+    val isDark = isSystemInDarkTheme()
 
-    // Measured bounds of each tab in the row's own coordinate space: route -> (x, width, height).
-    val bounds = remember { mutableStateMapOf<String, Triple<Float, Float, Float>>() }
+    val lastIndex = (tabs.size - 1).coerceAtLeast(0)
+    val selectedIndex = tabs.indexOfFirst { isSelected(it) }.coerceIn(0, lastIndex)
 
-    // `anchor` is the tab the gesture began on — kept only to decide whether a release counts as
-    // a swipe (and to gate the capsule into existence). `hover` is the tab under the finger and
-    // is the capsule's only geometric target.
-    var anchorRoute by remember { mutableStateOf<String?>(null) }
-    var hoverRoute by remember { mutableStateOf<String?>(null) }
-    var pressed by remember { mutableStateOf(false) }
+    // Inset of the capsule inside the pill, and therefore what the tab pitch is measured from.
+    // 64dp of bar minus 4dp top and bottom is the capsule's 56dp.
+    val inset = 4.dp
+    val insetPx = with(density) { inset.toPx() }
+    val capsuleHeight = height - inset * 2
 
-    val capsuleLeft = remember { Animatable(0f) }
-    val capsuleRight = remember { Animatable(0f) }
-    val capsuleAlpha = remember { Animatable(0f) }
-    val capsuleHeight = remember { mutableStateOf(0f) }
+    var totalWidthPx by remember { mutableFloatStateOf(0f) }
+    var tabWidthPx by remember { mutableFloatStateOf(0f) }
 
-    // The stretch comes from the two edges arriving at DIFFERENT times, not from the capsule
-    // spanning both tabs. The edge in front runs stiff and lands first; the edge behind runs soft
-    // and is still catching up, so the pill elongates while it travels and snaps back to tab width
-    // once the trailing edge arrives. Both edges always target the hovered tab alone.
-    //
-    // Spanning the union of anchor+hover — the previous model — meant a Home→Library drag grew one
-    // blob across all three tabs and held it there for the rest of the gesture, because the
-    // trailing edge was pinned to the anchor and never released. That is not a stretch, it is an
-    // accumulation.
-    // At 900 the leading edge crossed a whole tab in about 90ms — faster than the trailing edge
-    // could visibly lag behind it, so the capsule appeared to teleport between tabs with the
-    // stretch happening inside two or three frames. Slow enough to watch is the entire point.
-    val leadingSpec = remember { spring<Float>(dampingRatio = 1f, stiffness = 480f) }
-    val trailingSpec = remember { spring<Float>(dampingRatio = 0.85f, stiffness = 165f) }
-    val settleSpec = remember {
-        spring<Float>(dampingRatio = AquamorphicDampingRatio, stiffness = AquamorphicStiffness)
-    }
+    // ---- Live gesture state. All plain float state: written from the pointer callback, read
+    // ---- only from draw lambdas, so a drag frame costs a layer invalidation and nothing else.
+    val dragging = remember { mutableStateOf(false) }
+    val dragValue = remember { mutableFloatStateOf(selectedIndex.toFloat()) }
+    val dragVelocity = remember { mutableFloatStateOf(0f) }
+    val overscrollPx = remember { mutableFloatStateOf(0f) }
 
-    // Extra width the capsule carries beyond the tab's own measured content.
-    val capsuleSidePadding = with(LocalDensity.current) { 10.dp.toPx() }
-
-    LaunchedEffect(pressed, hoverRoute) {
-        val hover = hoverRoute?.let { bounds[it] } ?: return@LaunchedEffect
-        capsuleHeight.value = hover.third
-
-        // One width for every tab, not each tab's own.
-        //
-        // The tabs measure to their labels, so "Home" is barely wider than its icon while
-        // "Mood & Genres" is nearly three times that. A capsule tracking those bounds is a small
-        // oval on one tab and a long pill on the next, and changes size as it travels for reasons
-        // that have nothing to do with the gesture. A segmented control has one slot width; this
-        // takes the widest tab and centres that on whichever tab is hovered.
-        val slotWidth = (bounds.values.maxOfOrNull { it.second } ?: hover.second) + capsuleSidePadding
-        val center = hover.first + hover.second / 2f
-        val targetLeft = center - slotWidth / 2f
-        val targetRight = center + slotWidth / 2f
-
-        if (pressed) {
-            if (capsuleAlpha.value == 0f) {
-                // Materialise at the tab actually being touched, never sliding in from 0.
-                capsuleLeft.snapTo(targetLeft)
-                capsuleRight.snapTo(targetRight)
-            }
-            // Which edge leads depends on travel direction: moving right, the right edge is out
-            // front; moving left, the left edge is.
-            val movingRight = targetLeft > capsuleLeft.value
-            coroutineScope {
-                launch { capsuleAlpha.animateTo(1f, tween(durationMillis = 110)) }
-                launch {
-                    capsuleLeft.animateTo(targetLeft, if (movingRight) trailingSpec else leadingSpec)
-                }
-                launch {
-                    capsuleRight.animateTo(targetRight, if (movingRight) leadingSpec else trailingSpec)
-                }
-            }
+    val rubberBandPx = with(density) { 6.dp.toPx() }
+    val panelOffset: () -> Float = {
+        val raw = overscrollPx.floatValue
+        if (totalWidthPx == 0f || raw == 0f) {
+            0f
         } else {
-            // Released: settle both edges onto the landed tab together, hold a beat so the landing
-            // is legible, then dissolve.
-            coroutineScope {
-                launch { capsuleLeft.animateTo(targetLeft, settleSpec) }
-                launch { capsuleRight.animateTo(targetRight, settleSpec) }
-            }
-            delay(60)
-            capsuleAlpha.animateTo(0f, tween(durationMillis = 180))
+            val fraction = (raw / totalWidthPx).fastCoerceIn(-1f, 1f)
+            rubberBandPx * fraction.sign * EaseOut.transform(abs(fraction))
         }
     }
 
-    val indicatorGlass = indicatorGlassModifier(RoundedCornerShape(percent = 50))
+    // The drag callbacks outlive the composition that built them, so everything they need from
+    // the current frame is read through a State rather than captured by value.
+    val onItemClickState by rememberUpdatedState(onItemClick)
+    val selectedIndexState by rememberUpdatedState(selectedIndex)
+    val tabsState by rememberUpdatedState(tabs)
 
-    /** The tab whose measured slot contains [x], else the nearest one. Never null once measured. */
-    fun routeAt(x: Float): String? {
-        var nearest: String? = null
-        var nearestDistance = Float.MAX_VALUE
-        tabs.forEach { screen ->
-            val b = bounds[screen.route] ?: return@forEach
-            if (x >= b.first && x <= b.first + b.second) return screen.route
-            val distance = abs(x - (b.first + b.second / 2f))
-            if (distance < nearestDistance) {
-                nearestDistance = distance
-                nearest = screen.route
-            }
-        }
-        return nearest
-    }
+    // `moved` separates "the user dragged the capsule somewhere" from "the user tapped the
+    // capsule", which are the same gesture as far as the drag inspector is concerned but mean
+    // different things to the host.
+    val moved = remember { mutableFloatStateOf(0f) }
+    val tapSlopPx = with(density) { 12.dp.toPx() }
 
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 6.dp)
-            .pointerInput(tabs) {
-                awaitEachGesture {
-                    // Initial pass, nothing consumed: we observe the gesture without taking it
-                    // away from the TabButtons, so a tap still routes through their clickable.
-                    val down = awaitFirstDown(
-                        requireUnconsumed = false,
-                        pass = PointerEventPass.Initial,
-                    )
-                    val start = routeAt(down.position.x) ?: return@awaitEachGesture
-                    anchorRoute = start
-                    hoverRoute = start
-                    pressed = true
+    val dampedDragAnimation = remember(scope, tabs.size, isLtr) {
+        DampedDragAnimation(
+            animationScope = scope,
+            initialValue = selectedIndex.toFloat(),
+            valueRange = 0f..lastIndex.toFloat(),
+            visibilityThreshold = 0.001f,
+            initialScale = 1f,
+            // 78dp of swell on a 56dp capsule. Big enough that the pill visibly bulges past the
+            // top and bottom edges of the dock while held, which is what sells it as a blob of
+            // liquid sitting on the bar rather than a rectangle cut into it.
+            pressedScale = 78f / 56f,
+            onDragStarted = {
+                moved.floatValue = 0f
+                dragVelocity.floatValue = 0f
+                dragValue.floatValue = value
+                dragging.value = true
+            },
+            onDragStopped = {
+                val ended = dragValue.floatValue
+                val landed = ended.fastRoundToInt().fastCoerceIn(0, lastIndex)
 
-                    var crossed = false
-                    try {
-                        while (true) {
-                            val event = awaitPointerEvent(PointerEventPass.Initial)
-                            val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                            if (!change.pressed) break
-                            val over = routeAt(change.position.x)
-                            if (over != null && over != hoverRoute) {
-                                hoverRoute = over
-                                crossed = true
-                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                            }
+                // One coroutine for the whole settle: snap to where the finger left it, hand
+                // drawing back to the animation, then spring onto the tab.
+                settleFrom(ended, landed.toFloat()) { dragging.value = false }
+
+                // Two more, once per gesture, to unwind the two decorative floats. Both are
+                // cheap `Animatable`s created here and thrown away; the point is that neither of
+                // them existed during the drag itself.
+                val velocityFrom = dragVelocity.floatValue
+                if (velocityFrom != 0f) {
+                    scope.launch {
+                        Animatable(velocityFrom).animateTo(0f, spring(0.5f, 300f)) {
+                            dragVelocity.floatValue = value
                         }
-                    } finally {
-                        pressed = false
                     }
-
-                    // Only commit here when the finger actually travelled to a different tab. A
-                    // tap that never left its own tab is already handled by TabButton, and
-                    // firing both would navigate twice.
-                    val landed = hoverRoute
-                    if (crossed && landed != null && landed != start) {
-                        tabs.firstOrNull { it.route == landed }?.let { screen ->
-                            onItemClick(screen, isSelected(screen))
+                }
+                val overscrollFrom = overscrollPx.floatValue
+                if (overscrollFrom != 0f) {
+                    scope.launch {
+                        Animatable(overscrollFrom).animateTo(0f, spring(1f, 300f, 0.5f)) {
+                            overscrollPx.floatValue = value
                         }
+                    }
+                }
+
+                val screen = tabsState.getOrNull(landed)
+                if (screen != null) {
+                    if (landed != selectedIndexState) {
+                        onItemClickState(screen, false)
+                    } else if (moved.floatValue < tapSlopPx) {
+                        // Never travelled: this was a tap that happened to land on the capsule,
+                        // which by definition sits on the active tab. Forwarded as a re-tap so
+                        // the host can do what it does for those (scroll the page back to the
+                        // top), because the capsule covers that tab's own click target.
+                        onItemClickState(screen, true)
                     }
                 }
             },
+            onDrag = { _, dragAmount ->
+                if (tabWidthPx > 0f) {
+                    moved.floatValue += abs(dragAmount.x)
+                    val delta = dragAmount.x / tabWidthPx * if (isLtr) 1f else -1f
+                    val next = dragValue.floatValue + delta
+                    val clamped = next.fastCoerceIn(0f, lastIndex.toFloat())
+
+                    // Haptic on crossing, not on landing: the tick has to arrive while the finger
+                    // is still travelling or it reads as lag on the commit rather than as
+                    // feedback on the movement.
+                    if (clamped.fastRoundToInt() != dragValue.floatValue.fastRoundToInt()) {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    }
+                    dragValue.floatValue = clamped
+
+                    // Exponential smoothing rather than a VelocityTracker: only the capsule's
+                    // squish reads this, and it is clamped to ±0.2 before it reaches a scale, so
+                    // a least-squares fit over a sample history would be paying for precision
+                    // that is thrown away two lines later.
+                    dragVelocity.floatValue = dragVelocity.floatValue * 0.72f + delta * 2.4f
+
+                    // Only what the capsule could not absorb becomes overscroll; anything within
+                    // range pulls the panel back towards centre instead of accumulating.
+                    overscrollPx.floatValue =
+                        if (next < 0f || next > lastIndex) overscrollPx.floatValue + dragAmount.x
+                        else overscrollPx.floatValue * 0.5f
+                }
+            },
+        )
+    }
+
+    /** Where the capsule is, in tab units. The finger wins while it is down. */
+    val capsuleAt: () -> Float = {
+        if (dragging.value) dragValue.floatValue else dampedDragAnimation.value
+    }
+
+    // Route changes that did not come from this bar — a deep link, the back stack, the search
+    // circle — still have to move the capsule, and must do it without the pressed swell.
+    LaunchedEffect(dampedDragAnimation, selectedIndex) {
+        if (!dragging.value) dampedDragAnimation.settleToValue(selectedIndex.toFloat())
+    }
+
+    val glassBackdrop = rememberLayerBackdrop()
+    val tabsBackdrop = rememberLayerBackdrop()
+    val combinedBackdrop = rememberCombinedBackdrop(glassBackdrop, tabsBackdrop)
+    val containerGlass = frostedGlassModifier(shape)
+
+    Box(
+        modifier = modifier.height(height),
         contentAlignment = Alignment.CenterStart,
     ) {
-        // Drawn first = behind the tabs, so icons and labels ride on top of the glass.
-        // Not composed at all until the first touch: before that it would be a 0x0 node still
-        // running a backdrop shader, and there is nothing for it to indicate anyway — at rest
-        // the active tab is its accent-tinted icon, full stop.
-        if (anchorRoute != null) Box(
-            Modifier
-                // Measured in the layout phase rather than by animating a Dp size: reading the
-                // animatables here keeps a moving capsule out of recomposition entirely, and the
-                // row's own children are already measured so nothing else re-measures with it.
-                .layout { measurable, _ ->
-                    val left = capsuleLeft.value
-                    val width = (capsuleRight.value - left).coerceAtLeast(0f).fastRoundToInt()
-                    val height = capsuleHeight.value.fastRoundToInt()
-                    val placeable = measurable.measure(Constraints.fixed(width, height))
-                    layout(placeable.width, placeable.height) {
-                        placeable.place(left.fastRoundToInt(), 0)
+        // ---- 1 + 2. the plate, and the row you can see on it ------------------------
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .onGloballyPositioned { coords ->
+                    val width = coords.size.width.toFloat()
+                    if (totalWidthPx != width) {
+                        totalWidthPx = width
+                        tabWidthPx = ((width - insetPx * 2f) / tabs.size).coerceAtLeast(0f)
                     }
                 }
-                .graphicsLayer { alpha = capsuleAlpha.value }
-                .then(indicatorGlass),
-        )
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceEvenly,
+                .graphicsLayer {
+                    translationX = panelOffset()
+                    // The whole bar breathes a little under the finger, so the capsule is not the
+                    // only thing acknowledging the touch.
+                    val swell = lerp(1f, 1.012f, dampedDragAnimation.pressProgress)
+                    scaleX = swell
+                    scaleY = swell
+                },
         ) {
-            tabs.forEach { screen ->
-                TabButton(
-                    screen = screen,
-                    // While a drag is in flight the tint follows the finger, so the selection is
-                    // previewed under the thumb and the commit on release is never a surprise.
-                    selected = if (pressed) hoverRoute == screen.route else isSelected(screen),
-                    pureBlack = pureBlack,
-                    onClick = { onItemClick(screen, isSelected(screen)) },
-                    modifier = Modifier.onGloballyPositioned { coords ->
-                        val pos = coords.positionInParent()
-                        val next = Triple(
-                            pos.x,
-                            coords.size.width.toFloat(),
-                            coords.size.height.toFloat(),
+            // Contentless on purpose — see the KDoc. `layerBackdrop` records everything drawn
+            // *after* it in the chain, so it has to sit before the glass modifier to capture the
+            // pane at all.
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .then(if (glassy) Modifier.layerBackdrop(glassBackdrop) else Modifier)
+                    .then(containerGlass)
+            )
+
+            Row(
+                modifier = Modifier.fillMaxSize().padding(inset),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                tabs.forEachIndexed { index, screen ->
+                    LiquidTabItem(
+                        screen = screen,
+                        // Without a lens there is no hidden layer to reveal, so the selection has
+                        // to be painted here instead.
+                        tint = if (!glassy && index == selectedIndex) accent else restColor,
+                        filled = !glassy && index == selectedIndex,
+                        scaleProvider = { 1f },
+                        onClick = { onItemClick(screen, index == selectedIndex) },
+                    )
+                }
+            }
+        }
+
+        // ---- 3. the twin the lens reads --------------------------------------------
+        if (glassy) {
+            Row(
+                modifier = Modifier
+                    .clearAndSetSemantics {}
+                    .alpha(0f)
+                    .layerBackdrop(tabsBackdrop)
+                    .fillMaxWidth()
+                    .height(capsuleHeight)
+                    .graphicsLayer { translationX = panelOffset() }
+                    .padding(horizontal = inset),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                tabs.forEach { screen ->
+                    LiquidTabItem(
+                        screen = screen,
+                        tint = accent,
+                        filled = true,
+                        // Magnified with the press, so squeezing the capsule appears to draw the
+                        // icon towards the surface of the glass.
+                        scaleProvider = { lerp(1f, 1.16f, dampedDragAnimation.pressProgress) },
+                        onClick = null,
+                    )
+                }
+            }
+        }
+
+        // ---- 4. the capsule ---------------------------------------------------------
+        if (tabWidthPx > 0f) {
+            val tabWidth = with(density) { tabWidthPx.toDp() }
+            val capsuleModifier = Modifier
+                .padding(horizontal = inset)
+                .graphicsLayer {
+                    val travel = capsuleAt() * tabWidthPx
+                    translationX = (if (isLtr) travel else -travel) + panelOffset()
+                }
+                .then(dampedDragAnimation.modifier)
+
+            if (glassy) {
+                Box(
+                    capsuleModifier
+                        .drawBackdrop(
+                            backdrop = combinedBackdrop,
+                            shape = { shape },
+                            effects = {
+                                // Never fully off. A capsule with no refraction at rest is a
+                                // coloured rectangle, and the resting state is the one the user
+                                // spends all their time looking at — in the reference the pill is
+                                // visibly bending the label underneath it before anyone touches
+                                // it. The press deepens the bend rather than switching it on.
+                                val progress = dampedDragAnimation.pressProgress
+                                val depth = 0.4f + 0.6f * progress
+                                lens(
+                                    9f.dp.toPx() * depth,
+                                    14f.dp.toPx() * depth,
+                                    true,
+                                    // The extra sample cost of the colour fringe only buys
+                                    // anything while the thing is moving.
+                                    progress > 0.02f,
+                                )
+                            },
+                            highlight = {
+                                Highlight.Ambient.copy(
+                                    alpha = 0.4f + 0.6f * dampedDragAnimation.pressProgress,
+                                )
+                            },
+                            innerShadow = {
+                                val progress = dampedDragAnimation.pressProgress
+                                InnerShadow(
+                                    radius = 3f.dp + 5f.dp * progress,
+                                    color = Color.Black.copy(alpha = 0.15f),
+                                    alpha = 0.35f + 0.65f * progress,
+                                )
+                            },
+                            layerBlock = {
+                                scaleX = dampedDragAnimation.scaleX
+                                scaleY = dampedDragAnimation.scaleY
+                                // Conservation of volume, roughly: the faster it travels the
+                                // longer and flatter it gets, and it recovers as it settles.
+                                val velocity = dragVelocity.floatValue
+                                scaleX /= 1f - (velocity * 0.75f).fastCoerceIn(-0.2f, 0.2f)
+                                scaleY *= 1f - (velocity * 0.25f).fastCoerceIn(-0.2f, 0.2f)
+                            },
+                            onDrawSurface = {
+                                // A wash at rest so the capsule is still legible as a selected
+                                // slot on a busy backdrop, fading out as the lens takes over.
+                                val progress = dampedDragAnimation.pressProgress
+                                drawRect(
+                                    color = if (isDark) Color.White.copy(alpha = 0.13f)
+                                    else Color.Black.copy(alpha = 0.09f),
+                                    alpha = 1f - progress * 0.7f,
+                                )
+                                drawRect(Color.Black.copy(alpha = 0.03f * progress))
+                            },
                         )
-                        if (bounds[screen.route] != next) bounds[screen.route] = next
-                    },
+                        .height(capsuleHeight)
+                        .width(tabWidth),
+                )
+            } else {
+                Box(
+                    capsuleModifier
+                        .graphicsLayer {
+                            scaleX = dampedDragAnimation.scaleX
+                            scaleY = dampedDragAnimation.scaleY
+                        }
+                        .clip(shape)
+                        .background(selectedItemContainerColor(pureBlack), shape)
+                        .height(capsuleHeight)
+                        .width(tabWidth),
                 )
             }
         }
+    }
+}
+
+/**
+ * One tab. Equal width by construction — [RowScope.weight] rather than each tab measuring to its
+ * own label — because the capsule is a single fixed-pitch slot sliding across the row, and a row
+ * whose slots are "Home"-wide and "Mood & Genres"-wide cannot be indexed by multiplication.
+ *
+ * [onClick] is null for the hidden twin: it is a rendering of the row, not a copy of its
+ * behaviour, and a second set of invisible click targets stacked over the real ones would
+ * swallow every tap.
+ */
+@Composable
+private fun RowScope.LiquidTabItem(
+    screen: Screens,
+    tint: Color,
+    filled: Boolean,
+    scaleProvider: () -> Float,
+    onClick: (() -> Unit)?,
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    Column(
+        modifier = Modifier
+            .then(
+                if (onClick != null) {
+                    Modifier.clickable(
+                        interactionSource = interactionSource,
+                        indication = null,
+                        role = Role.Tab,
+                        onClick = onClick,
+                    )
+                } else {
+                    Modifier
+                }
+            )
+            .fillMaxHeight()
+            .weight(1f)
+            .graphicsLayer {
+                val scale = scaleProvider()
+                scaleX = scale
+                scaleY = scale
+            },
+        verticalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterVertically),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Icon(
+            painter = painterResource(if (filled) screen.iconIdActive else screen.iconIdInactive),
+            contentDescription = stringResource(screen.titleId),
+            tint = tint,
+            modifier = Modifier.size(24.dp),
+        )
+        Text(
+            text = stringResource(screen.titleId),
+            color = tint,
+            style = MaterialTheme.typography.labelSmall,
+            fontSize = 10.sp,
+            fontWeight = if (filled) FontWeight.SemiBold else FontWeight.Medium,
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
@@ -727,65 +1022,93 @@ private fun MiniPlayerPill(
             .padding(start = 8.dp, end = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // Album art (clean circle — no wavy/floral shapes).
-        Box(
-            modifier = Modifier
-                .size(44.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.surfaceVariant),
-            contentAlignment = Alignment.Center,
-        ) {
-            val thumb = mediaMetadata?.thumbnailUrl
-            if (thumb != null) {
-                AsyncImage(
-                    // Same pinned request the standalone mini-player pill uses, so the two share
-                    // one memory-cache entry and the art survives the A/B morph without a reload.
-                    model = rememberPinnedArtworkRequest(thumb),
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize(),
-                )
-            } else {
-                Image(
-                    painter = painterResource(R.drawable.exhale),
-                    contentDescription = null,
-                    modifier = Modifier.size(22.dp),
-                )
-            }
-        }
+        // The song, as one thing that changes as one thing.
+        //
+        // Art, title and artist used to swap their contents in place: the cover blinked to the new
+        // URL the instant it arrived, the two lines of text re-laid out underneath it on whatever
+        // frame their own state landed on, and a track change came out as three small unrelated
+        // glitches. Now the whole block travels — the outgoing song lifts out through the top of
+        // the pill as the incoming one rises into it — which also makes it the one piece of motion
+        // in the dock that means *something changed by itself* rather than *you touched something*.
+        //
+        // Keyed on the metadata rather than on the id, so a re-emission of the same song (a like,
+        // a download finishing) compares equal and does not re-run the transition.
+        AnimatedContent(
+            targetState = mediaMetadata,
+            transitionSpec = {
+                (fadeIn(tween(190)) + slideInVertically { it / 2 }) togetherWith
+                    (fadeOut(tween(130)) + slideOutVertically { -it / 2 }) using
+                    SizeTransform(clip = false) { _, _ -> snap() }
+            },
+            label = "miniPillTrack",
+            modifier = Modifier.weight(1f),
+        ) { metadata ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                // Album art (clean circle — no wavy/floral shapes).
+                Box(
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    val thumb = metadata?.thumbnailUrl
+                    if (thumb != null) {
+                        AsyncImage(
+                            // Same pinned request the standalone mini-player pill uses, so the two
+                            // share one memory-cache entry and the art survives the A/B morph
+                            // without a reload.
+                            model = rememberPinnedArtworkRequest(thumb),
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    } else {
+                        Image(
+                            painter = painterResource(R.drawable.exhale),
+                            contentDescription = null,
+                            modifier = Modifier.size(22.dp),
+                        )
+                    }
+                }
 
-        Column(
-            modifier = Modifier
-                .weight(1f)
-                .padding(horizontal = 10.dp),
-            verticalArrangement = Arrangement.Center,
-        ) {
-            Text(
-                text = mediaMetadata?.title.orEmpty(),
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.basicMarquee(),
-            )
-            val artistText = mediaMetadata?.artists?.joinToString { it.name }.orEmpty()
-            if (artistText.isNotEmpty()) {
-                Text(
-                    text = artistText,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.basicMarquee(),
-                )
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(horizontal = 10.dp),
+                    verticalArrangement = Arrangement.Center,
+                ) {
+                    Text(
+                        text = metadata?.title.orEmpty(),
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.basicMarquee(),
+                    )
+                    val artistText = metadata?.artists?.joinToString { it.name }.orEmpty()
+                    if (artistText.isNotEmpty()) {
+                        Text(
+                            text = artistText,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.basicMarquee(),
+                        )
+                    }
+                }
             }
         }
 
         // Play / pause — instant press feedback, clean circle.
         var pressed by remember { mutableStateOf(false) }
         val pressScale by animateFloatAsState(
-            targetValue = if (pressed) 0.88f else 1f,
-            animationSpec = spring(dampingRatio = 0.8f, stiffness = 300f),
+            targetValue = if (pressed) 0.86f else 1f,
+            animationSpec = spring(dampingRatio = 0.55f, stiffness = 900f),
             label = "playPress",
         )
         val interactionSource = remember { MutableInteractionSource() }
@@ -813,12 +1136,31 @@ private fun MiniPlayerPill(
                 ),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(
-                painter = painterResource(if (isPlaying) R.drawable.pause else R.drawable.play),
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.size(28.dp),
-            )
+            // The glyph swap is the confirmation.
+            //
+            // The press scale fires on ACTION_DOWN, before anything has happened — it acknowledges
+            // the touch, not the result. The bar and the triangle used to replace each other on a
+            // single frame some time later, so the only feedback that the command actually *took*
+            // was instantaneous and therefore easy to miss on a slow connection. Popping the new
+            // glyph in from small gives that moment a shape, and it lasts about as long as a
+            // transport control should be allowed to.
+            AnimatedContent(
+                targetState = isPlaying,
+                transitionSpec = {
+                    val glyph = spring<Float>(dampingRatio = 0.6f, stiffness = 1400f)
+                    (scaleIn(glyph, 0.55f) + fadeIn(tween(90))) togetherWith
+                        (scaleOut(glyph, 0.55f) + fadeOut(tween(90))) using
+                        SizeTransform(clip = false) { _, _ -> snap() }
+                },
+                label = "miniPillPlayPause",
+            ) { playing ->
+                Icon(
+                    painter = painterResource(if (playing) R.drawable.pause else R.drawable.play),
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.size(28.dp),
+                )
+            }
         }
     }
 }
@@ -826,6 +1168,32 @@ private fun MiniPlayerPill(
 /* ----------------------------------------------------------------------- */
 /* Search screen unified bottom bar                                         */
 /* ----------------------------------------------------------------------- */
+
+/**
+ * Slim on purpose, and not the dock's height.
+ *
+ * It was briefly 56dp, on the theory that a row which is *nearly* the dock reads as a mistake.
+ * It does not — it reads as a search field that has been inflated. The field is one line of text
+ * and a glyph; at 56dp the type sits in the middle of a lot of nothing and the capsule looks
+ * padded rather than considered. The gap that change was really aimed at was never the row's
+ * height anyway: it was the row hanging at the bottom of a taller reservation, which is fixed at
+ * the call site by filling that band and centring in it.
+ */
+private val SearchRowHeight = 48.dp
+
+/**
+ * See [frostedGlassModifier]'s `extraTint` for why the search row is not dock-strength glass.
+ *
+ * Both numbers were higher — 0.14 and 72dp — and the result was a capsule that read as *thicker*
+ * even though its height had not moved. A milky, heavily blurred pane at 48dp has no interior to
+ * speak of, so the eye stops seeing a thin sheet of glass with content behind it and starts seeing
+ * a solid slab, and a solid slab at that size looks bloated. Legibility over a busy result grid
+ * was the goal and it costs far less than that: a few points of tint over the base chrome, and a
+ * blur a little under the dock's own — which the row can afford to sit below precisely because it
+ * is short enough that its interior would otherwise disappear.
+ */
+private const val SearchGlassExtraTint = 0.05f
+private val SearchGlassBlurRadius = 60.dp
 
 /**
  * The bottom chrome for **both** search surfaces — the Search tab and the results page for a
@@ -861,9 +1229,14 @@ fun SearchBottomBar(
         modifier = modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // Standalone circular leading pill — its OWN frosted glass surface. Sized to match
-        // the slim Apple-Music search capsule beside it, NOT the fat 64dp nav circles.
-        FrostedCircle(onClick = onHomeClick, size = 48.dp) {
+        // Standalone circular leading pill — its OWN frosted glass surface. Sized to match the
+        // slim search capsule beside it, NOT the fat 64dp nav circles.
+        FrostedCircle(
+            onClick = onHomeClick,
+            size = SearchRowHeight,
+            extraTint = SearchGlassExtraTint,
+            blurRadius = SearchGlassBlurRadius,
+        ) {
             Icon(
                 painter = painterResource(
                     if (leadingIsBack) R.drawable.arrow_back else R.drawable.home_outlined,
@@ -881,7 +1254,12 @@ fun SearchBottomBar(
         // Search input capsule — a SEPARATE frosted pill. Tapping anywhere on it expands
         // the real type-in field (host-owned overlay). Apple Music's field is a slim
         // ~48dp capsule, noticeably thinner than the 64dp nav-bar pills.
-        FrostedPill(modifier = Modifier.weight(1f), height = 48.dp) {
+        FrostedPill(
+            modifier = Modifier.weight(1f),
+            height = SearchRowHeight,
+            extraTint = SearchGlassExtraTint,
+            blurRadius = SearchGlassBlurRadius,
+        ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier

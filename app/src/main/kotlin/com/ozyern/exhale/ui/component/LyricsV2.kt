@@ -148,6 +148,15 @@ private const val TTML_LEAD_MS = 0L
 private const val MANUAL_SCROLL_TIMEOUT_MS = 3000L
 
 /** Apple-Music-style easing for smooth deceleration. */
+/**
+ * Extra lead on top of the format's own, in milliseconds of track at 1x.
+ *
+ * The eye needs to arrive at a line slightly before it is sung, not with it — a highlight that
+ * lands exactly on the beat reads as late, because reading takes time that the timestamp does not
+ * account for.
+ */
+private const val VISUAL_TUNING_OFFSET_MS = 150L
+
 private val V2Easing = CubicBezierEasing(0.25f, 0.1f, 0.25f, 1.0f)
 
 /** Liquid fill easing: fast attack, very smooth deceleration (Apple Music-like). */
@@ -345,19 +354,32 @@ fun LyricsV2(
     var currentPositionMs by remember { mutableLongStateOf(0L) }
     var currentLineIndex by remember { mutableIntStateOf(0) }
 
-    // Frame-accurate position loop
+    // ── Position loop ──
+    //
+    // Frame-accurate while it matters, idle when it does not. It used to poll at a flat 60Hz for
+    // as long as the lyrics tab was open, writing `currentPositionMs` on every one of those ticks
+    // whether or not anything had moved — and that value feeds the per-word highlight, so a paused
+    // song sat there recomposing the visible lines sixty times a second forever.
+    //
+    // Three states now: playing or being scrubbed, where nothing less than a frame will do;
+    // paused, where 5Hz is enough to notice a resume; and unsynced, where the loop does not run.
+    //
+    // The lead is scaled by playback speed. It exists to compensate for a fixed amount of
+    // wall-clock latency (drawing the frame, the eye reaching the line), and at 1.5x a fixed
+    // number of *milliseconds of track* covers only two thirds of the wall-clock time it did at
+    // 1x, so the highlight would drift late exactly when the words are hardest to follow.
     LaunchedEffect(entriesWithWords, isSynced) {
         if (!isSynced || entriesWithWords.isEmpty()) return@LaunchedEffect
         while (isActive) {
             val sliderPos = sliderPositionProvider()
             val pos = sliderPos ?: player.currentPosition
+            val speed = player.playbackParameters.speed.takeIf { it > 0.05f } ?: 1f
 
-            // Add a visual tuning offset so animations feel instantly responsive and perfectly land on beat
-            val visualTuningOffsetMs = 150L
-            currentPositionMs = pos + leadMs + visualTuningOffsetMs
-
+            currentPositionMs = pos + ((leadMs + VISUAL_TUNING_OFFSET_MS) * speed).toLong()
             currentLineIndex = findCurrentLineIndex(entriesWithWords, currentPositionMs, 0L)
-            delay(16L) // ~60fps polling
+
+            val live = sliderPos != null || player.isPlaying
+            delay(if (live) 16L else 200L)
         }
     }
 
@@ -551,7 +573,19 @@ fun LyricsV2(
                 // pick up a light depth blur that grows with distance. NOTHING snaps: alpha,
                 // scale and blur all ride the same buttery spring the moment the active
                 // index moves.
-                val lineSpring = spring<Float>(dampingRatio = 0.8f, stiffness = 300f)
+                // Stiffness falls off with distance from the active line, so a line change
+                // ripples outward through the stack instead of every line in the viewport
+                // arriving at its new state on the same frame. That synchronised move is what
+                // made the transition read as a crossfade of three properties rather than as one
+                // object being handed forward — and a spring cannot be given a start delay, so
+                // the stagger has to come from the curve rather than from timing.
+                val lineSpring = remember(distanceFromActive, isActive) {
+                    spring<Float>(
+                        dampingRatio = 0.8f,
+                        stiffness = if (isActive) 420f
+                        else (330f - distanceFromActive * 45f).coerceAtLeast(120f),
+                    )
+                }
                 val animatedLineAlpha by animateFloatAsState(
                     targetValue = wordLineAlpha,
                     animationSpec = lineSpring,
@@ -561,6 +595,21 @@ fun LyricsV2(
                     targetValue = if (!isSynced || isActive) 1f else 0.85f,
                     animationSpec = lineSpring,
                     label = "lineScale",
+                )
+                // The active line lifts a couple of pixels off the column and the line just
+                // behind it settles back. Small enough that it is never read as a layout shift,
+                // large enough that the eye is told where the words are without relying on
+                // brightness alone - which is the only cue that survives a bright wallpaper
+                // behind translucent lyrics.
+                val animatedLineLift by animateFloatAsState(
+                    targetValue = when {
+                        !isSynced -> 0f
+                        isActive -> -2.5f
+                        distanceFromActive == 1 -> 1.5f
+                        else -> 0f
+                    },
+                    animationSpec = lineSpring,
+                    label = "lineLift",
                 )
                 val animatedLineBlur by animateFloatAsState(
                     targetValue = when {
@@ -608,6 +657,7 @@ fun LyricsV2(
                             alpha = animatedLineAlpha
                             scaleX = animatedLineScale
                             scaleY = animatedLineScale
+                            translationY = animatedLineLift.dp.toPx()
                             transformOrigin = lineTransformOrigin
                         }
                         .then(

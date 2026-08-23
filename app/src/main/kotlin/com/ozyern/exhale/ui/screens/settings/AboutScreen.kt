@@ -87,6 +87,11 @@ import com.ozyern.exhale.ui.component.IconButton
 import com.ozyern.exhale.ui.utils.backToMain
 import kotlin.math.PI
 import kotlin.math.sin
+import android.os.Build
+import android.widget.Toast
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 
 // ─── People and links ─────────────────────────────────────────────────────────
 
@@ -148,7 +153,24 @@ fun AboutScreen(
     scrollBehavior: TopAppBarScrollBehavior,
 ) {
     val uriHandler = LocalUriHandler.current
+    val clipboard = LocalClipboardManager.current
+    val context = LocalContext.current
     var showEasterEgg by remember { mutableStateOf(false) }
+
+    // Everything the page states about the build, assembled once. `remember` with no keys
+    // because none of it can change without the process restarting.
+    val buildFacts = remember {
+        BuildFacts(
+            version = BuildConfig.VERSION_NAME,
+            build = BuildConfig.VERSION_CODE.toString(),
+            packageName = BuildConfig.APPLICATION_ID,
+            architecture = BuildConfig.ARCHITECTURE,
+            buildType = BuildConfig.BUILD_TYPE,
+            commit = BuildConfig.GIT_COMMIT.take(7).ifBlank { "—" },
+            android = "${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})",
+            device = "${Build.MANUFACTURER.replaceFirstChar { it.uppercase() }} ${Build.MODEL}",
+        )
+    }
 
     if (showEasterEgg) {
         ExhaleBreathingEgg(onDismiss = { showEasterEgg = false })
@@ -264,23 +286,89 @@ fun AboutScreen(
                 }
             }
 
+            item(key = "updates") {
+                Column(modifier = Modifier.padding(bottom = spacing)) {
+                    SettingsSectionHeader(stringResource(R.string.updates))
+                    AboutGroup {
+                        // About is where people come looking for this, and until now the only
+                        // route to it was back out to Settings and down a different branch.
+                        AboutRow(
+                            icon = R.drawable.update,
+                            title = stringResource(R.string.update_check_now),
+                            value = null,
+                            onClick = { navController.navigate("settings/update") },
+                        )
+                        AboutDivider()
+                        AboutRow(
+                            icon = R.drawable.history,
+                            title = stringResource(R.string.view_changelog),
+                            value = null,
+                            onClick = { navController.navigate("settings/changelog") },
+                        )
+                    }
+                }
+            }
+
             item(key = "info") {
                 Column(modifier = Modifier.padding(bottom = spacing)) {
                     SettingsSectionHeader(stringResource(R.string.about_information))
                     AboutGroup {
+                        // The table answers the question this page is actually opened for, which
+                        // is almost never "what version am I on" in isolation — it is "what
+                        // exactly am I running", asked because something is wrong. Three rows
+                        // naming the app and nothing naming the phone or the build left the other
+                        // half of that answer somewhere in Android's own settings.
                         AboutValueRow(
                             title = stringResource(R.string.update_installed_version),
-                            value = BuildConfig.VERSION_NAME,
+                            value = buildFacts.version,
                         )
                         AboutPlainDivider()
                         AboutValueRow(
                             title = stringResource(R.string.about_build),
-                            value = BuildConfig.VERSION_CODE.toString(),
+                            value = buildFacts.build,
+                        )
+                        AboutPlainDivider()
+                        AboutValueRow(
+                            title = stringResource(R.string.about_build_type),
+                            value = buildFacts.buildType,
+                        )
+                        AboutPlainDivider()
+                        AboutValueRow(
+                            title = stringResource(R.string.about_commit),
+                            value = buildFacts.commit,
                         )
                         AboutPlainDivider()
                         AboutValueRow(
                             title = stringResource(R.string.about_package),
-                            value = BuildConfig.APPLICATION_ID,
+                            value = buildFacts.packageName,
+                        )
+                        AboutPlainDivider()
+                        AboutValueRow(
+                            title = stringResource(R.string.about_android),
+                            value = buildFacts.android,
+                        )
+                        AboutPlainDivider()
+                        AboutValueRow(
+                            title = stringResource(R.string.about_device),
+                            value = buildFacts.device,
+                        )
+                        AboutDivider()
+                        // One tap instead of eight fields transcribed by hand into a bug report,
+                        // half of them wrong. No chevron: it does something here rather than
+                        // going somewhere.
+                        AboutRow(
+                            icon = R.drawable.content_copy,
+                            title = stringResource(R.string.about_copy_build_info),
+                            value = stringResource(R.string.about_copy_build_info_desc),
+                            showChevron = false,
+                            onClick = {
+                                clipboard.setText(AnnotatedString(buildFacts.asReport()))
+                                Toast.makeText(
+                                    context,
+                                    context.getString(R.string.about_build_info_copied),
+                                    Toast.LENGTH_SHORT,
+                                ).show()
+                            },
                         )
                     }
                 }
@@ -300,6 +388,38 @@ fun AboutScreen(
                 }
             }
         }
+    }
+}
+
+// ─── Build facts ──────────────────────────────────────────────────────────────
+
+/**
+ * Everything the Information table states, in one immutable object.
+ *
+ * Exists mainly for [asReport]. A "copy build info" row that reassembles the string from eight
+ * separate `BuildConfig` and `Build` reads at the call site is a second copy of the table that can
+ * silently disagree with the first one; this way the rows and the clipboard are guaranteed to be
+ * the same facts.
+ */
+private data class BuildFacts(
+    val version: String,
+    val build: String,
+    val packageName: String,
+    val architecture: String,
+    val buildType: String,
+    val commit: String,
+    val android: String,
+    val device: String,
+) {
+    /** Formatted for pasting straight into an issue: one fact per line, aligned labels. */
+    fun asReport(): String = buildString {
+        appendLine("Exhale $version ($build)")
+        appendLine("Package:      $packageName")
+        appendLine("Architecture: $architecture")
+        appendLine("Build type:   $buildType")
+        appendLine("Commit:       $commit")
+        appendLine("Android:      $android")
+        append("Device:       $device")
     }
 }
 
@@ -643,6 +763,8 @@ private fun AboutRow(
     title: String,
     value: String?,
     onClick: () -> Unit,
+    // A chevron promises another screen. Rows that act on the spot must not wear one.
+    showChevron: Boolean = true,
 ) {
     AboutRowScaffold(onClick = onClick) {
         Box(
@@ -683,7 +805,7 @@ private fun AboutRow(
             Spacer(Modifier.width(6.dp))
         }
 
-        AboutChevron()
+        if (showChevron) AboutChevron()
     }
 }
 

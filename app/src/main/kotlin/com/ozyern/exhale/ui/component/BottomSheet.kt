@@ -67,6 +67,7 @@ import com.ozyern.exhale.utils.rememberPreference
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.launch
+import androidx.compose.ui.util.fastRoundToInt
 
 // At p=0 (fully collapsed) the content layer is squashed to this fraction of its natural height.
 // It has to be aggressive enough that the controls visibly compress into the pill band, and stay
@@ -123,6 +124,7 @@ fun BottomSheet(
     collapsedContent: @Composable BoxScope.() -> Unit,
     content: @Composable BoxScope.() -> Unit,
 ) {
+    val collapsedInteractionSource = remember { MutableInteractionSource() }
     Box(
         modifier =
         modifier
@@ -291,11 +293,13 @@ fun BottomSheet(
                         } else {
                             alpha = 1f - (p * 4).coerceAtMost(1f)
                         }
-                    }.clickable(
-                        interactionSource = remember { MutableInteractionSource() },
+                    }
+                    .clickable(
+                        interactionSource = collapsedInteractionSource,
                         indication = null,
                         onClick = state::expandSoft,
-                    ).fillMaxWidth()
+                    )
+                    .fillMaxWidth()
                     .height(state.collapsedBound),
                 content = collapsedContent,
             )

@@ -9,6 +9,7 @@
 package com.ozyern.exhale.ui.player
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -27,15 +28,21 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.ozyern.exhale.LocalPlayerConnection
 import com.ozyern.exhale.constants.LiquidGlassNavBarKey
+import com.ozyern.exhale.constants.CompactMiniPlayerHeight
+import com.ozyern.exhale.constants.CompactMiniPlayerPillCornerRadius
 import com.ozyern.exhale.constants.MiniPlayerHeight
 import com.ozyern.exhale.constants.MiniPlayerPillCornerRadius
 import com.ozyern.exhale.constants.SwipeSensitivityKey
 import com.ozyern.exhale.ui.component.BottomSheetState
-import com.ozyern.exhale.ui.component.GlassSurface
+import com.ozyern.exhale.ui.component.rememberChromeGlassModifier
 import com.ozyern.exhale.utils.rememberPreference
 import kotlin.math.roundToInt
 
 
+/**
+ * @param compact lay the pill out at [CompactMiniPlayerHeight] inside the standard slot, for the
+ *   surfaces whose bottom row is the slim search bar rather than the 64dp dock.
+ */
 @Composable
 fun MiniPlayer(
     position: Long,
@@ -43,7 +50,8 @@ fun MiniPlayer(
     modifier: Modifier = Modifier,
     pureBlack: Boolean,
     navController: NavController,
-    state: BottomSheetState
+    state: BottomSheetState,
+    compact: Boolean = false,
 ) {
     NewMiniPlayer(
         position = position,
@@ -51,7 +59,8 @@ fun MiniPlayer(
         modifier = modifier,
         pureBlack = pureBlack,
         navController = navController,
-        state = state
+        state = state,
+        compact = compact,
     )
 }
 
@@ -62,7 +71,8 @@ private fun NewMiniPlayer(
     modifier: Modifier = Modifier,
     pureBlack: Boolean,
     navController: NavController,
-    state: BottomSheetState
+    state: BottomSheetState,
+    compact: Boolean = false,
 ) {
     val playerConnection = LocalPlayerConnection.current ?: return
     val layoutDirection = LocalLayoutDirection.current
@@ -79,14 +89,17 @@ private fun NewMiniPlayer(
         layoutDirection = layoutDirection,
         coroutineScope = coroutineScope,
         pureBlack = pureBlack,
-        useLegacyBackground = false
+        useLegacyBackground = false,
+        compact = compact,
     ) { offsetX ->
         // Shared with BottomSheet's Dynamic-Island morph target — the full player shrinks into
         // exactly this pill, so the two must read the same constants.
-        val shape = RoundedCornerShape(MiniPlayerPillCornerRadius)
+        val shape = RoundedCornerShape(
+            if (compact) CompactMiniPlayerPillCornerRadius else MiniPlayerPillCornerRadius,
+        )
         val barModifier = Modifier
             .fillMaxWidth()
-            .height(MiniPlayerHeight)
+            .height(if (compact) CompactMiniPlayerHeight else MiniPlayerHeight)
             .offset { IntOffset(offsetX.roundToInt(), 0) }
 
         val content: @Composable () -> Unit = {
@@ -96,16 +109,41 @@ private fun NewMiniPlayer(
                 duration = duration,
                 playerConnection = playerConnection,
                 navController = navController,
-                state = state
+                state = state,
+                compact = compact,
             )
         }
 
         if (liquidGlass && !pureBlack) {
-            // Frosted glass mini player: live backdrop blur of the content above it
-            // (Android 12+), translucent scrim fallback on older devices.
-            GlassSurface(
-                modifier = barModifier,
-                shape = shape,
+            // The SAME glass as the dock, from the same helper, with the same numbers — not a
+            // second frosted material that happens to sit next to it.
+            //
+            // This used to be `GlassSurface`, the Haze-backed panel the in-content cards use. It
+            // is a different renderer with a different tint, a different blur radius and a
+            // different fallback, so the pill and the dock 8dp below it were two visibly
+            // different densities of glass stacked on each other — one milkier, one greyer.
+            // Nothing about the pill is in-content: like the dock, it is composed in the
+            // Scaffold's bottomBar slot, a sibling drawn *over* the NavHost, so consuming
+            // `LocalAppBackdrop` here is safe for exactly the reason it is safe there and is not
+            // the re-entrant layer draw that in-content glass would be.
+            Box(
+                modifier = barModifier
+                    .then(
+                        rememberChromeGlassModifier(
+                            shape = shape,
+                            dark = isSystemInDarkTheme(),
+                            // Verbatim from `LiquidGlassBottomBar.frostedGlassModifier`. Copied
+                            // rather than shared because that one is private to the bar; if
+                            // either moves, they must move together.
+                            tintAlpha = if (isSystemInDarkTheme()) 0.30f else 0.26f,
+                            blurRadius = 52.dp,
+                            quality = 0.5f,
+                        ),
+                    )
+                    // `drawBackdrop` paints the pane; it does not clip what is drawn on top of
+                    // it. Without this the progress hairline runs straight out past the capsule's
+                    // rounded ends.
+                    .clip(shape),
             ) {
                 content()
             }

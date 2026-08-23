@@ -94,6 +94,7 @@ import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.navigation.NavController
 import androidx.palette.graphics.Palette
 import coil3.compose.AsyncImage
+import com.ozyern.exhale.ui.component.heroParallax
 import coil3.imageLoader
 import coil3.request.ImageRequest
 import coil3.request.allowHardware
@@ -146,6 +147,10 @@ import com.ozyern.exhale.ui.utils.resize
 import com.ozyern.exhale.utils.rememberPreference
 import com.ozyern.exhale.viewmodels.ArtistViewModel
 import com.valentinilk.shimmer.shimmer
+import androidx.compose.ui.draw.BlurredEdgeTreatment
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
 
 // Sealed class for video background state
 sealed class VideoBackgroundState {
@@ -536,67 +541,193 @@ fun ArtistScreen(
                 item(key = "header") {
                     val artistName = artistPage?.artist?.title ?: libraryArtist?.artist?.name
 
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = systemBarsTopPadding + AppBarHeight),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        // Artist portrait. Sized down from 210dp and given a soft rim: at 210 it ate
-                        // the whole first screen and, sitting directly on the colour wash with no
-                        // edge of its own, it bled into the gradient behind it instead of reading
-                        // as a portrait on top of one.
-                        Box(
-                            modifier = Modifier.padding(top = 4.dp, bottom = 18.dp),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            val rimBrush = Brush.linearGradient(
-                                listOf(
-                                    Color.White.copy(alpha = 0.55f),
-                                    Color.White.copy(alpha = 0.08f),
-                                ),
-                            )
-                            if (thumbnail != null) {
+                    // ── Hero ──
+                    //
+                    // A profile header, not a poster.
+                    //
+                    // It used to be a 172dp portrait centred on the page with the name in
+                    // `displaySmall` underneath it and the counts centred under that — three
+                    // stacked centred blocks that between them ate the entire first screen before
+                    // a single song appeared. Centring is also the wrong axis for this page: the
+                    // description below it is a paragraph, the sections below that are lists, and
+                    // both of those read left-to-right from a fixed margin, so the top of the page
+                    // was the only part of it that did not.
+                    //
+                    // Now the portrait, the name and the counts are one row against the same
+                    // margin as everything under them, over a blurred wash of the artist's own
+                    // image. That is roughly two thirds of the vertical space for the same
+                    // information, and the first section header now lands above the fold.
+                    val countsLine = run {
+                        val songSections = artistPage?.sections?.filter { section ->
+                            section.items.any { it is SongItem }
+                        }
+                        val songCount = if (showLocal) {
+                            librarySongs.size
+                        } else {
+                            songSections
+                                ?.flatMap { it.items }
+                                ?.filterIsInstance<SongItem>()
+                                ?.distinctBy { it.id }
+                                ?.size ?: librarySongs.size
+                        }
+                        val hasMoreSongs =
+                            !showLocal && songSections?.any { it.moreEndpoint != null } == true
+
+                        val albumSections = artistPage?.sections?.filter { section ->
+                            section.items.any { it is AlbumItem }
+                        }
+                        val albumCount = if (showLocal) {
+                            libraryAlbums.size
+                        } else {
+                            albumSections
+                                ?.flatMap { it.items }
+                                ?.filterIsInstance<AlbumItem>()
+                                ?.distinctBy { it.id }
+                                ?.size ?: libraryAlbums.size
+                        }
+                        val hasMoreAlbums =
+                            !showLocal && albumSections?.any { it.moreEndpoint != null } == true
+
+                        buildList {
+                            if (songCount > 0) {
+                                val n = if (hasMoreSongs) "$songCount+" else songCount.toString()
+                                add("$n ${stringResource(R.string.songs)}")
+                            }
+                            if (albumCount > 0) {
+                                val n = if (hasMoreAlbums) "$albumCount+" else albumCount.toString()
+                                add("$n ${stringResource(R.string.albums)}")
+                            }
+                        }.joinToString("  ·  ").takeIf { it.isNotEmpty() }
+                    }
+
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Box(modifier = Modifier.fillMaxWidth()) {
+                            // The artist's own image, blurred past recognition and scrimmed, as the
+                            // ground the header sits on. Same URL as the portrait, so it costs one
+                            // more decode of an image already in Coil's cache and never a second
+                            // network request — and because it is the same picture, the header is
+                            // always tinted by the artist rather than by the theme.
+                            if (thumbnail != null && !disableBlur) {
                                 AsyncImage(
-                                    model = thumbnail.resize(600, 600),
+                                    model = thumbnail.resize(240, 240),
                                     contentDescription = null,
                                     contentScale = ContentScale.Crop,
                                     modifier = Modifier
-                                        .size(172.dp)
-                                        .shadow(22.dp, CircleShape, clip = false)
-                                        .clip(CircleShape)
-                                        .border(1.5.dp, rimBrush, CircleShape)
+                                        .matchParentSize()
+                                        .graphicsLayer {
+                                            // Anchored to the top and over-scaled so the blur's
+                                            // soft edges are pushed off every side of the box
+                                            // instead of showing as a pale frame inside it.
+                                            transformOrigin = TransformOrigin(0.5f, 0f)
+                                            scaleX = 1.35f
+                                            scaleY = 1.35f
+                                            alpha = 0.55f
+                                        }
+                                        .blur(46.dp, edgeTreatment = BlurredEdgeTreatment.Unbounded),
                                 )
-                            } else {
                                 Box(
                                     modifier = Modifier
-                                        .size(172.dp)
-                                        .shadow(22.dp, CircleShape, clip = false)
-                                        .clip(CircleShape)
-                                        .background(MaterialTheme.colorScheme.surfaceVariant)
-                                        .border(1.5.dp, rimBrush, CircleShape),
-                                    contentAlignment = Alignment.Center
+                                        .matchParentSize()
+                                        .background(
+                                            Brush.verticalGradient(
+                                                listOf(
+                                                    surfaceColor.copy(alpha = 0.10f),
+                                                    surfaceColor.copy(alpha = 0.55f),
+                                                    surfaceColor,
+                                                ),
+                                            ),
+                                        ),
+                                )
+                            }
+
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = systemBarsTopPadding + AppBarHeight)
+                                    .padding(start = 20.dp, end = 20.dp, top = 4.dp, bottom = 18.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                val rimBrush = Brush.linearGradient(
+                                    listOf(
+                                        Color.White.copy(alpha = 0.55f),
+                                        Color.White.copy(alpha = 0.08f),
+                                    ),
+                                )
+                                Box(
+                                    // Still lags the list and fades as the page scrolls, so the
+                                    // content slides over the portrait rather than dragging it
+                                    // along. Shorter travel than before because the portrait now
+                                    // has a shorter distance to go. Draw-phase only.
+                                    modifier = Modifier.heroParallax(lazyListState, travel = 150.dp),
+                                    contentAlignment = Alignment.Center,
                                 ) {
-                                    Icon(
-                                        painter = painterResource(R.drawable.person),
-                                        contentDescription = null,
-                                        modifier = Modifier.size(72.dp),
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    if (thumbnail != null) {
+                                        AsyncImage(
+                                            model = thumbnail.resize(400, 400),
+                                            contentDescription = null,
+                                            contentScale = ContentScale.Crop,
+                                            modifier = Modifier
+                                                .size(104.dp)
+                                                .shadow(18.dp, CircleShape, clip = false)
+                                                .clip(CircleShape)
+                                                .border(1.5.dp, rimBrush, CircleShape),
+                                        )
+                                    } else {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(104.dp)
+                                                .shadow(18.dp, CircleShape, clip = false)
+                                                .clip(CircleShape)
+                                                .background(MaterialTheme.colorScheme.surfaceVariant)
+                                                .border(1.5.dp, rimBrush, CircleShape),
+                                            contentAlignment = Alignment.Center,
+                                        ) {
+                                            Icon(
+                                                painter = painterResource(R.drawable.person),
+                                                contentDescription = null,
+                                                modifier = Modifier.size(46.dp),
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            )
+                                        }
+                                    }
+                                }
+
+                                Spacer(Modifier.width(16.dp))
+
+                                Column(modifier = Modifier.weight(1f)) {
+                                    // An overline, so the name below it does not have to be
+                                    // enormous to say "this is a person". It is the cheapest way
+                                    // to buy back two type steps.
+                                    Text(
+                                        text = stringResource(R.string.artist).uppercase(),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        letterSpacing = 1.4.sp,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        maxLines = 1,
                                     )
+                                    Spacer(Modifier.height(3.dp))
+                                    Text(
+                                        text = artistName ?: stringResource(R.string.unknown_artist),
+                                        style = MaterialTheme.typography.headlineSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        lineHeight = 30.sp,
+                                        maxLines = 3,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                    if (countsLine != null) {
+                                        Spacer(Modifier.height(5.dp))
+                                        Text(
+                                            text = countsLine,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                    }
                                 }
                             }
                         }
-
-                        // Artist Name
-                        Text(
-                            text = artistName ?: stringResource(R.string.unknown_artist),
-                            style = MaterialTheme.typography.displaySmall,
-                            fontWeight = FontWeight.Bold,
-                            textAlign = TextAlign.Center,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.padding(horizontal = 24.dp)
-                        )
 
                         // Artist Description (expandable)
                         //
@@ -615,8 +746,7 @@ fun ArtistScreen(
                             Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(horizontal = 24.dp)
-                                    .padding(top = 14.dp)
+                                    .padding(horizontal = 20.dp)
                                     .combinedClickable(
                                         onClick = { isExpanded = !isExpanded },
                                         onLongClick = {}
@@ -651,68 +781,6 @@ fun ArtistScreen(
                             }
                         }
 
-                        // Counts, as one quiet caption line under the name.
-                        //
-                        // They used to be a `SpaceEvenly` row of `titleLarge` bold numerals with
-                        // labels beneath — a stats panel of the kind a dashboard has. On an artist
-                        // page the counts are context, not content: they belong at caption weight
-                        // beside the name, and reclaiming that band of vertical space is what lets
-                        // the actual music start above the fold.
-                        run {
-                            // Songs count - sum all SongItem instances across all sections
-                            val songSections = artistPage?.sections?.filter { section ->
-                                section.items.any { it is SongItem }
-                            }
-                            val songCount = if (showLocal) {
-                                librarySongs.size
-                            } else {
-                                songSections
-                                    ?.flatMap { it.items }
-                                    ?.filterIsInstance<SongItem>()
-                                    ?.distinctBy { it.id }
-                                    ?.size ?: librarySongs.size
-                            }
-                            // Check if any song section has moreEndpoint (meaning there are more songs)
-                            val hasMoreSongs = !showLocal && songSections?.any { it.moreEndpoint != null } == true
-
-                            // Albums count - sum all AlbumItem instances across all sections
-                            val albumSections = artistPage?.sections?.filter { section ->
-                                section.items.any { it is AlbumItem }
-                            }
-                            val albumCount = if (showLocal) {
-                                libraryAlbums.size
-                            } else {
-                                albumSections
-                                    ?.flatMap { it.items }
-                                    ?.filterIsInstance<AlbumItem>()
-                                    ?.distinctBy { it.id }
-                                    ?.size ?: libraryAlbums.size
-                            }
-                            // Check if any album section has moreEndpoint (meaning there are more albums)
-                            val hasMoreAlbums = !showLocal && albumSections?.any { it.moreEndpoint != null } == true
-
-                            val parts = buildList {
-                                if (songCount > 0) {
-                                    val n = if (hasMoreSongs) "$songCount+" else songCount.toString()
-                                    add("$n ${stringResource(R.string.songs)}")
-                                }
-                                if (albumCount > 0) {
-                                    val n = if (hasMoreAlbums) "$albumCount+" else albumCount.toString()
-                                    add("$n ${stringResource(R.string.albums)}")
-                                }
-                            }
-
-                            if (parts.isNotEmpty()) {
-                                Text(
-                                    text = parts.joinToString("  ·  "),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    textAlign = TextAlign.Center,
-                                    modifier = Modifier.padding(top = 6.dp),
-                                )
-                            }
-                        }
-
                         // One action row instead of three buttons in two rows across three
                         // different Material styles (filled-tonal, filled, outlined). There is
                         // exactly one primary thing to do on an artist page — play them — so that
@@ -729,8 +797,8 @@ fun ArtistScreen(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 24.dp)
-                                .padding(top = 20.dp, bottom = 4.dp),
+                                .padding(horizontal = 20.dp)
+                                .padding(top = 16.dp, bottom = 4.dp),
                             horizontalArrangement = Arrangement.spacedBy(10.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {

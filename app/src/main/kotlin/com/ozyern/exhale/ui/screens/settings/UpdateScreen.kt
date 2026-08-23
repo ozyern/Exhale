@@ -108,6 +108,8 @@ import com.ozyern.exhale.utils.rememberPreference
 import kotlinx.coroutines.launch
 import java.io.File
 import java.util.Locale
+import android.text.format.DateUtils
+import com.ozyern.exhale.constants.LastUpdateCheckKey
 
 // ─── Update check state ───────────────────────────────────────────────────────
 
@@ -147,6 +149,12 @@ fun UpdateScreen(
         EnableUpdateNotificationKey, defaultValue = false
     )
 
+    // Written by the background worker after every automatic check, and now by the manual one
+    // too. It was already being recorded and never shown — the page could tell you a newer build
+    // existed but not whether it had looked in the last minute or the last fortnight, which is
+    // the difference between "up to date" meaning something and meaning nothing.
+    val (lastCheckedAt, onLastCheckedAtChange) = rememberPreference(LastUpdateCheckKey, 0L)
+
     var latestVersion by remember { mutableStateOf<String?>(null) }
     var updateCheckState by remember { mutableStateOf<UpdateCheckState>(UpdateCheckState.Idle) }
     var showUpdateDialog by remember { mutableStateOf(false) }
@@ -176,6 +184,7 @@ fun UpdateScreen(
         if (updateCheckState == UpdateCheckState.Loading) return
         coroutineScope.launch {
             updateCheckState = UpdateCheckState.Loading
+            onLastCheckedAtChange(System.currentTimeMillis())
             Updater.checkForUpdate(BuildConfig.VERSION_NAME)
                 .onSuccess { info ->
                     if (info == null) {
@@ -303,6 +312,28 @@ fun UpdateScreen(
                         },
                         valueBold = updateAvailable,
                     )
+                    UpdateRowDivider()
+                    UpdateRow(
+                        icon = painterResource(R.drawable.history),
+                        title = stringResource(R.string.update_last_checked),
+                        value = remember(lastCheckedAt) {
+                            if (lastCheckedAt <= 0L) null
+                            else DateUtils.getRelativeTimeSpanString(
+                                lastCheckedAt,
+                                System.currentTimeMillis(),
+                                DateUtils.MINUTE_IN_MILLIS,
+                            ).toString()
+                        } ?: stringResource(R.string.update_never_checked),
+                    )
+                    UpdateRowDivider()
+                    // This page is the one people screenshot when reporting that an update did
+                    // not apply, so it should carry enough to identify the build without a trip
+                    // to About.
+                    UpdateRow(
+                        icon = painterResource(R.drawable.code),
+                        title = stringResource(R.string.about_build),
+                        value = "${BuildConfig.VERSION_CODE} · ${BuildConfig.ARCHITECTURE}",
+                    )
                 }
 
                 Spacer(Modifier.height(22.dp))
@@ -422,6 +453,27 @@ fun UpdateScreen(
                             )
                         },
                     )
+
+                    UpdateRowDivider()
+
+                    // The releases page was only reachable from inside the "an update exists"
+                    // sheet, so on an up-to-date build there was no way to reach the downloads at
+                    // all — including the older ones, which is exactly what someone wanting to
+                    // roll back is here for.
+                    UpdateRow(
+                        icon = painterResource(R.drawable.github),
+                        title = stringResource(R.string.update_releases_page),
+                        subtitle = stringResource(R.string.update_releases_page_desc),
+                        onClick = { uriHandler.openUri(GitHubReleasesUrl) },
+                        trailing = {
+                            Icon(
+                                painter = painterResource(R.drawable.link),
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                            )
+                        },
+                    )
                 }
 
                 Spacer(Modifier.height(32.dp))
@@ -429,6 +481,8 @@ fun UpdateScreen(
         }
     }
 }
+
+private const val GitHubReleasesUrl = "https://github.com/ozyern/Exhale/releases"
 
 // ─── Hero ─────────────────────────────────────────────────────────────────────
 

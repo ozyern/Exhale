@@ -109,6 +109,18 @@ val ScrobbleDelaySecondsKey = intPreferencesKey("scrobbleDelaySeconds")
 
 val AudioQualityKey = stringPreferencesKey("audioQuality")
 
+/**
+ * Force the "this connection is metered" branch of stream selection, regardless of what
+ * `ConnectivityManager` reports.
+ *
+ * **Defaults to off.** It used to default to on, which meant every install started out asking
+ * YouTube for the low-bandwidth ladder even on unmetered Wi-Fi — the setting overrides the
+ * platform's own answer rather than adding to it, so switching it on is a statement that the
+ * system's metered detection is wrong here, not a general "be careful with data" preference.
+ * Android already reports metered tethering and metered Wi-Fi correctly on the overwhelming
+ * majority of devices, so the sensible default is to believe it and let this be the escape hatch
+ * for the minority where it lies.
+ */
 val NetworkMeteredKey = booleanPreferencesKey("networkMetered")
 
 enum class AudioQuality {
@@ -473,17 +485,30 @@ val EnableLockScreenLyricsKey = booleanPreferencesKey("enableLockScreenLyrics")
  * Write the line currently playing into the media session's own subtitle, so it appears on the
  * lock screen's standard media card.
  *
- * This is the delivery path that does not depend on the ROM. `lyricInfo` and its aliases address
- * OPlus SystemUI's private lyric surface, which stock ColorOS gates on a package whitelist no
- * third-party player is on — hence the Live Alert capsule working while the lock screen never
- * does. The media card is not private: it is the platform media control every Android lock screen
- * has drawn since 11, it renders whatever the session puts in its subtitle field, and nothing
- * about it can be whitelisted away.
+ * **Defaults to on, because it is the only one of the two lyric paths that works on a phone with
+ * nothing installed on it.** [EnableLockScreenLyricsKey] publishes an OPlus `lyricInfo` document
+ * to the ColorOS lock-screen lyric page, and that page is private vendor SystemUI gated on a
+ * package whitelist a third-party player is never added to. The community bridge that opens it is
+ * an LSPosed module and says so in its own requirements: without root, that path can be
+ * spec-perfect and still paint nothing. The media card is the platform control every Android lock
+ * screen has drawn since 11, it has no whitelist, and it renders whatever the session's subtitle
+ * says.
  *
- * The cost is that the same field feeds the notification shade, Bluetooth head units and Android
- * Auto, so while this is on the artist name is replaced by the lyric everywhere the session is
- * read. That is a real trade, which is why it is its own switch rather than part of
- * [EnableLockScreenLyricsKey].
+ * The two are not free to combine, and this used to be hard-gated off whenever the Live Space
+ * path was on for that reason: the integration spec is explicit that a player must keep `TITLE`,
+ * `ARTIST` and `DISPLAY_SUBTITLE` stable for the current track, because OPlus reads them as track
+ * identity, so a line-by-line rewrite looks like the track changing every few seconds and its
+ * metadata debounce can drop the `lyricInfo` document.
+ *
+ * That gate is gone, and its removal is the fix rather than a regression. The conflict is only
+ * real on a phone where the Live Space path *works at all* — i.e. one with the bridge module
+ * installed — and gating on a preference that is on by default meant the stock case, which is
+ * almost every case, shipped with both channels silently dark. Trading a broken default for a
+ * one-switch fix on rooted phones is the right way round. Users who have the bridge turn this
+ * off; the description in Settings says so.
+ *
+ * The cost while it is on: the same field feeds the notification shade, Bluetooth head units and
+ * Android Auto, so the artist name is replaced by the lyric everywhere the session is read.
  */
 val LyricsOnMediaCardKey = booleanPreferencesKey("lyricsOnMediaCard")
 val QueueLyricsPreloadCountKey = intPreferencesKey("queue_lyrics_preload_count")

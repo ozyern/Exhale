@@ -400,6 +400,10 @@ fun ContentSettings(
             onCheckedChange = onLockScreenLyricsChange,
         )
 
+        // Independent of the Live Space switch above, and on by default. See
+        // `LyricsOnMediaCardKey`: the two do interfere, but only on the phones where Live Space
+        // works at all, and disabling this one whenever that one was on left the stock case -
+        // almost every case - with no lyrics on the lock screen whatsoever.
         SwitchPreference(
             title = { Text(stringResource(R.string.lyrics_on_media_card)) },
             description = stringResource(R.string.lyrics_on_media_card_desc),

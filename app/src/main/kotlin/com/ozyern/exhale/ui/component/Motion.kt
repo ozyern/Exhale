@@ -26,6 +26,8 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChangeIgnoreConsumed
 import com.ozyern.exhale.ui.theme.MotionTokens
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Shape
 
 /**
  * "Apple Music" tap physics — scale down on press, spring back on release.
@@ -108,6 +110,24 @@ fun Modifier.pressScaleContainer(
  * All-in-one: INSTANT press physics (scale on ACTION_DOWN) + [combinedClickable] ripple/click.
  * The scale comes from [pressScaleContainer] (Initial-pass observer, no tap-slop delay), while
  * the clickable still provides ripple indication and the click/long-click semantics.
+ *
+ * ### Always pass [shape] when the target is not a rectangle
+ *
+ * A ripple is drawn by the indication node and clipped by whatever clip is **above** it in the
+ * chain. Every glass surface in this app clips itself, and the idiom at all six call sites was
+ *
+ * ```
+ * Modifier.size(38.dp).bounceClick(onClick).liquidGlassSurface(CircleShape)
+ * ```
+ *
+ * which puts the clip *below* the clickable — so the ripple was never clipped at all. Tapping the
+ * account disc washed a hard-edged **square** across a circular button, and the same square landed
+ * on every rounded card in the account sheet, including the one whose comment says a stray ripple
+ * is the cheapest-looking thing in a glass UI.
+ *
+ * Clipping inside `bounceClick`, before the indication, fixes it wherever the caller says what
+ * shape it is. The default stays null so nothing rectangular pays for a graphics layer it does
+ * not need.
  */
 @Composable
 fun Modifier.bounceClick(
@@ -115,10 +135,12 @@ fun Modifier.bounceClick(
     onLongClick: (() -> Unit)? = null,
     enabled: Boolean = true,
     pressedScale: Float = MotionTokens.PressedScale,
+    shape: Shape? = null,
 ): Modifier {
     val source = remember { MutableInteractionSource() }
     return this
         .pressScaleContainer(pressedScale)
+        .then(if (shape != null) Modifier.clip(shape) else Modifier)
         .combinedClickable(
             interactionSource = source,
             indication = LocalIndication.current,

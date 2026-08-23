@@ -93,6 +93,7 @@ import androidx.media3.exoplayer.offline.DownloadService
 import androidx.navigation.NavController
 import androidx.palette.graphics.Palette
 import coil3.compose.AsyncImage
+import com.ozyern.exhale.ui.component.heroParallax
 import coil3.imageLoader
 import coil3.request.ImageRequest
 import coil3.request.allowHardware
@@ -650,6 +651,10 @@ fun AlbumScreen(
                         Box(
                             modifier = Modifier
                                 .padding(top = 8.dp, bottom = 20.dp)
+                                // Same treatment as the artist portrait, and the same reason: a
+                                // cover that scrolls at exactly the list's speed reads as a tall
+                                // list row rather than as the subject of the page.
+                                .heroParallax(lazyListState, travel = 260.dp)
                         ) {
                             Surface(
                                 modifier = Modifier

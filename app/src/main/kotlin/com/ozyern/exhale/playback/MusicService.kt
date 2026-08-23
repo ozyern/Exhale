@@ -1573,8 +1573,14 @@ class MusicService :
         metadata: com.ozyern.exhale.models.MediaMetadata,
         lyrics: String?,
     ) {
-        val enabled = dataStore.data.first()[EnableLockScreenLyricsKey] ?: true
-        if (!enabled) return
+        // Read both switches here, not one. The line ticker below feeds the media card as well
+        // as the Live Space extras, so returning early on the Live Space switch alone used to
+        // take the media card down with it - a user who turned off a feature that does nothing on
+        // their phone silently lost the one that works on it.
+        val preferences = dataStore.data.first()
+        val liveSpaceEnabled = preferences[EnableLockScreenLyricsKey] ?: true
+        val mediaCardEnabled = preferences[LyricsOnMediaCardKey] ?: true
+        if (!liveSpaceEnabled && !mediaCardEnabled) return
 
         val usable = lyrics?.takeIf { it != LyricsEntity.LYRICS_NOT_FOUND }
         // Normalise once. `toLrc` is the TTML flattener for word-synced providers, and both the
@@ -1592,6 +1598,9 @@ class MusicService :
         }
 
         startLiveLyricLineTicker(lrc)
+
+        // Everything past here is the OPlus document channel.
+        if (!liveSpaceEnabled) return
 
         // Second delivery channel, independent of the media items.
         //
@@ -1612,8 +1621,18 @@ class MusicService :
             Log.i(LiveLyricsTag, "${metadata.id}: published with the track, nothing to force")
         } else {
             withContext(Dispatchers.Main) { forceLyricInfo(metadata.id, payload) }
+            // One retry, and only if the first one did not stick.
+            //
+            // The integration spec is emphatic that this must be at most one republication, and
+            // conditional: OPlus debounces metadata updates that arrive close together, so a
+            // second unconditional write is not insurance, it is the thing most likely to get the
+            // first one discarded. Re-reading the item is the whole point - if `lyricInfo` is
+            // already on it, the publication crossed and there is nothing to do.
             delay(LiveLyricsRepublishDelayMs)
-            withContext(Dispatchers.Main) { forceLyricInfo(metadata.id, payload) }
+            val stuck = withContext(Dispatchers.Main) { currentItemCarries(metadata.id, payload) }
+            if (!stuck) {
+                withContext(Dispatchers.Main) { forceLyricInfo(metadata.id, payload) }
+            }
         }
 
         withContext(Dispatchers.Main) { logLiveLyricsDelivery(metadata.id) }
@@ -1660,22 +1679,72 @@ class MusicService :
         }
     }
 
-    /** The polling loop itself. Main thread: it reads the player directly. */
+    /**
+     * The ticker. Main thread: it reads the player directly.
+     *
+     * ### It sleeps until the next line, not for a fixed interval
+     *
+     * The old loop woke every 300ms and asked `findCurrentLineIndex` for the line at
+     * `position + 300ms`. Both numbers were wrong in the same direction and neither cancelled the
+     * other: the 300ms lead published each line up to a third of a second *early*, and the 300ms
+     * poll could then discover the change up to a third of a second *late*. Net error anywhere in
+     * ±300ms, varying per line, on a surface whose entire job is to agree with what you can hear.
+     * It also woke 200 times a minute to conclude nothing had changed.
+     *
+     * Now the delay is derived from the gap to the next line: far from a boundary it sleeps the
+     * full [LiveLyricsTickMs], and as the boundary approaches it shortens until it is landing
+     * within [LiveLyricsMinTickMs] of the real transition. Fewer wakeups on average *and* an order
+     * of magnitude better placement, because those were never a trade-off — they were both
+     * symptoms of a loop that did not know what it was waiting for.
+     *
+     * Re-derived from `player.currentPosition` every pass rather than accumulated, so a seek, a
+     * pause or a track change is absorbed on the next tick instead of leaving a stale timer
+     * pointed at a position that no longer exists. Playback speed divides the wait for the same
+     * reason: at 1.5x the next line arrives in two thirds of the wall-clock time.
+     *
+     * [LiveLyricsPublishLeadMs] is what remains of the old lead, and it is now doing an honest
+     * job — it covers the real cost of getting a string onto the lock screen (a `replaceMediaItem`
+     * plus the system's own metadata debounce), not the loop's own imprecision.
+     */
     private fun launchLiveLyricTicker(): Job =
         scope.launch {
             while (isActive) {
-                val playing = player.isPlaying
-                if (playing) {
-                    val position = player.currentPosition
-                    val index = LyricsUtils.findCurrentLineIndex(liveLyricLines, position)
-                    if (index >= 0 && index != liveLyricLineIndex) {
-                        liveLyricLineIndex = index
-                        val entry = liveLyricLines[index]
-                        publishSessionCurrentLine(entry.text, entry.time)
-                        publishMediaCardLine(entry.text)
-                    }
+                if (!player.isPlaying) {
+                    delay(LiveLyricsIdleTickMs)
+                    continue
                 }
-                delay(if (playing) LiveLyricsTickMs else LiveLyricsIdleTickMs)
+
+                val lines = liveLyricLines
+                if (lines.isEmpty()) {
+                    delay(LiveLyricsIdleTickMs)
+                    continue
+                }
+
+                val position = player.currentPosition
+                val index = LyricsUtils.findCurrentLineIndex(
+                    lines,
+                    position,
+                    leadMs = LiveLyricsPublishLeadMs,
+                )
+                if (index >= 0 && index != liveLyricLineIndex) {
+                    liveLyricLineIndex = index
+                    val entry = lines[index]
+                    // A blank entry is the gap between verses, and an LRC has plenty of them.
+                    // Publishing "" leaves the lock screen showing an empty subtitle under the
+                    // title, which looks like the feature broke; null restores the artist, which
+                    // is what an instrumental passage should say.
+                    val text = entry.text.takeIf { it.isNotBlank() }
+                    publishSessionCurrentLine(text, entry.time)
+                    publishMediaCardLine(text)
+                }
+
+                // Sleep until just before the next line rather than for a fixed interval.
+                val nextTime = lines.getOrNull(index + 1)?.time
+                val speed = player.playbackParameters.speed.takeIf { it > 0.05f } ?: 1f
+                val untilNext =
+                    if (nextTime == null) LiveLyricsTickMs
+                    else ((nextTime - LiveLyricsPublishLeadMs - position) / speed).toLong()
+                delay(untilNext.coerceIn(LiveLyricsMinTickMs, LiveLyricsTickMs))
             }
         }
 
@@ -1698,12 +1767,17 @@ class MusicService :
      * Writes [line] into the session's displayed subtitle, which is what the lock screen's media
      * card renders under the song title. Null restores the real artist.
      *
-     * This is the path that works without a ROM module. Everything else here talks to OPlus
-     * SystemUI's private lyric surface, and stock ColorOS gates that on a package whitelist a
-     * third-party player is never added to — which is why the Live Alert capsule lights up and
-     * the lock screen stays on "no lyrics" no matter how many keys we publish under. The media
-     * card is the platform control every Android lock screen has drawn since 11. It has no
-     * whitelist. It renders whatever the session's subtitle says.
+     * This is the path that works without a ROM module, and the only one that does, which is why
+     * it is now on by default. Everything else here talks to OPlus SystemUI's private lyric
+     * surface, and stock ColorOS gates that on a package whitelist a third-party player is never
+     * added to - which is why the Live Alert capsule lights up and the lock screen stays on "no
+     * lyrics" no matter how many keys we publish under. The media card is the platform control
+     * every Android lock screen has drawn since 11. It has no whitelist. It renders whatever the
+     * session's subtitle says.
+     *
+     * It does interfere with the `lyricInfo` document on phones where that document is actually
+     * being read, because OPlus treats the subtitle as track identity - see
+     * [LyricsOnMediaCardKey] for why that is a switch to flip rather than a gate to enforce.
      *
      * `replaceMediaItem` on the current item is the same mechanism [forceLyricInfo] already uses
      * and does not interrupt playback: the item keeps its URI and its `tag`, so the player sees a
@@ -1713,7 +1787,9 @@ class MusicService :
      * Main thread.
      */
     private fun publishMediaCardLine(line: String?) {
-        if (!liveLyricsOnMediaCard && line != null) return
+        // A null is a *restore*, so it is allowed through even when the feature is off - that is
+        // how switching the preference puts the real artist back straight away.
+        if (line != null && !liveLyricsOnMediaCard) return
         if (line == liveLyricCardLine) return
 
         val index = player.currentMediaItemIndex
@@ -5468,8 +5544,21 @@ class MusicService :
         /** The retry window the OPlus spec allows when a first publication is swallowed. */
         private const val LiveLyricsRepublishDelayMs = 800L
 
-        /** Line-ticker cadence while playing. Line granularity needs nothing finer. */
-        private const val LiveLyricsTickMs = 300L
+        /** Longest the ticker will sleep while playing — the cadence far from any boundary. */
+        private const val LiveLyricsTickMs = 400L
+
+        /** Shortest, used as a line boundary comes up. This is the placement error, near enough. */
+        private const val LiveLyricsMinTickMs = 32L
+
+        /**
+         * How far ahead of a line's own timestamp it is published.
+         *
+         * Not a fudge factor for a sloppy loop any more — see [launchLiveLyricTicker]. It buys
+         * back the time it actually takes for a string written here to be drawn on the lock
+         * screen: a `replaceMediaItem`, the platform session update, and whatever debounce the
+         * system UI applies before it redraws the card.
+         */
+        private const val LiveLyricsPublishLeadMs = 120L
 
         /** Cadence while paused — just often enough to notice playback resuming. */
         private const val LiveLyricsIdleTickMs = 1_000L

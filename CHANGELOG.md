@@ -104,6 +104,17 @@ dialog, the last surface in the app that did not look like the app. It also stop
 able to switch outputs — Android routes audio system-wide, so the other-device rows open the system
 picker rather than doing nothing convincingly.
 
+**exhale.ozyern.me** — a site for the app.
+
+- Built from the shipping build's own screenshots rather than a recreation, so it cannot drift from
+  what the app looks like. The one part rebuilt in the browser is the dock, because that is the one
+  part you can put your hands on: its capsule stretches into a move and overshoots before it
+  settles, exactly as the real one does.
+- The hero is a light ribbon drawn on canvas — five lens-shaped bands weaving through one another
+  on periods that share no factors, so the colour order keeps inverting and the shape never repeats
+  where anyone can catch it. It stops drawing entirely when it scrolls off screen or is paused.
+- Deployed to GitHub Pages from `website/` on any push that touches it.
+
 ### Changed
 
 **Design system**
@@ -146,6 +157,34 @@ stack of elevated cards with shadows, shimmer sweeps and fake hover states.
 
 - Section headers end in a small grey chevron rather than a full-size filled forward arrow.
 - Keep Listening became the shortcut grid and moved to the top of the page.
+
+**The dock is one material again.**
+
+- State A and State B were drawing glass at different strengths, so the collapse read as a
+  cross-fade between two panes rather than one pane changing shape. Both now take the same tint and
+  blur, raised to stay legible over album art — the dock is the one surface that is never over a
+  background of its own choosing.
+- The A/B morph no longer animates the container at all. Every piece moves itself: the tab strip
+  folds into its left edge, the home circle and the mini-player pill arrive from the outside of the
+  bar, and the search circle — same place, same size in both states — simply stays put instead of
+  cross-fading against itself.
+- In the collapsed pill, artwork, title and artist change as one movement rather than three
+  independent glitches on three different frames, and the play/pause glyph pops in from small so
+  the command visibly takes.
+- Circle presses went underdamped and stiff, to match the capsule's physics rather than sitting
+  next to it with a lift button's.
+
+**Sheets can be thrown away.**
+
+- Every frosted sheet now asks the compositor to blur the whole screen behind its window. A sheet
+  lives in its own window, where the dock's trick is unavailable; this is the same effect, done by
+  the system. Where the platform refuses — low-end devices, battery saver, a developer setting —
+  the surface falls back to the opacity it had before.
+- Dim and blur ride the sheet's own position, so dragging it halfway down lightens the room by
+  half rather than holding a hard scrim until the window is torn down.
+- The grab handle is a control now: drag or flick it to dismiss, with the sheet springing back if
+  you change your mind. It drew that affordance for months and did nothing with it.
+- Sheets animate out. They used to rise on a spring and then vanish on a single frame.
 
 ### Fixed
 
@@ -210,6 +249,19 @@ stack of elevated cards with shadows, shimmer sweeps and fake hover states.
 - Grid artwork carries a soft drop shadow, so shelves read as covers lifted off the page.
 - Home shortcut tiles and the account sheet's tiles are gradient plates with rims and the app's tap
   physics, rather than flat ink washes with a Material ripple washing across the glass.
+
+**Some songs showed another song's lyrics.**
+
+LRCLIB's search endpoint is fuzzy full-text, and the result was being chosen on duration alone —
+so any track of about the same length could win. Matching now scores title and artist together and
+refuses anything below a floor, with duration demoted to a tie-breaker.
+
+**The Home screen could crash on open.**
+
+A YouTube Music feed can return the same browse id for more than one section, and that id was the
+row's key. A repeat is fatal to `LazyColumn` during measure, which took the whole screen down.
+Repeats now get an occurrence suffix; first occurrences keep the key they always had, so an
+ordinary append-only feed rebinds nothing.
 
 ### Removed
 

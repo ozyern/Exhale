@@ -205,6 +205,11 @@ fun BottomSheetPlayer(
     morphPillHorizontalInset: Dp = MiniPlayerPillHorizontalInset,
     morphPillCornerRadius: Dp = MiniPlayerPillCornerRadius,
     morphPillTopOffset: Dp = 0.dp,
+    // The slim collapsed pill, for routes whose bottom row is the search bar rather than the
+    // 64dp dock. The host owns the decision because only it knows the route; the three morph
+    // parameters above are passed the matching geometry so the shrink still lands on the pill
+    // that is actually drawn.
+    compactMiniPlayer: Boolean = false,
 ) {
     val context = LocalContext.current
     val clipboardManager = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
@@ -645,11 +650,32 @@ fun BottomSheetPlayer(
     }
 
 
+    /**
+     * The position ticker, and the reason the whole player tree is not recomposing ten times a
+     * second for the entire time the app is open.
+     *
+     * `position` is a state read by everything from the scrubber to the elapsed-time label to the
+     * mini pill's hairline, so every write to it invalidates a large part of this composable. It
+     * used to be written on a flat `delay(100)` regardless of what was on screen or whether
+     * anything was playing — including while paused, and including while the sheet is collapsed
+     * and the only consumer is a 3dp line whose fill moves about a pixel and a half per second.
+     *
+     * The cadence now follows what is actually being drawn:
+     *
+     *  * **scrubbing** — 100ms, because the thumb has to keep up with the finger;
+     *  * **expanded and playing** — 100ms, for the scrubber and the two time labels;
+     *  * **anything else** — 1s, which is the granularity of the only things still reading it.
+     *
+     * Collapsed-and-playing is where the app spends most of its life, and it is the case this
+     * takes from ten recompositions a second to one.
+     */
     LaunchedEffect(mediaMetadata?.id, playbackState) {
         val startTime = SystemClock.elapsedRealtime()
         if (playbackState == STATE_READY) {
             while (isActive) {
-                delay(100)
+                val fine = isUserSeeking ||
+                    (playerConnection.player.isPlaying && state.progress > 0.02f)
+                delay(if (fine) 100L else 1000L)
                 val isTransitioning = playerConnection.player.currentMediaItem?.mediaId != mediaMetadata?.id
                 val currentPlayerPosition = playerConnection.player.currentPosition
                 val currentPlayerDuration = playerConnection.player.duration
@@ -845,14 +871,17 @@ fun BottomSheetPlayer(
             playerConnection.service.stopAndClearPlayback()
         },
         collapsedContent = {
-            // Hidden in State B — the floating bottom bar renders the mini-player pill there.
-            if (!hideMiniPlayer) {
+            // Hidden in State B - the floating bottom bar renders the mini-player pill there.
+            if (hideMiniPlayer) {
+                Unit
+            } else {
                 MiniPlayer(
                     position = position,
                     duration = duration,
                     pureBlack = pureBlack,
                     navController = navController,
-                    state = state
+                    state = state,
+                    compact = compactMiniPlayer,
                 )
             }
         },

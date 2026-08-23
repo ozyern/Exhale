@@ -120,6 +120,18 @@ import com.ozyern.exhale.utils.Updater
 import com.ozyern.exhale.utils.dataStore
 import com.ozyern.exhale.utils.rememberPreference
 import com.ozyern.exhale.viewmodels.HomeViewModel
+import androidx.compose.animation.core.animateIntAsState
+import com.ozyern.exhale.constants.ChipSortTypeKey
+import com.ozyern.exhale.constants.LibraryFilter
+import com.ozyern.exhale.ui.screens.Screens
+import com.ozyern.exhale.utils.rememberEnumPreference
+import com.ozyern.exhale.viewmodels.AccountLibraryViewModel
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.runtime.saveable.rememberSaveable
+import com.ozyern.exhale.constants.AquamorphicDampingRatio
+import com.ozyern.exhale.constants.AquamorphicStiffness
 
 @Composable
 fun AccountSettings(
@@ -150,6 +162,24 @@ fun AccountSettings(
     val viewModel: HomeViewModel = hiltViewModel()
     val accountName by viewModel.accountName.collectAsState()
     val accountImageUrl by viewModel.accountImageUrl.collectAsState()
+
+    val libraryViewModel: AccountLibraryViewModel = hiltViewModel()
+    val librarySongs by libraryViewModel.songCount.collectAsState()
+    val libraryArtists by libraryViewModel.artistCount.collectAsState()
+    val libraryAlbums by libraryViewModel.albumCount.collectAsState()
+
+    // Written before navigating so the library opens already filtered to whichever number was
+    // tapped. Setting the same preference the library screen reads is the whole mechanism - no
+    // argument to thread through the route, and the filter is where the user left it next time.
+    // The long tail of the sheet is folded away until asked for - see `AccountMoreSettingsRow`.
+    var showMoreSettings by rememberSaveable { mutableStateOf(false) }
+
+    val (_, onLibraryFilterChange) = rememberEnumPreference(ChipSortTypeKey, LibraryFilter.LIBRARY)
+    val openLibrary: (LibraryFilter) -> Unit = { filter ->
+        onLibraryFilterChange(filter)
+        onClose()
+        navController.navigate(Screens.Library.route)
+    }
 
     var showToken by remember { mutableStateOf(false) }
     var showTokenEditor by remember { mutableStateOf(false) }
@@ -187,6 +217,16 @@ fun AccountSettings(
                         navController.navigate(buildLoginRoute())
                     }
                 },
+            )
+
+            // What is actually in the library, directly under whose library it is. The sheet
+            // used to go straight from a name to a row of navigation shortcuts, which meant the
+            // one screen in the app that is entirely about *this account* said nothing about it.
+            AccountLibraryStrip(
+                songs = librarySongs,
+                artists = libraryArtists,
+                albums = libraryAlbums,
+                onOpen = openLibrary,
             )
 
             // The three things people actually open this sheet for, as tiles rather than as rows
@@ -284,9 +324,25 @@ fun AccountSettings(
                 )
             }
 
+            // Everything from here down is a settings screen wearing a sheet.
+            //
+            // Four captioned groups - account toggles, notification permissions, integrations,
+            // token - none of which is why anyone taps an avatar. The sheet is opened to see who
+            // you are signed in as, to jump to History or Stats, or to sign out; those four
+            // things were at the top and the other twelve rows pushed the whole thing to about
+            // two and a half screens of scrolling, so the short answer to a short question was
+            // buried in a long one.
+            //
+            // Folded behind one row rather than deleted: every one of them is still exactly where
+            // it was, one tap further away, and the sheet now opens at the size of what it is for.
+            AccountMoreSettingsRow(
+                expanded = showMoreSettings,
+                onToggle = { showMoreSettings = !showMoreSettings },
+            )
+
             // Account Options Section
             AnimatedVisibility(
-                visible = isLoggedIn,
+                visible = isLoggedIn && showMoreSettings,
                 enter = fadeIn() + expandVertically(),
                 exit = fadeOut() + shrinkVertically()
             ) {
@@ -314,6 +370,12 @@ fun AccountSettings(
             }
 
             // Notifications Section (relocated into the Accounts area)
+            AnimatedVisibility(
+                visible = showMoreSettings,
+                enter = fadeIn() + expandVertically(),
+                exit = fadeOut() + shrinkVertically(),
+            ) {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             SettingsSection(title = stringResource(R.string.permission_notifications_title)) {
                 SettingsToggleItem(
                     icon = painterResource(R.drawable.notifications),
@@ -393,6 +455,9 @@ fun AccountSettings(
                 )
             }
 
+            }
+            }
+
             // App Version Footer
             AppVersionFooter()
 
@@ -404,6 +469,71 @@ fun AccountSettings(
     if (showPlaylistDialog) {
         PlaylistSelectionDialog(
             onDismiss = { showPlaylistDialog = false }
+        )
+    }
+}
+
+/**
+ * The one row that stands for the four settings groups underneath it.
+ *
+ * Deliberately quieter than the tiles above: no accent puck, no chevron pointing off the sheet.
+ * A caret that rotates in place is the honest glyph for something that opens *here*, and the row
+ * is the last thing on the sheet precisely so it reads as "and the rest" rather than as a peer of
+ * History and Stats.
+ */
+@Composable
+private fun AccountMoreSettingsRow(
+    expanded: Boolean,
+    onToggle: () -> Unit,
+) {
+    val caret by animateFloatAsState(
+        targetValue = if (expanded) 180f else 0f,
+        animationSpec = spring(
+            dampingRatio = AquamorphicDampingRatio,
+            stiffness = AquamorphicStiffness,
+        ),
+        label = "accountMoreCaret",
+    )
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .bounceClick(onClick = onToggle, shape = RoundedCornerShape(20.dp))
+            .liquidGlassSurface(RoundedCornerShape(20.dp))
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            painter = painterResource(R.drawable.tune),
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(20.dp),
+        )
+        Spacer(Modifier.width(14.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = stringResource(R.string.account_more_settings),
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = stringResource(R.string.account_more_settings_desc),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Icon(
+            painter = painterResource(R.drawable.expand_more),
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+            modifier = Modifier
+                .size(22.dp)
+                .graphicsLayer { rotationZ = caret },
         )
     }
 }
@@ -430,7 +560,7 @@ private fun AccountSheetTopBar(onClose: () -> Unit) {
         Box(
             modifier = Modifier
                 .size(34.dp)
-                .bounceClick(onClick = onClose)
+                .bounceClick(onClick = onClose, shape = CircleShape)
                 .liquidGlassSurface(CircleShape),
             contentAlignment = Alignment.Center,
         ) {
@@ -466,7 +596,7 @@ private fun AccountIdentityCard(
             // across a translucent glass plate is the single cheapest-looking interaction in
             // any glass UI — it paints an opaque grey circle over the thing that is supposed
             // to be a pane of glass.
-            .bounceClick(onClick = onClick)
+            .bounceClick(onClick = onClick, shape = RoundedCornerShape(20.dp))
             .liquidGlassSurface(RoundedCornerShape(20.dp))
             .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -576,6 +706,104 @@ private fun AccountIdentityCard(
 }
 
 /**
+ * The library totals: songs, artists, albums, as one glass plate split into three.
+ *
+ * Numbers first and large, labels underneath and small, because the number is the content and the
+ * label is the caption — the other way round is a form field. Each third navigates to the library
+ * already filtered to what it counts, so the strip is a shortcut and not just a readout; a stat
+ * you cannot act on belongs on a stats screen, and this sheet has a tile for that one.
+ *
+ * Hairline dividers rather than three separate cards: at this width three cards would be three
+ * 100dp plates with 10dp of glass showing between them, which reads as a control row. One plate
+ * with rules in it reads as one fact in three parts, which is what it is.
+ */
+@Composable
+private fun AccountLibraryStrip(
+    songs: Int,
+    artists: Int,
+    albums: Int,
+    onOpen: (LibraryFilter) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .liquidGlassSurface(RoundedCornerShape(20.dp)),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        AccountLibraryStat(
+            value = songs,
+            label = stringResource(R.string.songs),
+            onClick = { onOpen(LibraryFilter.SONGS) },
+            modifier = Modifier.weight(1f),
+        )
+        AccountLibraryStatDivider()
+        AccountLibraryStat(
+            value = artists,
+            label = stringResource(R.string.artists),
+            onClick = { onOpen(LibraryFilter.ARTISTS) },
+            modifier = Modifier.weight(1f),
+        )
+        AccountLibraryStatDivider()
+        AccountLibraryStat(
+            value = albums,
+            label = stringResource(R.string.albums),
+            onClick = { onOpen(LibraryFilter.ALBUMS) },
+            modifier = Modifier.weight(1f),
+        )
+    }
+}
+
+@Composable
+private fun AccountLibraryStat(
+    value: Int,
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier
+            // No plate of its own — it is a third of one — so the ripple is given the
+            // inner radius rather than the plate's, which would round past the dividers.
+            .bounceClick(onClick = onClick, shape = RoundedCornerShape(16.dp))
+            .padding(vertical = 14.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        // Animated, because these tick up as a sync lands while the sheet is open, and a number
+        // that jumps from 0 to 1,412 with no travel reads as a glitch rather than as an import.
+        val shown by animateIntAsState(
+            targetValue = value,
+            animationSpec = tween(durationMillis = 650),
+            label = "libraryStat",
+        )
+        Text(
+            text = shown.toString(),
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+        )
+        Spacer(Modifier.height(2.dp))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+@Composable
+private fun AccountLibraryStatDivider() {
+    Box(
+        modifier = Modifier
+            .height(30.dp)
+            .width(1.dp)
+            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.09f)),
+    )
+}
+
+/**
  * Three square tiles under the identity card.
  *
  * These destinations used to be scattered across three separate captioned groups, each one a
@@ -644,7 +872,10 @@ private fun AccountSignInOutRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .bounceClick(onClick = if (isLoggedIn) onSignOut else onSignIn)
+            .bounceClick(
+                onClick = if (isLoggedIn) onSignOut else onSignIn,
+                shape = RoundedCornerShape(20.dp),
+            )
             .liquidGlassSurface(RoundedCornerShape(20.dp))
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -702,7 +933,7 @@ private fun AccountTile(
 ) {
     Column(
         modifier = modifier
-            .bounceClick(onClick = onClick)
+            .bounceClick(onClick = onClick, shape = RoundedCornerShape(20.dp))
             // Neutral glass, coloured glyph. The tiles used to tint the ENTIRE plate with their
             // accent, which put four differently-coloured cards in a row — a 2010s dashboard,
             // and the single most dated thing on the sheet. The colour belongs on the glyph,

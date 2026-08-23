@@ -35,8 +35,47 @@ val MiniPlayerBottomSpacing = 8.dp // Space between MiniPlayer and NavigationBar
  * `SwipeableMiniPlayerBox` / `NewMiniPlayer` actually lay the pill out — if they drift, the full
  * player shrinks into the wrong rectangle and the hand-off to the pill visibly jumps.
  */
-val MiniPlayerPillHorizontalInset = 12.dp
+/**
+ * Deliberately the *same* value as [FloatingToolbarHorizontalPadding], not a number of its own.
+ *
+ * The pill is never on screen alone. It floats directly above the dock, or above the search row,
+ * and both of those are laid out at [FloatingToolbarHorizontalPadding] from the edge. At the old
+ * 12dp the player was 4dp wider on each side than whatever it was sitting on, so the bottom of
+ * the screen was a stack of two capsules whose edges did not line up — most obvious over the
+ * Search tab, where the row below is also visibly shorter. Four device-independent pixels is
+ * small enough to look like a rendering mistake rather than a design decision, which is the worst
+ * size for a misalignment to be.
+ */
+val MiniPlayerPillHorizontalInset = FloatingToolbarHorizontalPadding
 val MiniPlayerPillCornerRadius = 32.dp
+
+/**
+ * The pill's geometry **anywhere but Home**.
+ *
+ * Home is where you start something: the dock is right underneath, the wide pill's swipe-to-skip
+ * and like button are worth the strip of screen they cost, and a 64dp player over a 64dp dock
+ * reads as one stacked object. Everywhere else you are reading — a results list, an album, a
+ * settings page — and the player is a status line you occasionally reach for, so it loses a type
+ * step, loses the like button, and gives 8dp back to the page.
+ *
+ * This slot briefly held a top-docked "Dynamic Island" instead, and the reason that failed is
+ * worth keeping written down: on iOS the island works because the OS owns the status bar and
+ * moves the clock aside for it. Android does not — the status bar is a system window drawn above
+ * every app — so the thing either sits *under* the clock and the battery, or hangs below the inset
+ * where it is no longer an island at all, just a card at the wrong end of the screen, a thumb's
+ * length from where every other control in the app lives. Slimming the pill is the same idea
+ * (take less room on pages that are not about playback) without moving the player away from the
+ * hand that uses it.
+ *
+ * The pill is *drawn* at this height inside the unchanged [MiniPlayerHeight] slot rather than
+ * changing the sheet's collapsed bound, which is captured once in `rememberBottomSheetState` and
+ * cannot be re-derived per route without resetting the sheet. [CompactMiniPlayerTopInset] is the
+ * resulting gap above it, and the Dynamic-Island morph is handed the same three numbers so the
+ * full player still shrinks onto the pill that is actually there.
+ */
+val CompactMiniPlayerHeight = 56.dp
+val CompactMiniPlayerPillCornerRadius = CompactMiniPlayerHeight / 2
+val CompactMiniPlayerTopInset = (MiniPlayerHeight - CompactMiniPlayerHeight) / 2
 
 /**
  * Geometry of the floating nav bar's own centre pill — the **State B** morph target.

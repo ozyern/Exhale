@@ -124,7 +124,7 @@ constructor(
                 return@Factory dataSpec.withUri(it.first.toUri())
             }
             val playbackData = runBlocking(Dispatchers.IO) {
-                val networkMeteredPref = context.dataStore.get(NetworkMeteredKey, true)
+                val networkMeteredPref = context.dataStore.get(NetworkMeteredKey, false)
                 YTPlayerUtils.playerResponseForPlayback(
                     mediaId,
                     audioQuality = audioQuality,

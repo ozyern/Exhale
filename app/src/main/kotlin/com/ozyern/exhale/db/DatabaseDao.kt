@@ -304,6 +304,21 @@ interface DatabaseDao {
     @Query("SELECT COUNT(1) FROM song WHERE liked")
     fun likedSongsCount(): Flow<Int>
 
+    /**
+     * Library totals, for the strip under the identity card in the account sheet.
+     *
+     * Counts rather than rows: the sheet wants three numbers, and loading three full lists to call
+     * `.size` on them would pull the entire library through Room to render nine characters.
+     */
+    @Query("SELECT COUNT(1) FROM song WHERE inLibrary IS NOT NULL")
+    fun librarySongsCount(): Flow<Int>
+
+    @Query("SELECT COUNT(1) FROM artist WHERE bookmarkedAt IS NOT NULL")
+    fun libraryArtistsCount(): Flow<Int>
+
+    @Query("SELECT COUNT(1) FROM album WHERE bookmarkedAt IS NOT NULL")
+    fun libraryAlbumsCount(): Flow<Int>
+
     @Transaction
     @Query("SELECT song.* FROM song JOIN song_album_map ON song.id = song_album_map.songId WHERE song_album_map.albumId = :albumId")
     fun albumSongs(albumId: String): Flow<List<Song>>

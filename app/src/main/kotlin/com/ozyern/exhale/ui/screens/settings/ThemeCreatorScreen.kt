@@ -113,6 +113,7 @@ import com.ozyern.exhale.ui.theme.ThemeSeedPalette
 import com.ozyern.exhale.ui.theme.ThemeSeedPaletteCodec
 import com.ozyern.exhale.ui.utils.backToMain
 import com.ozyern.exhale.utils.rememberPreference
+import kotlin.math.roundToInt
 
 private enum class SeedRole {
     PRIMARY,
@@ -1399,7 +1400,9 @@ private fun RgbSlider(
         }
         LiquidSlider(
             value = value.toFloat(),
-            onValueChange = { onValueChange(it.toInt().coerceIn(0, 255)) },
+            // roundToInt, not toInt: truncation biased every channel one step low and made the
+            // last step of the range unreachable from a drag.
+            onValueChange = { onValueChange(it.roundToInt().coerceIn(0, 255)) },
             valueRange = 0f..255f,
             // Each channel keeps its own track colour — that is the whole point of this control.
             accentColor = color,

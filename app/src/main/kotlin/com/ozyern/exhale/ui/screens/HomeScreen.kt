@@ -266,12 +266,34 @@ fun HomeScreen(
                 scope = scope
             )
 
+            // Stable per-section keys keep the LazyColumn from recomposing/rebinding every
+            // section (and its whole nested LazyRow of thumbnails) when the list grows via
+            // pagination. Fall back to the title and index if a section has no endpoint identity.
+            //
+            // The browse id alone is NOT unique, which is what crashed the app with
+            // `Key "home_section_title_FEmusic_new_releases_albums" was already used`: YouTube
+            // Music happily returns the same endpoint twice in one feed — "New releases" and
+            // "New albums & singles" are both `FEmusic_new_releases_albums` — and a continuation
+            // can append a section the first page already had. LazyColumn treats a repeated key
+            // as a programming error and throws during measure, so the whole screen went down the
+            // moment such a feed arrived.
+            //
+            // Repeats get an occurrence suffix rather than everything getting the index appended:
+            // the first section under a given id keeps the key it always had, so the common case
+            // (an append-only feed with no duplicates) is byte-for-byte the old behaviour and
+            // pagination still does not rebind a single existing row.
+            val sectionKeys = buildList {
+                val seen = HashMap<String, Int>()
+                homePage?.sections?.forEachIndexed { index, section ->
+                    val base = section.endpoint?.browseId ?: "title_${section.title}_$index"
+                    val occurrence = (seen[base] ?: 0) + 1
+                    seen[base] = occurrence
+                    add(if (occurrence == 1) base else "${base}__$occurrence")
+                }
+            }
+
             homePage?.sections?.forEachIndexed { index, section ->
-                // Stable per-section keys keep the LazyColumn from recomposing/rebinding every
-                // section (and its whole nested LazyRow of thumbnails) when the list grows via
-                // pagination. Fall back to the index if a section has no endpoint/title identity.
-                val sectionKey = section.endpoint?.browseId
-                    ?: "title_${section.title}_$index"
+                val sectionKey = sectionKeys.getOrElse(index) { "section_$index" }
 
                 item(key = "home_section_title_$sectionKey", contentType = "section_title") {
                     HomePageSectionTitle(

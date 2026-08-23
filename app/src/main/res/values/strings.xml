@@ -5,6 +5,7 @@
     <string name="back">Back</string>
     <string name="songs">Songs</string>
     <string name="artists">Artists</string>
+    <string name="artist">Artist</string>
     <string name="albums">Albums</string>
     <string name="playlists">Playlists</string>
     <!-- Top bar -->
@@ -146,6 +147,8 @@
     <string name="search_online">Search online</string>
     <string name="action_sync">Sync</string>
     <string name="advanced">Advanced</string>
+    <string name="account_more_settings">Account &amp; sync settings</string>
+    <string name="account_more_settings_desc">Notifications, integrations, sync, token</string>
     <string name="tempo_and_pitch">Tempo and Pitch</string>
     <string name="tempo">Tempo</string>
     <string name="pitch">Pitch</string>
@@ -940,13 +943,17 @@ Exhale will only extract your token, and everything else is stored locally.</str
     <string name="about_no_contributors">No contributors listed yet</string>
     <string name="egg_breathe_in">Breathe in</string>
     <string name="egg_breathe_out">Breathe out</string>
-    <string name="egg_hint">Four seconds in, six seconds out.</string>
-    <string name="egg_close_hint">Tap to ripple &#183; Swipe down to close</string>
+    <string name="egg_hint">Follow the ring. Tap the rhythm to change it.</string>
+    <string name="egg_hold">Hold</string>
+    <string name="egg_pattern_relax">Relax \u00b7 4\u20136</string>
+    <string name="egg_pattern_box">Box \u00b7 4\u20134\u20134\u20134</string>
+    <string name="egg_pattern_478">Sleep \u00b7 4\u20137\u20138</string>
+    <string name="egg_close_hint">Tap to ripple &#183; Hold to gather &#183; Swipe down to close</string>
     <string name="egg_breath_count">%1$s breaths</string>
     <string name="lock_screen_lyrics">Lock screen lyrics</string>
-    <string name="lock_screen_lyrics_desc">Publish timed lyrics to Live Space on OxygenOS and ColorOS. Ignored on other systems.</string>
+    <string name="lock_screen_lyrics_desc">Publishes timed lyrics to Live Space on OxygenOS and ColorOS. The system only shows them for approved apps, so on a stock phone this does nothing on its own \u2014 use the media card below.</string>
     <string name="lyrics_on_media_card">Lyrics on the media card</string>
-    <string name="lyrics_on_media_card_desc">Show the line playing now under the song title on the lock screen and in the notification. Works on every phone, unlike Live Space. While this is on, the lyric replaces the artist name wherever playback is shown \u2014 including Bluetooth and Android Auto.</string>
+    <string name="lyrics_on_media_card_desc">Shows the line playing now under the song title on the lock screen and in the notification. Works on every phone, unlike Live Space above, which needs a ColorOS module. The lyric replaces the artist name wherever playback is shown, including Bluetooth and Android Auto \u2014 and if Live Space does work on your phone, turn this off, because the two interfere.</string>
     <string name="logout">Sign out</string>
     <!-- Account sheet. Distinct from logout_confirm_* above, which is Discord's. -->
     <string name="account_signout_title">Sign out?</string>
@@ -959,6 +966,17 @@ Exhale will only extract your token, and everything else is stored locally.</str
     <string name="about_version">Version</string>
     <string name="about_architecture">Architecture</string>
     <string name="about_package">Package</string>
+    <string name="about_device">Device</string>
+    <string name="about_android">Android</string>
+    <string name="about_build_type">Build type</string>
+    <string name="about_commit">Commit</string>
+    <string name="about_copy_build_info">Copy build info</string>
+    <string name="about_copy_build_info_desc">For bug reports</string>
+    <string name="about_build_info_copied">Build info copied</string>
+    <string name="update_last_checked">Last checked</string>
+    <string name="update_never_checked">Never</string>
+    <string name="update_releases_page">All releases on GitHub</string>
+    <string name="update_releases_page_desc">Downloads, notes and older builds</string>
     <string name="about_tagline">Music, exhaled.</string>
     <string name="settings_search_hint">Search settings</string>
 </resources>
