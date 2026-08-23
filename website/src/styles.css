@@ -100,14 +100,14 @@ svg {
    weight comes from the size, which is the difference between "Apple" and
    "poster". */
 .headline {
-  font-size: clamp(38px, 5.4vw, 76px);
+  font-size: clamp(34px, 5.4vw, 76px);
   font-weight: 600;
   line-height: 1.06;
   letter-spacing: -0.025em;
 }
 
 .headline-sm {
-  font-size: clamp(30px, 3.8vw, 52px);
+  font-size: clamp(28px, 3.8vw, 52px);
   font-weight: 600;
   line-height: 1.1;
   letter-spacing: -0.022em;
@@ -228,10 +228,11 @@ svg {
 .wordmark .mark {
   /* Alone in the bar with no wordmark beside it, the icon IS the identity, so
      it gets a couple more pixels than it had when it was only a bullet in
-     front of a label. */
-  width: 23px;
-  height: 23px;
-  border-radius: 6px;
+     front of a label — and a couple more again now that it is a glyph on
+     transparency rather than a tile, since the artwork carries its own margin
+     and the visible mark is smaller than its box. */
+  width: 25px;
+  height: 25px;
   display: block;
 }
 
@@ -1584,6 +1585,10 @@ svg {
   margin: 30px auto 0;
   max-width: 460px;
   text-align: left;
+  /* The clone URL is longer than a phone is wide and it is meant to be copied,
+     so it scrolls inside its own box rather than being clipped by it. */
+  overflow-x: auto;
+  white-space: pre;
   padding: 18px 22px;
   border-radius: 16px;
   background: #000;
@@ -2284,9 +2289,9 @@ video.phone-shot {
 }
 
 .footer-mark img {
-  width: 28px;
-  height: 28px;
-  border-radius: 7px;
+  /* Transparent artwork: no tile to round off. */
+  width: 30px;
+  height: 30px;
   display: block;
 }
 
@@ -2334,8 +2339,93 @@ video.phone-shot {
 
 @media (max-width: 999px) {
   :root {
-    --shell: min(1120px, 100% - 28px);
-    --phone-scale: 0.58;
+    /* 24px of gutter each side, which is what the reference uses on a phone.
+       14px read as edge-to-edge text and left the type nowhere to breathe. */
+    --shell: min(1120px, 100% - 48px);
+    --phone-scale: 0.62;
+  }
+
+  /* Centred text is a wide-screen luxury.
+     In a 342px column a centred paragraph gives every line a different start,
+     so the eye has to re-find the left edge on each one — and the reference,
+     which centres these same blocks on a desktop, sets them left on a phone
+     for exactly that reason. */
+  .statement.center,
+  .build .center {
+    text-align: left;
+  }
+
+  .statement .lede,
+  .build .lede,
+  .build .subnote {
+    margin-inline: 0;
+    max-width: none;
+  }
+
+  .statement.center .linkrow {
+    justify-content: flex-start;
+  }
+
+  /* Pills are a touch target before they are a label. */
+  .segment {
+    height: 38px;
+    padding: 0 15px;
+  }
+
+  .segment-capsule {
+    height: 38px;
+  }
+
+  .segments {
+    max-width: calc(100% - 20px);
+    scroll-behavior: smooth;
+  }
+
+  /* A card that is nearly as wide as the screen has to be much taller to hold
+     a four-line caption AND the miniature under it. */
+  .gcard {
+    aspect-ratio: 3 / 4.4;
+    padding: 24px 20px;
+  }
+
+  .g-panel {
+    width: 100%;
+  }
+
+  .gcard-cap {
+    max-width: none;
+  }
+
+  /* The gallery's controls are the one thing on the page a thumb has to hit
+     precisely, so on a phone they grow rather than shrink with everything
+     else. */
+  .gallery-nav {
+    margin-top: 22px;
+    gap: 14px;
+  }
+
+  .gnav-dots {
+    gap: 10px;
+    padding: 13px 18px;
+  }
+
+  .gnav-dots button {
+    width: 9px;
+    height: 9px;
+  }
+
+  .gnav-dots button[data-on='true'] {
+    width: 40px;
+  }
+
+  .gnav-toggle {
+    width: 52px;
+    height: 52px;
+  }
+
+  .gnav-toggle svg {
+    width: 18px;
+    height: 18px;
   }
 
   /* No pinning on a phone.
@@ -2398,7 +2488,17 @@ video.phone-shot {
 
 @media (max-width: 420px) {
   :root {
-    --phone-scale: 0.52;
+    --phone-scale: 0.56;
+  }
+
+  /* Six words of monospace is all that fits; the box scrolls for the rest. */
+  .code {
+    font-size: 11.5px;
+    padding: 16px 18px;
+  }
+
+  .getit {
+    border-radius: 26px;
   }
 }
 

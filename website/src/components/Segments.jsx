@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { prefersReducedMotion } from '../hooks.js'
 
 /**
  * The page's navigation is the app's dock.
@@ -21,6 +22,24 @@ export default function Segments({ items, active, onSelect }) {
     const node = itemRefs.current[active]
     if (!node) return
     setBox({ left: node.offsetLeft, width: node.offsetWidth })
+  }, [active])
+
+  // On a phone the five labels are wider than the screen, so the last one or
+  // two live off the right edge. A control you cannot reach the end of is
+  // worse than no control, so the active pill scrolls itself into view —
+  // which also means that scrolling the PAGE walks the bar along, and the
+  // section you are in is always the one you can see.
+  useEffect(() => {
+    const rail = railRef.current
+    const node = itemRefs.current[active]
+    if (!rail || !node) return
+    if (rail.scrollWidth <= rail.clientWidth + 1) return
+    const pad = parseFloat(getComputedStyle(rail).paddingLeft) || 0
+    const target = node.offsetLeft - (rail.clientWidth - node.offsetWidth) / 2
+    rail.scrollTo({
+      left: Math.max(0, target - pad),
+      behavior: prefersReducedMotion() ? 'auto' : 'smooth',
+    })
   }, [active])
 
   // Layout effect, not an effect: the capsule has to be in the right place on

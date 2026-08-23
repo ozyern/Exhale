@@ -467,7 +467,7 @@ export default function App() {
       <footer className="footer">
         <div className="shell">
           <div className="footer-mark">
-            <img src="/logo.png" alt="" width="28" height="28" />
+            <img src="/logo.png" alt="" width="30" height="30" />
             Exhale
           </div>
 
