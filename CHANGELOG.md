@@ -213,6 +213,10 @@ updater downloads is `Exhale-universal.apk`.
 - Release builds were never signed at all: the signing config existed but nothing referenced
   it, so `assembleRelease` produced an unsigned APK that no device would install.
 
+- "Update check failed: no releases found" is gone. An empty release list is not a failure —
+  it means there is nothing newer — so the Updates screen now says Exhale is up to date, which
+  is what anyone who installed before the first release was seeing an error for.
+
 **The bottom dock was never actually glass.**
 
 - It refracted `LocalAppBackdrop`, which is `rememberDefaultBackdrop()` — an *empty* passthrough

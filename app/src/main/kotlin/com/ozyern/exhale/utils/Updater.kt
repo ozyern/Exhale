@@ -467,7 +467,15 @@ object Updater {
         }
 
     private suspend fun checkForUpdateStable(currentVersionName: String): UpdateInfo? {
-        val latest = getLatestReleaseInfo().getOrThrow()
+        // A repository with no release in this major line is not an error — there is
+        // simply nothing newer, which is the same answer as "you are up to date". It
+        // was being reported as "update check failed", which reads as a broken app to
+        // anyone who installed before the first release was published, and to anyone
+        // whose network let the request through to an empty list.
+        val releases = getAllReleases().getOrThrow()
+        val latest = findLatestRelease(releases) ?: return null
+        lastCheckTime = System.currentTimeMillis()
+
         val latestVersionName =
             preferredReleaseVersionNameOrNull(latest)
                 ?: latest.name.ifBlank { latest.tagName }
