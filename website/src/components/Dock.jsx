@@ -12,7 +12,7 @@ export const TABS = [
  *
  * Same construction as the app's `LiquidTabBar`: equal-width slots, and a
  * glass capsule that is a separate layer sliding between them rather than a
- * background colour switching from one tab to the next. It matters for the
+ * background color switching from one tab to the next. It matters for the
  * same reason it matters in the app — a capsule that *moves* is one object the
  * eye can follow, where a highlight that jumps is two objects blinking.
  *

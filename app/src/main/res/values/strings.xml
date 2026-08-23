@@ -906,7 +906,7 @@ Exhale will only extract your token, and everything else is stored locally.</str
     <string name="feature_glass_ui_title">Brina Glass UI</string>
     <string name="feature_glass_ui_desc">Live, dynamic backdrop blur throughout the app.</string>
     <string name="feature_theming_title">Dynamic theming</string>
-    <string name="feature_theming_desc">Colours follow the album art on screen, or build a palette of your own.</string>
+    <string name="feature_theming_desc">Colors follow the album art on screen, or build a palette of your own.</string>
     <string name="feature_lyrics_title">Synced lyrics</string>
     <string name="feature_lyrics_desc">Real-time, line-by-line lyrics that follow the track.</string>
     <string name="feature_offline_title">Stream and offline</string>

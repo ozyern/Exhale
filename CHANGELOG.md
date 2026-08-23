@@ -111,8 +111,14 @@ picker rather than doing nothing convincingly.
   part you can put your hands on: its capsule stretches into a move and overshoots before it
   settles, exactly as the real one does.
 - The hero is a light ribbon drawn on canvas — five lens-shaped bands weaving through one another
-  on periods that share no factors, so the colour order keeps inverting and the shape never repeats
+  on periods that share no factors, so the color order keeps inverting and the shape never repeats
   where anyone can catch it. It stops drawing entirely when it scrolls off screen or is paused.
+- The feature gallery is a rail of large cards that runs itself, and each card holds a working
+  miniature of what it names — the equalizer card is an equalizer, the sleep-timer card is a dial —
+  rather than an abstract wash with a caption on it. It stops when you stop it.
+- The build facts are cards too, each showing the thing the number came out of: the three SDK
+  levels, a Compose snippet, the licence header, the five ABI flavours, the current release. Every
+  figure is read off `app/build.gradle.kts`, so the page cannot claim a build that is not shipping.
 - Deployed to GitHub Pages from `website/` on any push that touches it.
 
 ### Changed
@@ -122,7 +128,7 @@ picker rather than doing nothing convincingly.
 - New shared liquid-glass surface: gradient fill, diagonal sheen, hairline rim, and an optional
   accent tint. Used by the Sound Chem deck, the Updates page, the account sheet and About, so they
   can no longer drift apart.
-- New animated aurora backdrop — three colour blobs drifting on a 26-second cycle, driven entirely
+- New animated aurora backdrop — three color blobs drifting on a 26-second cycle, driven entirely
   through `graphicsLayer` so a frame of drift costs no recomposition and no layout.
 
 **Accounts sheet** — redesigned.
@@ -143,7 +149,7 @@ picker rather than doing nothing convincingly.
   Settings stopped 6dp short of the text it aligned to.
 - Group headers sit 20dp from the screen edge instead of 36dp, where they lined up with nothing.
 - Rows fill with a neutral grey on press instead of shrinking to 98% and tinting themselves with the
-  brand colour — that is button behaviour, and a grouped table is a list of destinations.
+  brand color — that is button behaviour, and a grouped table is a list of destinations.
 - The header plate is now a real destination: it opens About.
 
 **About** — rebuilt as an inset grouped table on the same ground as the rest of Settings, replacing a
@@ -185,6 +191,9 @@ stack of elevated cards with shadows, shimmer sweeps and fake hover states.
 - The grab handle is a control now: drag or flick it to dismiss, with the sheet springing back if
   you change your mind. It drew that affordance for months and did nothing with it.
 - Sheets animate out. They used to rise on a spring and then vanish on a single frame.
+
+**Spelling is American throughout.** "Colours follow the album art" is now "Colors", and the site
+and these notes match — one spelling, everywhere the app writes a word.
 
 ### Fixed
 

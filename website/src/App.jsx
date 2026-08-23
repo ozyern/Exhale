@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Dock from './components/Dock.jsx'
+import Gallery from './components/Gallery.jsx'
 import Words from './components/Words.jsx'
 import Phone from './components/Phone.jsx'
 import Ribbon from './components/Ribbon.jsx'
 import Segments from './components/Segments.jsx'
+import Specs from './components/Specs.jsx'
 import {
   ABOUT_FACTS,
   FEATURES,
@@ -18,30 +20,13 @@ import {
   VERSION,
 } from './content.js'
 import { useHeroScroll, useOnScreen, useReveals, prefersReducedMotion } from './hooks.js'
-import {
-  CloudIcon,
-  DownloadIcon,
-  GithubIcon,
-  GlassIcon,
-  LinkIcon,
-  Mark,
-  MoonIcon,
-  WaveIcon,
-} from './icons.jsx'
-
-const GLYPHS = {
-  cloud: CloudIcon,
-  wave: WaveIcon,
-  moon: MoonIcon,
-  link: LinkIcon,
-  glass: GlassIcon,
-}
+import { DownloadIcon, GithubIcon, Mark } from './icons.jsx'
 
 const SECTIONS = [
   { id: 'overview', label: 'Overview' },
   { id: 'material', label: 'Material' },
   { id: 'lyrics', label: 'Lyrics' },
-  { id: 'colour', label: 'Colour' },
+  { id: 'color', label: 'Color' },
   { id: 'download', label: 'Download' },
 ]
 
@@ -228,19 +213,19 @@ function Stage() {
           </p>
         </section>
 
-        <section className="beat" data-index="2" data-on={beat === 2} id="colour">
-          <p className="kicker">Colour</p>
-          <h2 className="headline-sm">The song brings its own colour.</h2>
+        <section className="beat" data-index="2" data-on={beat === 2} id="color">
+          <p className="kicker">Color</p>
+          <h2 className="headline-sm">The song brings its own color.</h2>
           <p className="lede">
             Open a track and the player takes its palette from the cover — the
             background wash, the progress bar, the lyric highlight. Close it and
-            the rest of the app is back to the colour you chose. Nothing here
+            the rest of the app is back to the color you chose. Nothing here
             was picked by hand; it is the artwork, sampled.
           </p>
           <p className="footnote">
             The player above is tinted by the art behind it. The artist and
             About screens in the same build are not — they keep your theme,
-            which is the point: the colour follows the music, not the app.
+            which is the point: the color follows the music, not the app.
           </p>
         </section>
       </div>
@@ -320,7 +305,7 @@ export default function App() {
             </h1>
             <p className="lede reveal" style={{ '--d': '180ms' }}>
               Live glass on every surface, lyrics that land on the beat, and
-              colour that follows whatever is playing.
+              color that follows whatever is playing.
               <br />
               Open source, for Android 13 and newer.
             </p>
@@ -341,48 +326,32 @@ export default function App() {
           <Stage />
         </div>
 
-        {/* Eight features, as the app's own settings list rather than eight
-            near-identical gradient cards on a rail. The rail was borrowed from
-            a reference whose cards each carry a real photograph; with nothing
-            to put in them mine were eight abstract washes in a row, which is
-            filler with a scrollbar. A list of rows with hairline dividers is
-            what this content actually is — and it is the shape the app uses for
-            exactly the same job. */}
+        {/* The eight features, as a gallery of large cards that runs itself.
+            Each card holds a working miniature of the thing it names rather
+            than a coloured wash — the objection to the version before this one
+            was that eight abstract gradients on a rail is filler with a
+            scrollbar, and it was right. A card showing the EQ is the EQ. */}
         <section className="everything" id="everything">
           <div className="shell">
             <h2 className="bigtitle">
               <Words text="Everything else it does." />
             </h2>
-
-            <div className="featlist reveal">
-              {FEATURES.map((feature, index) => {
-                const Glyph = GLYPHS[feature.icon]
-                return (
-                  <div className="featrow" key={feature.title} style={{ '--d': `${index * 45}ms` }}>
-                    <span className="featglyph">
-                      <Glyph />
-                    </span>
-                    <div>
-                      <h3>{feature.title}</h3>
-                      <p>{feature.body}</p>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
           </div>
+          <Gallery items={FEATURES} />
         </section>
 
-        <section className="block">
+        <section className="block" id="build">
           <div className="shell">
-            <div className="specs reveal">
-              {SPECS.map((spec) => (
-                <div className="spec" key={spec.value}>
-                  <b>{spec.value}</b>
-                  <span>{spec.label}</span>
-                </div>
-              ))}
-            </div>
+            <p className="kicker reveal">The build</p>
+            <h2 className="headline-sm reveal" style={{ '--d': '80ms' }}>
+              Open source, and specific about it.
+            </h2>
+            <p className="lede reveal" style={{ '--d': '160ms' }}>
+              None of this is a marketing number. Every figure below comes out
+              of the same <code>build.gradle.kts</code> the release APK is
+              compiled from.
+            </p>
+            <Specs items={SPECS} />
           </div>
         </section>
 
@@ -448,7 +417,7 @@ export default function App() {
                   <a href="#lyrics">Lyrics</a>
                 </li>
                 <li>
-                  <a href="#colour">Colour</a>
+                  <a href="#color">Color</a>
                 </li>
                 <li>
                   <a href="#download">Download</a>

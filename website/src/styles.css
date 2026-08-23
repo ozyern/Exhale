@@ -4,12 +4,12 @@
    Built to Apple's rules, not to a landing-page template:
 
      · The page opens with an OBJECT, not a headline. Light in a black room.
-     · Pure #000 everywhere. Colour only ever comes from the light itself.
+     · Pure #000 everywhere. Color only ever comes from the light itself.
      · One neutral face at semibold. No display grotesk, no poster typography.
      · Grey is #86868b and it does all the secondary work.
      · Enormous negative space. A section is allowed to be one sentence.
 
-   The one thing that is ours rather than borrowed: every colour on the page
+   The one thing that is ours rather than borrowed: every color on the page
    is three custom properties that the album art overwrites, so the ribbon,
    the device, the accents and the links all retint together — which is the
    app's own architecture, not a decoration.
@@ -113,7 +113,7 @@ svg {
   letter-spacing: -0.022em;
 }
 
-/* Apple's eyebrow is a small bold WHITE line, not a coloured tracked-out
+/* Apple's eyebrow is a small bold WHITE line, not a colored tracked-out
    label. It names the section; it does not decorate it. */
 .kicker {
   font-size: clamp(17px, 1.6vw, 21px);
@@ -130,7 +130,7 @@ svg {
   color: var(--grey);
 }
 
-/* Apple's inline link: coloured, with a chevron that steps away on hover. */
+/* Apple's inline link: colored, with a chevron that steps away on hover. */
 .textlink {
   display: inline-flex;
   align-items: center;
@@ -381,7 +381,7 @@ svg {
   /* The blur belongs on the element, not in the 2D context: `ctx.filter` runs
      a CPU convolution per path per frame, this is one GPU pass on a layer that
      is already composited. Saturate/brightness bring the app's UI palette up
-     to emitter strength without hard-coding a second set of colours. */
+     to emitter strength without hard-coding a second set of colors. */
   filter: blur(9px) saturate(1.5) brightness(1.02);
 }
 
@@ -542,7 +542,7 @@ svg {
 /* ============================================================ dock demo */
 
 /* The dock needs something with detail behind it or the blur proves nothing —
-   a pane over flat colour is just a lighter rectangle. */
+   a pane over flat color is just a lighter rectangle. */
 .dock-demo {
   position: relative;
   margin-top: 26px;
@@ -665,118 +665,713 @@ svg {
   color: var(--grey);
 }
 
-/* ========================================================== everything */
+/* ============================================================== gallery */
 
 .everything {
   background: #131315;
   padding-block: clamp(56px, 8vw, 104px);
 }
 
-/* The app's settings vocabulary: one inset panel, rows inside it, a hairline
-   between each. Two columns on a wide screen because eight rows in one column
-   is a scroll, not a list. */
-.featlist {
-  margin-top: clamp(32px, 4vw, 52px);
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  gap: 0 clamp(24px, 4vw, 56px);
-  border-radius: 24px;
-  background: #08080a;
-  padding: 6px clamp(18px, 2.6vw, 30px);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.06),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.03);
+/* The rail runs off the right edge of the window, not off the edge of the
+   text column — the peek of the next card is what tells you there IS a next
+   card, and a rail that stops at the gutter has to say so with a scrollbar
+   instead. So the leading padding matches the shell and the trailing edge is
+   allowed to bleed. */
+.gallery {
+  margin-top: clamp(30px, 3.6vw, 48px);
 }
 
-.featrow {
+.gallery-rail {
+  position: relative; /* so a card's offsetLeft is measured against the rail */
   display: flex;
-  gap: 16px;
-  align-items: flex-start;
-  padding: 22px 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-  opacity: 0;
-  transform: translateY(14px);
-  transition: opacity 0.6s var(--ease), transform 0.7s var(--settle);
-  transition-delay: var(--d, 0ms);
+  gap: clamp(14px, 1.6vw, 22px);
+  padding-inline: max(22px, (100% - 1120px) / 2);
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  /* A snap container cancels the leading padding on its own, so it has to be
+     handed back explicitly or the first card sits flush against the window. */
+  scroll-padding-inline-start: max(22px, (100% - 1120px) / 2);
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
 }
 
-.featlist.in .featrow {
+.gallery-rail::-webkit-scrollbar {
+  display: none;
+}
+
+.gcard {
+  position: relative;
+  isolation: isolate;
+  flex: 0 0 min(86vw, 940px);
+  aspect-ratio: 16 / 9.4;
+  scroll-snap-align: start;
+  display: flex;
+  flex-direction: column;
+  padding: clamp(24px, 3vw, 44px);
+  border-radius: 28px;
+  overflow: hidden;
+  background: #000;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.07);
+  opacity: 0.5;
+  transition: opacity 0.7s var(--ease);
+}
+
+.gcard[data-on='true'] {
   opacity: 1;
-  transform: none;
 }
 
-/* The last row of each COLUMN loses its divider, which on a two-column grid
-   means the last two — `:last-child` alone would leave a stray rule hanging
-   under the left column. */
-.featrow:last-child,
-.featrow:nth-last-child(2):nth-child(odd) {
-  border-bottom: 0;
+/* Pure black is the ground, but a card of nothing but black is a hole. One
+   soft emitter behind the miniature gives it a room to sit in. */
+.gcard::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  left: 50%;
+  top: 46%;
+  width: 78%;
+  height: 92%;
+  translate: -50% -50%;
+  background: radial-gradient(
+    ellipse at center,
+    color-mix(in oklab, var(--rose) 20%, transparent),
+    transparent 66%
+  );
+  filter: blur(24px);
 }
 
-@media (max-width: 719px) {
-  .featrow:nth-last-child(2):nth-child(odd) {
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-  }
-
-  .featrow:last-child {
-    border-bottom: 0;
-  }
+.gcard:nth-child(2)::before,
+.gcard:nth-child(6)::before {
+  background: radial-gradient(
+    ellipse at center,
+    color-mix(in oklab, var(--iris) 22%, transparent),
+    transparent 66%
+  );
 }
 
-.featglyph {
+.gcard:nth-child(3)::before,
+.gcard:nth-child(7)::before {
+  background: radial-gradient(
+    ellipse at center,
+    color-mix(in oklab, var(--cyan) 18%, transparent),
+    transparent 66%
+  );
+}
+
+.gcard:nth-child(4)::before,
+.gcard:nth-child(8)::before {
+  background: radial-gradient(
+    ellipse at center,
+    color-mix(in oklab, var(--ember) 20%, transparent),
+    transparent 66%
+  );
+}
+
+/* The caption sits inside the card, above the thing it describes, centred and
+   narrow — so it reads as a title card rather than as a label stuck on. */
+.gcard-cap {
   flex: none;
-  width: 36px;
-  height: 36px;
-  border-radius: 11px;
+  max-width: 46ch;
+  margin-inline: auto;
+  text-align: center;
+  font-size: clamp(14.5px, 1.4vw, 18px);
+  line-height: 1.42;
+  letter-spacing: -0.012em;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.gcard-cap b {
+  color: #fff;
+  font-weight: 600;
+}
+
+.gcard-art {
+  flex: 1;
+  min-height: 0;
   display: grid;
   place-items: center;
-  color: var(--rose);
-  background: color-mix(in oklab, var(--rose) 14%, transparent);
-  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--rose) 22%, transparent);
-  transition: color 0.7s var(--ease), background 0.7s var(--ease);
+  padding-top: clamp(16px, 2.2vw, 30px);
 }
 
-.featrow h3 {
-  font-size: 16.5px;
-  font-weight: 600;
-  letter-spacing: -0.015em;
+/* ------------------------------------------------------------ miniatures */
+
+.g-panel {
+  /* Big enough to be the subject of the card. A miniature floating small in
+     the middle of a 940px black rectangle reads as a thumbnail of something
+     else; at this size it reads as the thing itself. */
+  width: min(560px, 100%);
+  padding: 20px;
+  border-radius: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(22px) saturate(160%);
+  -webkit-backdrop-filter: blur(22px) saturate(160%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.05);
 }
 
-.featrow p {
-  margin-top: 5px;
-  font-size: 14.5px;
-  line-height: 1.5;
-  color: var(--grey);
-}
-
-/* ================================================================ specs *//* ================================================================ specs */
-
-.specs {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 16px;
+.g-centre {
+  align-items: center;
   text-align: center;
 }
 
-.spec {
-  padding: 24px 18px;
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.022);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+.g-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
-.spec b {
+.g-cover {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border-radius: 11px;
+  background: linear-gradient(
+    140deg,
+    color-mix(in oklab, var(--tint) 82%, #fff),
+    color-mix(in oklab, var(--tint) 45%, #000)
+  );
+}
+
+.g-meta {
+  flex: 1;
+  min-width: 0;
+}
+
+.g-meta b {
   display: block;
-  font-size: clamp(19px, 2vw, 24px);
+  font-size: 15px;
   font-weight: 600;
-  letter-spacing: -0.018em;
+  letter-spacing: -0.012em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.spec span {
+.g-meta span {
+  display: block;
+  margin-top: 2px;
+  font-size: 13px;
+  color: var(--grey);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.g-pct {
+  flex: none;
+  font-size: 12px;
+  color: var(--grey);
+}
+
+.g-tick {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--rose);
+  color: #fff;
+}
+
+.g-tick svg {
+  width: 13px;
+  height: 13px;
+}
+
+.g-bar {
+  margin-top: -8px;
+  margin-left: 56px;
+  height: 4px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.14);
+  overflow: hidden;
+}
+
+.g-bar i {
+  display: block;
+  height: 100%;
+  border-radius: 99px;
+  background: var(--ink);
+}
+
+.g-eyebrow {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--grey-dim);
+}
+
+.g-caption-sm {
+  font-size: 12.5px;
+  color: var(--grey);
+}
+
+.g-chips {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.g-centre .g-chips {
+  justify-content: center;
+}
+
+.g-chip {
+  font-size: 12px;
+  padding: 7px 12px;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--ink);
+}
+
+.g-chip-solid {
+  background: var(--iris);
+  color: #fff;
+}
+
+.g-chip-on {
+  background: color-mix(in oklab, var(--cyan) 14%, transparent);
+  color: color-mix(in oklab, var(--cyan) 70%, #fff);
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--cyan) 26%, transparent);
+}
+
+/* The bands move, because a still equalizer is a bar chart. */
+.g-eq-bands {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  height: 168px;
+}
+
+.g-eq-bands span {
+  flex: 1;
+  height: 100%;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.07);
+  display: flex;
+  align-items: flex-end;
+  overflow: hidden;
+}
+
+.g-eq-bands i {
+  display: block;
+  width: 100%;
+  height: var(--h);
+  border-radius: 99px;
+  background: linear-gradient(180deg, var(--ember), var(--rose));
+  animation: gband 2.6s var(--ease) infinite alternate;
+  animation-delay: var(--d);
+}
+
+@keyframes gband {
+  from {
+    height: calc(var(--h) * 0.52);
+  }
+  to {
+    height: var(--h);
+  }
+}
+
+.g-eq-scale {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--grey-dim);
+}
+
+.g-dial {
+  width: 176px;
+  height: 176px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: conic-gradient(
+    from 0turn,
+    var(--ember),
+    var(--rose) 0.58turn,
+    rgba(255, 255, 255, 0.08) 0.58turn
+  );
+}
+
+.g-dial-face {
+  width: 138px;
+  height: 138px;
+  border-radius: 50%;
+  background: #0a0a0c;
+  display: grid;
+  place-items: center;
+  align-content: center;
+}
+
+.g-dial-face b {
+  font-size: 46px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.03em;
+}
+
+.g-dial-face em {
+  margin-top: 5px;
+  font-style: normal;
+  font-size: 12px;
+  color: var(--grey);
+}
+
+.g-auto-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.g-auto-grid span {
+  aspect-ratio: 1.3;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.06);
+  display: grid;
+  place-items: center;
+  font-size: 11.5px;
+  color: var(--grey);
+}
+
+.g-code {
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
+  font-size: clamp(30px, 4vw, 44px);
+  font-weight: 600;
+  letter-spacing: 0.05em;
+}
+
+.g-faces {
+  display: flex;
+  justify-content: center;
+}
+
+.g-faces i {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid #0a0a0c;
+  background: linear-gradient(140deg, var(--iris), var(--rose));
+}
+
+.g-faces i + i {
+  margin-left: -9px;
+}
+
+.g-faces i:nth-child(2) {
+  background: linear-gradient(140deg, var(--cyan), var(--iris));
+}
+
+.g-faces i:nth-child(3) {
+  background: linear-gradient(140deg, var(--ember), var(--rose));
+}
+
+.g-faces i:nth-child(4) {
+  background: linear-gradient(140deg, var(--rose), var(--iris));
+}
+
+.g-file {
+  width: 100%;
+  padding: 16px 18px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.06);
+  text-align: left;
+}
+
+.g-file b {
+  display: block;
+  font-size: 14.5px;
+  font-weight: 600;
+  letter-spacing: -0.012em;
+}
+
+.g-file span {
+  display: block;
+  margin-top: 4px;
+  font-size: 12.5px;
+  color: var(--grey);
+}
+
+/* ------------------------------------------------------------------ nav */
+
+/* Dots and the stop button in one cluster, the way the reference has it: the
+   control that halts the motion sits next to the thing that shows it. */
+.gallery-nav {
+  margin-top: clamp(20px, 2.4vw, 32px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+}
+
+.gnav-dots {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 14px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.09);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+.gnav-dots button {
+  border: 0;
+  padding: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 99px;
+  overflow: hidden;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.36);
+  transition:
+    width 0.5s var(--settle),
+    background 0.3s var(--ease);
+}
+
+.gnav-dots button[data-on='true'] {
+  width: 34px;
+  background: rgba(255, 255, 255, 0.26);
+}
+
+.gnav-dots button i {
+  display: block;
+  height: 100%;
+  width: 0;
+  border-radius: 99px;
+  background: #fff;
+  animation: gfill linear forwards;
+}
+
+@keyframes gfill {
+  from {
+    width: 0;
+  }
+  to {
+    width: 100%;
+  }
+}
+
+.gnav-toggle {
+  width: 36px;
+  height: 36px;
+  border: 0;
+  padding: 0;
+  border-radius: 50%;
+  cursor: pointer;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.09);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  display: grid;
+  place-items: center;
+  transition: background 0.3s var(--ease);
+}
+
+.gnav-toggle:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.gnav-toggle svg {
+  width: 15px;
+  height: 15px;
+}
+
+/* ============================================================ the build */
+
+.lede code {
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
+  font-size: 0.88em;
+  padding: 2px 7px;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--ink);
+}
+
+/* Caption UNDER the card rather than inside it — the opposite of the gallery,
+   and deliberately so. A gallery card is one statement you look at; these are
+   five facts you compare, and comparing them means the sentences have to line
+   up in a row of their own. */
+.cardrow {
+  margin-top: clamp(30px, 3.6vw, 46px);
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: clamp(14px, 1.6vw, 20px);
+  align-items: start;
+}
+
+.scard {
+  margin: 0;
+  min-width: 0;
+  scroll-snap-align: start;
+}
+
+.scard-art {
+  aspect-ratio: 4 / 5;
+  padding: clamp(14px, 1.4vw, 20px);
+  border-radius: 20px;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  background: #000;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.07);
+}
+
+.scard figcaption {
+  margin-top: 14px;
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--grey);
+}
+
+.scard figcaption b {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.s-art {
+  width: 100%;
+}
+
+.s-sdk {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.s-sdk div {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 9px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.s-sdk div[data-lead='true'] {
+  background: color-mix(in oklab, var(--rose) 16%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--rose) 30%, transparent);
+}
+
+.s-sdk b {
+  font-size: 21px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.s-sdk span {
+  font-size: 11.5px;
+  color: var(--grey);
+}
+
+.s-code {
+  margin: 0;
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
+  font-size: 10.5px;
+  line-height: 1.7;
+  color: rgba(255, 255, 255, 0.82);
+  white-space: pre;
+  overflow: hidden;
+}
+
+.s-kw {
+  color: #ff7b9c;
+}
+
+.s-fn {
+  color: #7fd0ff;
+}
+
+.s-ty {
+  color: #c6a2ff;
+}
+
+.s-an {
+  color: #ffb86b;
+}
+
+.s-doc b {
+  display: block;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: 0.01em;
+}
+
+.s-doc span {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--grey);
+}
+
+.s-lines {
+  margin-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.s-lines i {
+  height: 5px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.s-abi {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.s-abi span {
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
+  font-size: 11.5px;
+  padding: 9px 11px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--grey);
+}
+
+.s-abi span[data-on='true'] {
+  background: color-mix(in oklab, var(--iris) 20%, transparent);
+  color: var(--ink);
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--iris) 34%, transparent);
+}
+
+.s-release {
+  text-align: center;
+}
+
+.s-release b {
+  display: block;
+  font-size: clamp(24px, 2.8vw, 32px);
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+
+.s-release span {
   display: block;
   margin-top: 6px;
-  font-size: 13px;
-  color: var(--grey-dim);
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
+  font-size: 11px;
+  color: var(--grey);
+}
+
+.s-tagrow {
+  margin-top: 16px;
+}
+
+.s-tag {
+  font-size: 11.5px;
+  padding: 7px 11px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.07);
 }
 
 /* ============================================================= download */
@@ -1604,7 +2199,7 @@ svg {
 }
 
 /* The big titles fill in a word at a time as they arrive, rather than the
-   whole line changing colour together. */
+   whole line changing color together. */
 .words span {
   color: #45454a;
   transition: color 0.5s var(--ease);
@@ -1633,7 +2228,35 @@ svg {
      shown once, at the top of the section, and the beats simply follow it. */
   .stage-device {
     position: static;
+    /* Static means it starts at the top of the section, which is exactly where
+       the sticky pill bar is — so it needs the bar's own height as clearance
+       or the phone's status bar sits behind the pills. */
+    margin-top: var(--seg-h);
     margin-bottom: 8px;
+  }
+
+  /* Five cards side by side at phone width is five columns of nothing. The
+     row becomes a rail. */
+  .cardrow {
+    grid-auto-columns: minmax(200px, 74vw);
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+    padding-bottom: 4px;
+  }
+
+  .cardrow::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Taller, because the caption takes three or four lines once the card is
+     narrow and the miniature still needs room under it. And the neighbours
+     stay legible: on a small screen there is no room for a card that is only
+     present as a hint. */
+  .gcard {
+    aspect-ratio: 3 / 3.4;
+    border-radius: 22px;
+    opacity: 0.72;
   }
 
   .beat {
@@ -1672,7 +2295,7 @@ svg {
   }
 
   .reveal,
-  .featrow,
+  .scard,
   .stage-device {
     opacity: 1;
     transform: none;

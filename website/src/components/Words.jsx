@@ -3,7 +3,7 @@
  *
  * The reference's section titles arrive grey and light up as they cross into
  * view. Doing it per word rather than per line is what makes it read as the
- * line being *written* instead of a block changing colour — and it costs one
+ * line being *written* instead of a block changing color — and it costs one
  * span each, with the stagger carried in a custom property so the whole thing
  * still runs off the page's single reveal observer.
  */

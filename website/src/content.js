@@ -12,12 +12,12 @@ export const RELEASES = `${REPO}/releases/latest`
 export const VERSION = '1.0.102'
 
 /**
- * The palettes the colour beat swaps between.
+ * The palettes the color beat swaps between.
  *
  * `rose` is the app's `DefaultThemeColor`; the other two are the partners the
  * drifting backdrop mixes with. Choosing an album here rewrites those three
  * custom properties on `:root`, which is the same move the app makes when it
- * pulls a palette out of the cover — one source of colour, and every surface
+ * pulls a palette out of the cover — one source of color, and every surface
  * downstream of it follows without being told.
  */
 export const ALBUMS = [
@@ -93,55 +93,88 @@ export const LYRICS = [
   'breathe out',
 ]
 
+/**
+ * The eight, in the order the gallery runs them.
+ *
+ * `visual` names the miniature drawn on that card — see `Gallery`. Order is
+ * deliberate: the two everyone wants first, then the two that leave the phone,
+ * then the two that talk to other services, then the two about keeping things.
+ */
 export const FEATURES = [
   {
-    icon: 'cloud',
-    title: 'Stream or keep it',
-    body: 'Play straight through, or download a track, an album or a playlist and take it off the network entirely.',
+    visual: 'downloads',
+    title: 'Stream it or keep it',
+    body: 'Play straight through, or take a track, an album or a whole playlist off the network and listen with the radio off.',
   },
   {
-    icon: 'wave',
-    title: 'Equalizer',
-    body: 'A full band EQ with presets, plus playback speed and pitch that stay where you put them.',
+    visual: 'eq',
+    title: 'A real equalizer',
+    body: 'Full band EQ with presets, plus playback speed and pitch that stay exactly where you left them between sessions.',
   },
   {
-    icon: 'moon',
+    visual: 'sleep',
     title: 'Sleep timer',
-    body: 'Set it and stop worrying about it. The queue fades out on time rather than cutting.',
+    body: 'Set it and stop thinking about it. The queue fades out when the time is up instead of cutting mid-bar.',
   },
   {
-    icon: 'link',
+    visual: 'auto',
     title: 'Android Auto',
     body: 'Liked songs, history, downloads and your YouTube playlists on the dashboard, with a simplified mode for the road.',
   },
   {
-    icon: 'link',
+    visual: 'discord',
     title: 'Discord Rich Presence',
-    body: 'What you are playing, on your profile, with cover art and buttons — and an option to keep showing it while paused.',
+    body: 'What you are playing, on your profile, with the cover art and buttons — and the option to keep showing it while paused.',
   },
   {
-    icon: 'cloud',
+    visual: 'scrobble',
     title: 'Last.fm and ListenBrainz',
-    body: 'Scrobbling to either service or both, so your listening history belongs to you rather than to this app.',
+    body: 'Scrobble to either service or to both, so the record of what you listened to belongs to you rather than to this app.',
   },
   {
-    icon: 'wave',
+    visual: 'together',
     title: 'Music Together',
-    body: 'Host a session, share the code, and everyone hears the same song at the same second. Guests can queue if you let them.',
+    body: 'Host a session, share the code, and everyone hears the same song at the same second. Guests can queue, if you let them.',
   },
   {
-    icon: 'glass',
+    visual: 'backup',
     title: 'Backup and restore',
-    body: 'Library, playlists and settings out to a file and back again. Moving phones is not a reason to start over.',
+    body: 'Library, playlists and settings out to a file and back again. Changing phones should not mean starting over.',
   },
 ]
 
+/**
+ * The build facts, each with the thing it came out of.
+ *
+ * `art` names the card's illustration — see `Specs`. The numbers are read off
+ * `app/build.gradle.kts`; nothing here is rounded or aspirational.
+ */
 export const SPECS = [
-  { value: 'Android 13+', label: 'API 33 and newer' },
-  { value: '100% Kotlin', label: 'Jetpack Compose, no Views' },
-  { value: 'GPL-3.0', label: 'Source you can read' },
-  { value: 'arm64 · arm32', label: 'Split builds per ABI' },
-  { value: `v${VERSION}`, label: 'Current release' },
+  {
+    art: 'sdk',
+    value: 'Android 13+',
+    body: 'Compiled against 37, targeting 36, with a floor of API 33 — so it uses what those releases added rather than working around their absence.',
+  },
+  {
+    art: 'kotlin',
+    value: '100% Kotlin',
+    body: 'Jetpack Compose top to bottom. There is not a single XML layout in the project; the glass, the dock and the lyrics are all drawn by the same composition.',
+  },
+  {
+    art: 'license',
+    value: 'GPL-3.0',
+    body: 'Source you can read, build and fork, with the same freedom passed on to whoever you hand it to. The repository is the whole app, not a wrapper around a binary.',
+  },
+  {
+    art: 'abi',
+    value: 'Five builds',
+    body: 'arm64, arm32 and both x86 targets get their own APK, plus a universal one. Each carries only the native code it can actually run.',
+  },
+  {
+    art: 'release',
+    value: `v${VERSION}`,
+    body: 'The current release, checked straight against GitHub Releases. No store, no account, and nothing phoning home to ask permission.',
+  },
 ]
 
 /** Read straight off the app's own About screen, so the two cannot disagree. */

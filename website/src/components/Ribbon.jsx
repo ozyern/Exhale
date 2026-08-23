@@ -15,7 +15,7 @@ import { prefersReducedMotion } from '../hooks.js'
  *
  * What is drawn is five lens-shaped ribbons — pointed at both ends, fullest in
  * the middle — that WEAVE through one another on unrelated periods, so the
- * colour order keeps inverting the way the reference's does.
+ * color order keeps inverting the way the reference's does.
  *
  * ### How it stays cheap
  *
@@ -49,7 +49,7 @@ export default function Ribbon({ playing, onToggle }) {
     // Three attempts to get here. Blurred CSS ellipses could drift but never
     // change shape. Parallel wavy bands could flex but stayed stacked in the
     // same order forever. One shared centreline made a single coherent body —
-    // and locked the colours into a fixed spectrum, which the reference plainly
+    // and locked the colors into a fixed spectrum, which the reference plainly
     // is not: watch it for four seconds and blue is above red, then red is
     // above blue, then green is above both. The bands pass THROUGH one another.
     //
