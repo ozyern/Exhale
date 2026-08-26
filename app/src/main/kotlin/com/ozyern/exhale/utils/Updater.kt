@@ -105,26 +105,28 @@ data class DownloadProgress(
 }
 
 /**
- * The release asset the updater downloads.
+ * The release asset the updater downloads: `Exhale-1.0.103.apk`.
  *
- * Deliberately version-free: `releases/latest/download/<name>` only resolves when the
- * name is identical in every release, so putting the version in it would break the
- * one URL that always points at the newest build. The release workflow renames
- * Gradle's `app-universal-release.apk` to this before uploading.
+ * One APK per release, carrying the build it is. Splitting by ABI saved about a
+ * megabyte and cost a decision nobody outside this repository can make — a release
+ * page that asks which of arm64, armeabi-v7a, x86 and x86_64 you are is a page most
+ * people close. The universal build runs everywhere.
+ *
+ * The name carries the version, which means `releases/latest/download/<name>` can no
+ * longer be hard-coded — see [getLatestDownloadUrl]. That is the right trade: the
+ * updater resolves assets through the API anyway, and a filename in someone's
+ * Downloads folder should say what it is.
  */
-private const val APK_ASSET_NAME = "Exhale-universal.apk"
+private fun apkAssetNameFor(versionName: String): String = "Exhale-$versionName.apk"
 
 /**
  * Anything that would also do.
  *
- * The exact name above is what we publish, but an updater that can only recognise one
- * spelling breaks the day someone renames an asset — and the app in the field is the
- * copy that cannot be fixed. So resolution degrades: exact name, then any universal
- * APK, then any APK at all.
+ * An updater that can only recognise one spelling breaks the day an asset is renamed,
+ * and the app in the field is the copy that cannot be fixed. So resolution degrades:
+ * the exact name for this version, then any APK at all — which is unambiguous now
+ * that a release carries exactly one.
  */
-private fun isUniversalApkAsset(name: String): Boolean =
-    name.endsWith(".apk", ignoreCase = true) && name.contains("universal", ignoreCase = true)
-
 private fun isApkAsset(name: String): Boolean = name.endsWith(".apk", ignoreCase = true)
 
 /** 64 KB reads — large enough that the syscall overhead disappears against network latency. */
@@ -525,8 +527,9 @@ object Updater {
      * correct whenever the asset does carry the expected name.
      */
     private suspend fun resolveApkDownloadUrl(tagName: String): String {
+        val version = tagName.removePrefix("v")
         val fallback =
-            "https://github.com/ozyern/Exhale/releases/download/$tagName/$APK_ASSET_NAME"
+            "https://github.com/ozyern/Exhale/releases/download/$tagName/${apkAssetNameFor(version)}"
 
         return runCatching {
             val response = client.get(
@@ -548,8 +551,7 @@ object Updater {
                 if (name.isNotBlank() && url.isNotBlank()) names.add(name to url)
             }
 
-            names.firstOrNull { it.first.equals(APK_ASSET_NAME, ignoreCase = true) }?.second
-                ?: names.firstOrNull { isUniversalApkAsset(it.first) }?.second
+            names.firstOrNull { it.first.equals(apkAssetNameFor(version), ignoreCase = true) }?.second
                 ?: names.firstOrNull { isApkAsset(it.first) }?.second
                 ?: fallback
         }.getOrDefault(fallback)
@@ -692,7 +694,12 @@ object Updater {
         }
         return when (channel) {
             UpdateChannel.STABLE -> {
-                "https://github.com/ozyern/Exhale/releases/latest/download/$APK_ASSET_NAME"
+                // The release page, not a direct file. `releases/latest/download/<name>`
+                // needs a name that never changes, and the asset is named after its
+                // version now — a guessed URL would 404 the moment a version ships that
+                // this build has never heard of, which is every version after this one.
+                // The page always exists and is one tap from the APK.
+                "https://github.com/ozyern/Exhale/releases/latest"
             }
             UpdateChannel.NIGHTLY -> {
                 cachedNightlyInfo?.apkUrl

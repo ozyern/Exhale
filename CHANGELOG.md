@@ -195,10 +195,15 @@ stack of elevated cards with shadows, shimmer sweeps and fake hover states.
 **Spelling is American throughout.** "Colours follow the album art" is now "Colors", and the site
 and these notes match — one spelling, everywhere the app writes a word.
 
-**Releases are signed, named, and built by tag.** Pushing `v1.0.103` builds all five
-architectures, signs them with the release key and publishes them, with the notes taken from
-this file so the release page, the site and the in-app changelog cannot disagree. The APK the
-updater downloads is `Exhale-universal.apk`.
+**Releases are signed, named, and built by tag.** Pushing `v1.0.103` builds the app, signs it
+with the release key and publishes it, with the notes taken from this file so the release page,
+the site and the in-app changelog cannot disagree.
+
+One APK per release — `Exhale-1.0.103.apk`, the universal build that runs on every
+architecture. Splitting it four ways saved about a megabyte and cost a decision nobody outside
+this repository can make: a download page that asks whether you are arm64, armeabi-v7a, x86 or
+x86_64 is a page most people close. The filename carries the version, so a file sitting in a
+Downloads folder says which build it is.
 
 ### Fixed
 
