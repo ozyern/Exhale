@@ -82,8 +82,28 @@ export default function Ribbon({ playing, onToggle }) {
 
     const rgb = bands.map((band) => parse(band.css))
 
+    // Halo first, then core. Widths and alphas chosen so the sum peaks a little
+    // under 1 at the centre of a single band — the rest of the headroom is what
+    // the crossings spend to reach white.
+    // `fade` is where each pass reaches full strength along its own length. The
+    // halo comes up later and dies earlier than the core, so it never sticks out
+    // past the tip — a halo as long as the band is what turns a pointed lens
+    // into a streak with blunt ends.
+    const PASSES = [
+      { width: 2.05, alpha: 0.3, fade: [0.14, 0.52, 0.9] },
+      { width: 1, alpha: 0.78, fade: [0.2, 0.58, 1] },
+    ]
+
+    // The bands read as one body or as five streaks depending on how far apart
+    // they sit at rest. Pulled in from their authored spread until they overlap
+    // at the waist and only separate where the weave pushes them apart.
+    const SPREAD = 0.82
+
     const SCALE = 0.55
-    const STEPS = 52
+    // Enough segments that the crest of a travelling wave stays a curve rather
+    // than a run of chords. At 55% scale and one fill per band this is cheap.
+    const STEPS = 88
+    const TAU = Math.PI * 2
     let w = 0
     let h = 0
 
@@ -105,42 +125,89 @@ export default function Ribbon({ playing, onToggle }) {
       // so the bright core is produced by the weave rather than painted in.
       ctx.globalCompositeOperation = 'lighter'
 
+      // ── The whole object's own motion ────────────────────────────────────
+      //
+      // The weave alone made five ribbons that happened to be near each other.
+      // What the reference has on top of that is behaviour belonging to the
+      // WHOLE form: it breathes, it leans, and its light swells. Those are
+      // shared terms, which is what makes five paths read as one object —
+      // and they run on their own long periods so the composite never lands
+      // in the same state twice inside anyone's attention span.
+
+      // Breath. Amplitude and thickness together, because a form that swells
+      // without spreading reads as a zoom rather than an inhale.
+      const breath = 0.84 + 0.16 * Math.sin((t / 13) * TAU)
+
+      // Lean. A degree or two of shared tilt, slower than the breath.
+      const tilt = 0.052 + Math.sin((t / 21) * TAU) * 0.038
+
+      // Swell. The light gets brighter as the form opens, slightly out of
+      // phase so the peak of the glow is not the peak of the shape.
+      const bloom = 0.88 + 0.12 * Math.sin((t / 9.5) * TAU + 1.2)
+
+      // Entrance. Cold-starting mid-motion looks like a video that was already
+      // playing; this opens from a flat line over about a second and a half.
+      const raw = Math.min(1, t / 1.6)
+      const intro = raw * raw * (3 - 2 * raw)
+
       bands.forEach((band, index) => {
         const [r, g, b] = rgb[index]
 
-        // Where this band sits right now. The drift is the weave; the wave is
+        // Where this band sits right now. The drift is the weave; the waves are
         // the flex along its own length; the tilt is shared, so the group still
         // reads as one ribbon rather than five unrelated streaks.
+        //
+        // Two waves, not one. A single sine is a shape a viewer solves in about
+        // two seconds; a second, faster one at an unrelated phase travelling
+        // the other way keeps the profile from ever being symmetrical.
         const centre = (u) =>
           h * 0.5 +
-          h * band.base +
-          (u - 0.5) * h * 0.08 +
-          Math.sin((t / band.period) * Math.PI * 2 + band.phase) * h * band.drift +
-          Math.sin(u * Math.PI * 2 * band.freq + band.xphase + t * band.speed) * h * 0.045
+          h * band.base * SPREAD * breath +
+          (u - 0.5) * h * tilt +
+          Math.sin((t / band.period) * TAU + band.phase) * h * band.drift * breath * intro +
+          Math.sin(u * TAU * band.freq + band.xphase + t * band.speed) * h * 0.045 * intro +
+          Math.sin(u * TAU * band.freq * 2.3 + band.xphase * 1.7 - t * band.speed * 0.63) *
+            h *
+            0.017 *
+            intro
 
-        // Lens: full through the middle, brought to a point at each end.
-        const half = (u) => Math.sin(Math.PI * u) ** 0.6 * h * band.thick
+        // Lens: full through the middle, brought to a point at each end. The
+        // exponent is what makes the tips fine rather than blunt.
+        // The exponent is the tip. Below 1 the lens stays wide almost to the end
+        // and finishes on a blunt edge; above it the profile falls away fast and
+        // the band comes to a point, which is what the reference does.
+        const half = (u) =>
+          Math.sin(Math.PI * u) ** 0.86 * h * band.thick * (0.32 + 0.68 * breath) * intro
 
-        const gradient = ctx.createLinearGradient(0, 0, w, 0)
-        gradient.addColorStop(0, `rgba(${r},${g},${b},0)`)
-        gradient.addColorStop(0.22, `rgba(${r},${g},${b},0.5)`)
-        gradient.addColorStop(0.58, `rgba(${r},${g},${b},${band.alpha})`)
-        gradient.addColorStop(1, `rgba(${r},${g},${b},0)`)
-        ctx.fillStyle = gradient
+        // Drawn twice: a wide, faint halo and a narrow core inside it. One pass
+        // at a single width gives a band with an edge; light does not have an
+        // edge, it has a bright middle that falls away, and stacking the two
+        // additively is what produces that without a second blur pass.
+        for (const pass of PASSES) {
+          const gradient = ctx.createLinearGradient(0, 0, w, 0)
+          const peak = band.alpha * pass.alpha * bloom * intro
+          const [rise, crest, end] = pass.fade
+          gradient.addColorStop(0, `rgba(${r},${g},${b},0)`)
+          gradient.addColorStop(rise, `rgba(${r},${g},${b},${peak * 0.5})`)
+          gradient.addColorStop(crest, `rgba(${r},${g},${b},${peak})`)
+          gradient.addColorStop(end, `rgba(${r},${g},${b},0)`)
+          if (end < 1) gradient.addColorStop(1, `rgba(${r},${g},${b},0)`)
+          ctx.fillStyle = gradient
 
-        ctx.beginPath()
-        for (let i = 0; i <= STEPS; i += 1) {
-          const u = i / STEPS
-          const y = centre(u) - half(u)
-          if (i === 0) ctx.moveTo(u * w, y)
-          else ctx.lineTo(u * w, y)
+          ctx.beginPath()
+          for (let i = 0; i <= STEPS; i += 1) {
+            const u = i / STEPS
+            const y = centre(u) - half(u) * pass.width
+            if (i === 0) ctx.moveTo(u * w, y)
+            else ctx.lineTo(u * w, y)
+          }
+          for (let i = STEPS; i >= 0; i -= 1) {
+            const u = i / STEPS
+            ctx.lineTo(u * w, centre(u) + half(u) * pass.width)
+          }
+          ctx.closePath()
+          ctx.fill()
         }
-        for (let i = STEPS; i >= 0; i -= 1) {
-          const u = i / STEPS
-          ctx.lineTo(u * w, centre(u) + half(u))
-        }
-        ctx.closePath()
-        ctx.fill()
       })
 
       ctx.globalCompositeOperation = 'source-over'

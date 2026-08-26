@@ -7,7 +7,7 @@ Release notes for the build you are running are also bundled into the app itself
 **Settings → Updates → Changelog**. Every later version's notes are pulled from this repository's
 [GitHub releases](https://github.com/ozyern/Exhale/releases).
 
-## [1.0.102] — 2026-08-23
+## [1.0.102] — 2026-08-26
 
 First public release.
 

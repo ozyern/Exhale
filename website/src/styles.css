@@ -789,11 +789,19 @@ svg {
   background: #000;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.07);
   opacity: 0.5;
-  transition: opacity 0.7s var(--ease);
+  /* Depth, not just dimming. A rail where the neighbours only fade reads as one
+     card with two ghosts; a few percent of scale puts them BEHIND it, which is
+     what makes the rail feel like a stack you are moving through. */
+  transform: scale(0.955);
+  transform-origin: center bottom;
+  transition:
+    opacity 0.7s var(--ease),
+    transform 0.85s var(--settle);
 }
 
 .gcard[data-on='true'] {
   opacity: 1;
+  transform: none;
 }
 
 /* Pure black is the ground, but a card of nothing but black is a hole. One
@@ -1316,6 +1324,11 @@ svg {
   margin: 0;
   flex: 0 0 clamp(216px, 23vw, 266px);
   scroll-snap-align: start;
+  transition: transform 0.6s var(--settle);
+}
+
+.scard:hover {
+  transform: translateY(-4px);
 }
 
 .scard-art {
