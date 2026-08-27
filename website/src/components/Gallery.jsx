@@ -3,17 +3,13 @@ import { PauseIcon, PlayIcon } from '../icons.jsx'
 import { useOnScreen, prefersReducedMotion } from '../hooks.js'
 
 /*
- * The gallery.
- * ---------------------------------------------------------------------------
- * A rail of large black cards, each with its caption set INSIDE the card at the
- * top and the thing it describes drawn underneath. It advances on its own, the
- * next card peeks in from the right so the rail announces itself without a
- * scrollbar, and the whole thing can be stopped.
+ * A rail of large cards, caption inside at the top, the thing it describes
+ * drawn underneath. Advances on its own; the next card peeks in from the right
+ * so the rail announces itself without needing a scrollbar.
  *
- * Every card carries a working miniature of the feature rather than an abstract
- * wash — which was the objection to the last carousel here. A card that only
- * has a gradient in it is a headline with decoration; a card with the EQ in it
- * is the EQ.
+ * Each card holds a working miniature rather than a gradient. A card with a
+ * gradient in it is a headline with decoration; a card with the EQ in it is
+ * the EQ.
  */
 
 const DURATION = 5600
@@ -177,9 +173,8 @@ export default function Gallery({ items }) {
   const live = useOnScreen(railRef, '0px')
   const awake = playing && live && !prefersReducedMotion()
 
-  // `offsetLeft` is measured from the rail's border box, so the leading padding
-  // has to come back off it to get the scroll position that puts a card flush
-  // with where the content actually starts.
+  // offsetLeft includes the rail's leading padding, so take it back off to get
+  // the scroll position that puts a card flush with the content start.
   const go = useCallback((next, smooth = true) => {
     const rail = railRef.current
     const card = rail?.children[next]
@@ -188,9 +183,8 @@ export default function Gallery({ items }) {
     rail.scrollTo({ left: card.offsetLeft - pad, behavior: smooth ? 'smooth' : 'auto' })
   }, [])
 
-  // Which card is showing is read off the scroll position rather than tracked
-  // separately, so a drag, a wheel and the timer all end up telling the dots
-  // the same story.
+  // Read the current card off the scroll position rather than tracking it
+  // separately, so a drag, a wheel and the timer agree.
   useEffect(() => {
     const rail = railRef.current
     if (!rail) return
@@ -245,10 +239,8 @@ export default function Gallery({ items }) {
         })}
       </div>
 
-      {/* The reference puts the dots and the stop button together in one grey
-          cluster, and it is worth copying: the control that pauses the motion
-          sits next to the thing that shows the motion, so stopping it is an
-          obvious move rather than a hunt. */}
+      {/* Dots and stop button in one cluster, so the control that halts the
+          motion sits next to the thing showing it. */}
       <div className="gallery-nav">
         <div className="gnav-dots" role="tablist" aria-label="Features">
           {items.map((item, i) => (

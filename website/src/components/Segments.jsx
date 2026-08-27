@@ -2,16 +2,11 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { prefersReducedMotion } from '../hooks.js'
 
 /**
- * The page's navigation is the app's dock.
+ * Segmented control, built like the app's `LiquidTabBar`: the capsule slides
+ * between items instead of blinking from one to the next.
  *
- * A segmented control with a capsule that *slides* between items rather than a
- * highlight that blinks from one to the next — the same construction as the
- * app's `LiquidTabBar`, and the same reason: a capsule that moves is one
- * object the eye can follow.
- *
- * The capsule is measured rather than computed, because these segments are
- * label-width, not equal-width. The app can multiply by a fixed pitch; this
- * has to ask the DOM where each item actually landed.
+ * Measured rather than computed. These segments are label-width, so there's no
+ * fixed pitch to multiply by — we have to ask the DOM where each one landed.
  */
 export default function Segments({ items, active, onSelect }) {
   const railRef = useRef(null)
@@ -24,11 +19,9 @@ export default function Segments({ items, active, onSelect }) {
     setBox({ left: node.offsetLeft, width: node.offsetWidth })
   }, [active])
 
-  // On a phone the five labels are wider than the screen, so the last one or
-  // two live off the right edge. A control you cannot reach the end of is
-  // worse than no control, so the active pill scrolls itself into view —
-  // which also means that scrolling the PAGE walks the bar along, and the
-  // section you are in is always the one you can see.
+  // The five labels are wider than a phone screen, so the last couple sit off
+  // the right edge with no way to reach them. Scrolling the active pill into
+  // view also means scrolling the page walks the bar along with it.
   useEffect(() => {
     const rail = railRef.current
     const node = itemRefs.current[active]

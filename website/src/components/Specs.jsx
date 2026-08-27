@@ -1,14 +1,9 @@
 /*
- * The build, as a card row.
- * ---------------------------------------------------------------------------
- * Five facts that used to be five numbers on a strip. A number on its own is a
- * claim; the same number with the thing it came out of drawn beside it is
- * evidence, which is the whole difference between a spec sheet and a spec
- * sheet worth reading.
+ * Five build facts, each drawn with the thing it came out of. A number on its
+ * own is a claim; the same number next to its source is evidence.
  *
- * Every value here is lifted straight out of `app/build.gradle.kts`, so if the
- * build changes and this does not, the page is wrong on purpose rather than by
- * accident.
+ * Values come from app/build.gradle.kts. If the build changes and this doesn't,
+ * the page is wrong.
  */
 
 const Sdk = () => (
@@ -59,9 +54,8 @@ const License = () => (
 
 const Abi = () => (
   <div className="s-art s-abi">
-    {/* The published build is the highlighted one. The others are flavours the
-        Gradle project still defines — reachable if you compile it, not offered
-        as a choice on the release page. */}
+    {/* Highlighted is what we publish. The rest are flavours the project still
+        defines, reachable if you build it yourself. */}
     {[
       ['universal', true],
       ['arm64-v8a', false],

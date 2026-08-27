@@ -11,12 +11,12 @@
 
    The one thing that is ours rather than borrowed: every color on the page
    is three custom properties that the album art overwrites, so the ribbon,
-   the device, the accents and the links all retint together — which is the
+   the device, the accents and the links all retint together, which is the
    app's own architecture, not a decoration.
    ========================================================================= */
 
 :root {
-  --ink: #f5f5f7; /* Apple's off-white, not #fff — softer on black */
+  --ink: #f5f5f7; /* off-white, not #fff; softer on black */
   --grey: #86868b; /* Apple's secondary grey, verbatim */
   --grey-dim: #6e6e73;
 
@@ -96,9 +96,8 @@ svg {
 
 /* ============================================================ type roles */
 
-/* Apple's headline: semibold, tight, and big. Never bolder than 600 — the
-   weight comes from the size, which is the difference between "Apple" and
-   "poster". */
+/* Semibold, tight, big. Never heavier than 600: the weight comes from the
+   size. */
 .headline {
   font-size: clamp(34px, 5.4vw, 76px);
   font-weight: 600;
@@ -167,7 +166,7 @@ svg {
 
 /* ================================================================== bars */
 
-/* Tier one: the thin global bar. Deliberately quiet — it exists so the
+/* Tier one: the thin global bar. Deliberately quiet, so the
    segmented control below it can be the only thing you notice. */
 .topbar {
   position: relative;
@@ -185,7 +184,7 @@ svg {
   margin-inline: auto;
   display: flex;
   align-items: center;
-  /* Centred as a group, with ONE gap doing all the spacing — the reference's
+  /* Centred as a group, with one gap doing all the spacing. The reference's
      row is evenly distributed across the middle of the page, which a
      left/right split with a spacer can never look like. */
   justify-content: center;
@@ -228,7 +227,7 @@ svg {
 .wordmark .mark {
   /* Alone in the bar with no wordmark beside it, the icon IS the identity, so
      it gets a couple more pixels than it had when it was only a bullet in
-     front of a label — and a couple more again now that it is a glyph on
+     front of a label, and a couple more again now that it is a glyph on
      transparency rather than a tile, since the artwork carries its own margin
      and the visible mark is smaller than its box. */
   width: 25px;
@@ -244,7 +243,7 @@ svg {
   margin-left: auto;
 }
 
-/* Tier two: the segmented control — the app's dock, on a web page.
+/* Tier two: the segmented control, which is the app's dock on a web page.
    ---------------------------------------------------------------------------
    It was a row of separate dark chips, which is the reference's shape but not
    this product's material: every chip drew its own opaque background, so the
@@ -253,8 +252,8 @@ svg {
 
    Now it is built the way `LiquidTabBar` is: ONE frosted capsule holding the
    row, the items transparent on top of it, and a single bright capsule that
-   slides between them. Same reason as in the app — a capsule that moves is one
-   object the eye can follow, where a highlight that jumps is two blinking. */
+   slides between them. Same reason as in the app: a capsule that moves is one
+   object to follow, where a highlight that jumps is two blinking. */
 .segbar {
   position: sticky;
   top: 0;
@@ -281,7 +280,7 @@ svg {
 
   /* The app's chrome material: a real backdrop blur, a tint over it so it
      stays legible on anything, and a rim that is bright along the top edge and
-     dark along the bottom — which is what reads as a pane with thickness
+     dark along the bottom, which is what reads as a pane with thickness
      rather than a rounded box. */
   background: rgba(255, 255, 255, 0.055);
   backdrop-filter: blur(30px) saturate(180%);
@@ -324,8 +323,8 @@ svg {
 
 /* The capsule.
    `transform` and `width` both animate, which is what lets it stretch INTO a
-   move and recover on arrival instead of gliding rigidly — the same physics as
-   the app's, and the reason the curve is a spring rather than an ease. */
+   move and recover on arrival instead of gliding rigidly. Same physics as the
+   app's, which is why the curve is a spring rather than an ease. */
 .segment-capsule {
   position: absolute;
   z-index: 0;
@@ -356,7 +355,7 @@ svg {
 
 /* The object.
    ---------------------------------------------------------------------------
-   Drawn on canvas — see Ribbon.jsx for why it cannot be CSS. What lives here
+   Drawn on canvas; see Ribbon.jsx for why it can't be CSS. What lives here
    is only the frame it occupies and the light treatment on top of it.
 */
 .ribbon {
@@ -368,7 +367,7 @@ svg {
   aspect-ratio: 4.4 / 1;
   max-height: 46vh;
   /* The hero reacts to the scroll rather than sitting still while the page
-     moves past it — set from JS as you leave the section. */
+     moves past it. Set from JS as you leave the section. */
   transform: scale(var(--hero-scale, 1));
   opacity: var(--hero-fade, 1);
   will-change: transform, opacity;
@@ -484,17 +483,16 @@ svg {
   inset: 0;
   z-index: 1;
   pointer-events: none;
-  /* Parallax against the phone in front of it — see `useHeroScroll`. Written as
-     one custom property so scrolling only ever re-composites a transform. */
+  /* Parallax against the phone in front of it (see useHeroScroll). One custom
+     property, so scrolling only ever re-composites a transform. */
   transform: translateY(calc(var(--fan, 0) * -24px))
     scale(calc(1 + var(--fan, 0) * 0.045));
   will-change: transform;
 }
 
-/* Every offset is a multiple of a CARD's own size — a percentage in
-   `translate` resolves against the element, not its container — so the whole
-   arrangement scales with the phone instead of drifting apart on a wide screen
-   and piling up on a narrow one. */
+/* Offsets are multiples of a card's own size: a percentage in `translate`
+   resolves against the element, not its container, so the arrangement scales
+   with the phone instead of drifting apart on a wide screen. */
 .fan-card {
   position: absolute;
   left: 50%;
@@ -679,7 +677,7 @@ svg {
 
 /* ============================================================ big title */
 
-/* The reference's section headings are large, left-aligned, and arrive grey —
+/* Section headings: large, left-aligned, arriving grey and filling in.
    filling to white as they cross into view. It is the one piece of motion on
    the page that is driven by scroll position rather than by a state change,
    and it is worth the exception: a heading that lights up as you reach it does
@@ -754,10 +752,9 @@ svg {
 }
 
 /* The rail runs off the right edge of the window, not off the edge of the
-   text column — the peek of the next card is what tells you there IS a next
-   card, and a rail that stops at the gutter has to say so with a scrollbar
-   instead. So the leading padding matches the shell and the trailing edge is
-   allowed to bleed. */
+   text column. The peek of the next card is what says there is one; a rail
+   that stops at the gutter has to say it with a scrollbar instead. Leading
+   padding matches the shell, the trailing edge bleeds. */
 .gallery {
   margin-top: clamp(30px, 3.6vw, 48px);
 }
@@ -823,9 +820,9 @@ svg {
   background: radial-gradient(
     ellipse at center,
     color-mix(in oklab, var(--rose) 20%, transparent),
-    transparent 66%
+    color-mix(in oklab, var(--rose) 7%, transparent) 42%,
+    transparent 72%
   );
-  filter: blur(24px);
 }
 
 .gcard:nth-child(2)::before,
@@ -856,7 +853,7 @@ svg {
 }
 
 /* The caption sits inside the card, above the thing it describes, centred and
-   narrow — so it reads as a title card rather than as a label stuck on. */
+   narrow, so it reads as a title card rather than a label stuck on. */
 .gcard-cap {
   flex: none;
   max-width: 46ch;
@@ -1281,10 +1278,9 @@ svg {
   color: var(--ink);
 }
 
-/* Caption UNDER the card rather than inside it — the opposite of the gallery,
-   and deliberately so. A gallery card is one statement you look at; these are
-   five facts you compare, and comparing them means the sentences have to line
-   up in a row of their own. */
+/* Caption under the card rather than inside it, the opposite of the gallery.
+   A gallery card is one statement you look at; these are five facts you
+   compare, and comparing them needs the sentences lined up in their own row. */
 /* The panel is the conclusion of the section above it, so it sits closer to
    the cards than a section break would put it, and the cards get the section's
    bottom padding back. */
@@ -1319,19 +1315,17 @@ svg {
   color: var(--grey-dim);
 }
 
-/* Four cards across the text column and the fifth breaking the right margin —
-   the row has to leave the shell to do that, so it is padded to the shell's
-   gutter rather than sitting inside it. */
+/* All five in the text column, under a centred heading.
+   They used to run off the right edge on purpose, borrowed from a rail that
+   continues past the fold. Five is not many, and a row that overflows under
+   centred type just looks pushed to one side. */
 .cardrow {
-  margin-top: clamp(34px, 4.4vw, 60px);
-  display: flex;
-  gap: clamp(14px, 1.6vw, 20px);
+  width: var(--shell);
+  margin: clamp(34px, 4.4vw, 60px) auto 0;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: clamp(12px, 1.4vw, 18px);
   align-items: start;
-  padding-inline: max(22px, (100% - 1120px) / 2);
-  overflow-x: auto;
-  scroll-snap-type: x mandatory;
-  scroll-padding-inline-start: max(22px, (100% - 1120px) / 2);
-  scrollbar-width: none;
   text-align: left;
 }
 
@@ -1341,7 +1335,7 @@ svg {
 
 .scard {
   margin: 0;
-  flex: 0 0 clamp(216px, 23vw, 266px);
+  min-width: 0;
   scroll-snap-align: start;
   transition: transform 0.6s var(--settle);
 }
@@ -1352,7 +1346,7 @@ svg {
 
 .scard-art {
   aspect-ratio: 4 / 5;
-  padding: clamp(14px, 1.4vw, 20px);
+  padding: clamp(12px, 1.15vw, 17px);
   border-radius: 20px;
   overflow: hidden;
   display: grid;
@@ -2340,7 +2334,7 @@ video.phone-shot {
 /* ============================================================== reveals */
 
 /* Entrance choreography.
-   The reference never fades a whole block in at once — the kicker arrives, the
+   Nothing fades in as a whole block: the kicker arrives, the
    headline follows it, then the supporting line, then the links. `--d` staggers
    them; the rise is small on purpose, because a long travel reads as a slide
    deck rather than as something settling into place. */
@@ -2383,9 +2377,8 @@ video.phone-shot {
 
   /* Centred text is a wide-screen luxury.
      In a 342px column a centred paragraph gives every line a different start,
-     so the eye has to re-find the left edge on each one — and the reference,
-     which centres these same blocks on a desktop, sets them left on a phone
-     for exactly that reason. */
+     so the eye has to re-find the left edge on every line. Centred is a
+     wide-screen luxury. */
   .statement.center,
   .build .center {
     text-align: left;
@@ -2425,8 +2418,8 @@ video.phone-shot {
   }
 
   /* Eight live backdrop blurs, seven of them off screen, on the device least
-     able to afford one. What they blur here is a soft radial on near-black — a
-     flat tint is indistinguishable and costs nothing. */
+     able to afford one. What they blur is a soft radial on near-black, and a
+     flat tint matches it for free. */
   .g-panel {
     width: 100%;
     backdrop-filter: none;
@@ -2472,15 +2465,15 @@ video.phone-shot {
 
   /* No pinning on a phone.
      Sticky keeps the device in place while everything after it scrolls
-     *underneath* — which on a wide screen is the whole point, because the copy
+     *underneath*, which on a wide screen is the point, because the copy
      is in the other column. In one column it means the device parks on top of
      the paragraph you are trying to read. There is no arrangement of sticky
      that fixes that: the text would have to be forbidden from entering space
      the device is not occupying in layout. So on narrow screens the device is
      shown once, at the top of the section, and the beats simply follow it. */
   /* The hero is the object on this page, and at 78vw by 4.4:1 it was 304 by 69
-     CSS pixels on a phone — a hairline that reads as a progress bar rather than
-     as light. Wider, and much less flat, so it is something to look at. */
+     CSS pixels on a phone: a hairline that reads as a progress bar. Wider and
+     much less flat, so it is something to look at. */
   .ribbon {
     width: 92vw;
     aspect-ratio: 2.5 / 1;
@@ -2490,19 +2483,34 @@ video.phone-shot {
   .stage-device {
     position: static;
     /* Static means it starts at the top of the section, which is exactly where
-       the sticky pill bar is — so it needs the bar's own height as clearance
-       or the phone's status bar sits behind the pills. */
+       the sticky pill bar is, so it needs the bar's height as clearance or
+       the phone's status bar ends up behind the pills. */
     margin-top: var(--seg-h);
     margin-bottom: 8px;
   }
 
-  /* Four across is four columns of nothing at phone width. */
+  /* Five columns is five columns of nothing at phone width, so below this the
+     row goes back to being a rail. */
+  .cardrow {
+    width: auto;
+    display: flex;
+    padding-inline: max(22px, (100% - 1120px) / 2);
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    scroll-padding-inline-start: max(22px, (100% - 1120px) / 2);
+    scrollbar-width: none;
+  }
+
+  .cardrow::-webkit-scrollbar {
+    display: none;
+  }
+
   .scard {
     flex: 0 0 min(74vw, 260px);
   }
 
   /* The outer pair of the fan are off the screen entirely by this width, and
-     the next pair are mostly off it — which leaves a crowded edge rather than
+     the next pair are mostly off it, which leaves a crowded edge rather than
      an arrangement. Two cards, closer in. */
   .fan-card:nth-child(1),
   .fan-card:nth-child(2),

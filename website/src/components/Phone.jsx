@@ -2,31 +2,22 @@ import { useEffect, useRef } from 'react'
 import { prefersReducedMotion } from '../hooks.js'
 
 /**
- * The device — a frame around real screenshots.
+ * A frame around real screenshots of the app.
  *
- * This used to rebuild the app's UI in markup, which was the right call while
- * the only screenshots in the repo were inherited from OpenTune: wrong app
- * name, wrong language, years older than the current design. With real ones in
- * hand a recreation is strictly worse — it is a drawing of the product that
- * drifts the moment the product moves.
+ * Every screen stays mounted and cross-fades on `data-on`, so the frame never
+ * resizes between beats and the device doesn't jump while it's pinned.
  *
- * The one piece still rebuilt is the dock, and only because you can put your
- * hands on that one (see `Dock`). A screenshot cannot be dragged.
- *
- * Every screen is mounted and cross-fades on `data-on`, so the frame never
- * resizes between beats and the device never jumps while it is pinned.
+ * The dock is the one piece still rebuilt in markup (see `Dock`) — you can drag
+ * that one, and a screenshot can't be dragged.
  */
 
 /**
- * A screen recording, layered over the stills.
+ * A screen recording layered over the stills.
  *
- * Some things a still cannot show. Lyrics land word by word, and the whole
- * claim is in the timing — a frozen frame of it is just text with one word
- * lit, which proves nothing about when it lit up.
- *
- * It only plays while its beat owns the device and the page is not paused,
- * and it rewinds when it loses the beat, so scrolling back to it starts the
- * line again rather than joining halfway.
+ * Lyrics land word by word and the claim is entirely in the timing, which a
+ * still frame can't show. Plays only while its beat owns the device and the
+ * page isn't paused; rewinds when it loses the beat so scrolling back starts
+ * the line again instead of joining halfway.
  */
 function PhoneVideo({ src, poster, on, running }) {
   const ref = useRef(null)
@@ -35,8 +26,8 @@ function PhoneVideo({ src, poster, on, running }) {
     const el = ref.current
     if (!el) return
     if (on && running && !prefersReducedMotion()) {
-      // Autoplay can still be refused (a data saver, a strict setting); the
-      // poster is a real frame, so a refusal degrades to a screenshot.
+      // Autoplay can be refused. The poster is a real frame, so that degrades
+      // to a screenshot rather than a black hole.
       const started = el.play()
       if (started?.catch) started.catch(() => {})
     } else {

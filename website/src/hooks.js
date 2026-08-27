@@ -37,10 +37,9 @@ export function useReveals() {
 /**
  * Links the hero object to the scroll.
  *
- * The reference's hero does not sit still while the page slides past it — it
- * recedes as you leave. Two custom properties on the element, written from a
- * rAF-throttled scroll handler, so nothing here recomposes React or touches
- * layout: the browser only re-composites a transform and an opacity.
+ * The hero recedes as you scroll away from it. Two custom properties written
+ * from a rAF-throttled handler, so nothing here re-renders React — the browser
+ * only re-composites a transform and an opacity.
  */
 export function useHeroScroll() {
   useEffect(() => {
@@ -48,10 +47,19 @@ export function useHeroScroll() {
     const node = document.querySelector('.ribbon')
     if (!node) return
 
-    // The fan below the statement gets the same treatment for the same reason:
-    // a composition that holds perfectly still while the page moves past it
-    // reads as a picture of a product rather than the product.
+    // The fan below the statement drifts against the phone in front of it, so
+    // the group separates as it passes the middle of the screen.
     const fan = document.querySelector('.fan')
+
+    // Measured on resize, not on scroll. getBoundingClientRect inside a scroll
+    // handler forces a layout every frame; the fan does not move in the
+    // document, so its position only changes when the page reflows.
+    let fanMid = 0
+    const measure = () => {
+      if (!fan) return
+      const rect = fan.getBoundingClientRect()
+      fanMid = rect.top + window.scrollY + rect.height / 2
+    }
 
     let frame = 0
     const apply = () => {
@@ -61,12 +69,8 @@ export function useHeroScroll() {
       node.style.setProperty('--hero-fade', (1 - progress * 0.85).toFixed(3))
 
       if (fan) {
-        // Signed: the cards drift one way approaching the middle of the screen
-        // and the other way leaving it, so the phone in front of them separates
-        // from the group in both directions rather than only on the way out.
-        const rect = fan.getBoundingClientRect()
-        const centre = rect.top + rect.height / 2
-        const away = (window.innerHeight / 2 - centre) / (window.innerHeight * 0.8)
+        const seen = window.scrollY + window.innerHeight / 2
+        const away = (seen - fanMid) / (window.innerHeight * 0.8)
         fan.style.setProperty('--fan', Math.max(-1, Math.min(1, away)).toFixed(3))
       }
     }
@@ -74,10 +78,21 @@ export function useHeroScroll() {
       if (!frame) frame = requestAnimationFrame(apply)
     }
 
+    const onResize = () => {
+      measure()
+      apply()
+    }
+
+    measure()
     apply()
     window.addEventListener('scroll', onScroll, { passive: true })
+    window.addEventListener('resize', onResize)
+    // Images landing late change where the fan sits.
+    window.addEventListener('load', onResize)
     return () => {
       window.removeEventListener('scroll', onScroll)
+      window.removeEventListener('resize', onResize)
+      window.removeEventListener('load', onResize)
       if (frame) cancelAnimationFrame(frame)
     }
   }, [])

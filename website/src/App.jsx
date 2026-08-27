@@ -36,11 +36,9 @@ const SECTIONS = [
 function Bars({ active, onSelect }) {
   return (
     <>
-      {/* One centred group — mark, then the site-wide links evenly spaced, then
-          utility icons — rather than a left/right split. This row is about the
-          PROJECT (where the code and the builds live); the segmented control
-          below it is about this page. Keeping those two jobs in separate rows
-          is why neither has to carry the other's links. */}
+      {/* One centred group rather than a left/right split. This row is about
+          the project (where the code and the builds live); the segmented
+          control below it is about this page. */}
       <div className="topbar">
         <nav className="topbar-inner" aria-label="Project">
           <a className="wordmark" href="#top" aria-label="Exhale, back to top">
@@ -98,14 +96,12 @@ function Bars({ active, onSelect }) {
 /**
  * The screens either side of the phone.
  *
- * `x` and `y` are multiples of a CARD's own size, not the container's, so the
- * arrangement holds its proportions at every width — the phone shrinks, the
- * cards shrink with it, and the fan keeps its shape instead of collapsing into
- * the middle on a laptop and flying apart on a desktop.
+ * `x` and `y` are multiples of a card's own size rather than the container's,
+ * so the arrangement keeps its proportions at any width instead of collapsing
+ * on a laptop and flying apart on a desktop.
  *
- * The outer pair are deliberately the two screens that are least like a player
- * (an artist page, the About screen), because a fan of five near-identical
- * now-playing screens reads as one screenshot printed five times.
+ * The outer pair are the two screens least like a player. Five near-identical
+ * now-playing screens would read as one screenshot printed five times.
  */
 const FAN = [
   { shot: SHOT.about, x: '-186%', y: '10%', r: '-9deg', s: 0.58, o: 0.5, crop: 'top center', d: 620 },
@@ -119,14 +115,11 @@ const FAN = [
 /**
  * The device under the headline, cycling on its own, flanked by the rest.
  *
- * The reference pins its statement and puts one device in the middle with a
- * spread of the things it can do fanned out behind it — so the claim above is
- * made once and answered six ways at a glance, before you have scrolled at
- * all. Exhale is one app on one device, so what fans out here is its own
- * screens: the phone cycles them, and the cards hold them still.
+ * One claim above, answered six ways at a glance before anyone has scrolled.
+ * The phone cycles the screens; the cards hold them still.
  *
- * It answers the hero's pause button, because a viewer who stopped the light
- * at the top of the page meant "stop moving", not "stop that one element".
+ * Answers the hero's pause button — someone who stopped the light at the top
+ * of the page meant "stop moving", not "stop that one thing".
  */
 function HeroDevice({ running }) {
   const [index, setIndex] = useState(0)
@@ -177,12 +170,10 @@ function HeroDevice({ running }) {
 /* ----------------------------------------------------------------- stage */
 
 /**
- * Three claims, one device.
- *
- * The beats are ordinary blocks of text; one observer watches which is
- * crossing the middle of the viewport and that decides what the pinned phone
- * shows. Scroll only picks a state — the state changes are springs, which is
- * why flicking past three beats at once still resolves cleanly.
+ * Three claims, one device. An observer watches which beat is crossing the
+ * middle of the viewport and that picks what the pinned phone shows. Scroll
+ * only selects a state; the transitions are springs, so flicking past all
+ * three still resolves cleanly.
  */
 function Stage({ running }) {
   const [beat, setBeat] = useState(0)
@@ -233,9 +224,8 @@ function Stage({ running }) {
             app has already drawn.
           </p>
 
-          {/* The one part of the app rebuilt rather than photographed — because
-              this is the one part you can put your hands on. A screenshot of a
-              dock cannot be dragged. */}
+          {/* Rebuilt rather than photographed: this is the part you can put
+              your hands on, and a screenshot can't be dragged. */}
           <div className="dock-demo">
             <div className="dock-demo-art" aria-hidden="true">
               <span />
@@ -299,15 +289,12 @@ export default function App() {
   useReveals()
   useHeroScroll()
 
-  // Scroll spy for the segmented control — the capsule tracks where you are
-  // rather than only where you clicked.
+  // Scroll spy: the capsule tracks where you are, not only where you clicked.
   //
-  // The click case needs a lock. Smooth-scrolling from Overview to Download
-  // crosses every section in between, the observer reports each one, and the
-  // capsule stutters through four positions before landing — which read as the
-  // animation being broken when it was the spy doing exactly what it was told.
-  // So a click names its destination, and until that destination reports in,
-  // every other section's entry is ignored.
+  // Clicks need a lock. Smooth-scrolling from Overview to Download crosses
+  // every section between them and the capsule stutters through four positions
+  // before landing, which reads as broken animation. So a click names its
+  // destination and everything else is ignored until that destination arrives.
   const pending = useRef(null)
 
   useEffect(() => {
@@ -333,8 +320,8 @@ export default function App() {
     return () => io.disconnect()
   }, [])
 
-  // A destination that never arrives — an anchor already on screen, a scroll
-  // the user interrupts — would leave the spy deaf, so the lock always expires.
+  // The lock always expires, or a destination that never arrives (an anchor
+  // already on screen, an interrupted scroll) would leave the spy deaf.
   const goToSection = (index) => {
     pending.current = SECTIONS[index]?.id ?? null
     setSection(index)
@@ -383,11 +370,9 @@ export default function App() {
           <Stage running={ambient} />
         </div>
 
-        {/* The eight features, as a gallery of large cards that runs itself.
-            Each card holds a working miniature of the thing it names rather
-            than a coloured wash — the objection to the version before this one
-            was that eight abstract gradients on a rail is filler with a
-            scrollbar, and it was right. A card showing the EQ is the EQ. */}
+        {/* Eight features as a self-running gallery. Each card holds a working
+            miniature of the thing it names; eight abstract gradients on a rail
+            would be filler with a scrollbar. */}
         <section className="everything" id="everything">
           <div className="shell">
             <h2 className="bigtitle">
@@ -397,11 +382,9 @@ export default function App() {
           <Gallery items={FEATURES} />
         </section>
 
-        {/* The build and the download were two sections making one argument,
-            back to back: here is what it is made of, here is how to get it.
-            Split, the second one had to re-introduce itself and the first ended
-            on a spec sheet with nowhere to go. Joined, the cards are the
-            evidence and the panel below them is the conclusion. */}
+        {/* Build and download were two sections making one argument back to
+            back. Joined, the cards are the evidence and the panel under them
+            is the conclusion. */}
         <section className="block build" id="build">
           <div className="shell center">
             <p className="kicker reveal">The build</p>

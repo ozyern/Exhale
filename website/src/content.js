@@ -1,10 +1,9 @@
 /*
  * Everything the page says, in one place.
  *
- * The feature list is not aspirational: every entry below is a string, a
- * module or a settings screen that exists in the app today (`strings.xml`,
- * `kizzy/`, `lastfm/`, `lrclib/`, `innertube/`). If a feature ships, it can
- * go here; if it is planned, it does not.
+ * Nothing here is aspirational. Every feature below is a string, a module or a
+ * settings screen that exists today (strings.xml, kizzy/, lastfm/, lrclib/,
+ * innertube/). Shipped goes here; planned doesn't.
  */
 
 export const REPO = 'https://github.com/ozyern/Exhale'
@@ -12,13 +11,8 @@ export const RELEASES = `${REPO}/releases/latest`
 export const VERSION = '1.0.102'
 
 /**
- * The palettes the color beat swaps between.
- *
- * `rose` is the app's `DefaultThemeColor`; the other two are the partners the
- * drifting backdrop mixes with. Choosing an album here rewrites those three
- * custom properties on `:root`, which is the same move the app makes when it
- * pulls a palette out of the cover — one source of color, and every surface
- * downstream of it follows without being told.
+ * Palettes. `rose` is the app's DefaultThemeColor; the other two are what
+ * the drifting backdrop mixes with.
  */
 export const ALBUMS = [
   {
@@ -65,11 +59,8 @@ export const MAINTAINER = { name: 'Aditya Jha', role: 'Lead developer', handle: 
 export const TELEGRAM = 'https://t.me/ozyern'
 
 /**
- * The screens, in the order the hero cycles them.
- *
- * These are real captures of the shipping build, not recreations — see
- * `Phone`. Alt text describes what the screen DOES, because that is what a
- * reader who cannot see it needs from a product page.
+ * Real captures of the shipping build, in the order the hero cycles them.
+ * Alt text says what each screen does, not what it looks like.
  */
 export const SHOTS = [
   { src: '/shots/home.jpg', alt: 'The Home screen: rows of recommendations under a liquid-glass dock.' },
@@ -81,13 +72,7 @@ export const SHOTS = [
 
 export const SHOT = { home: 0, player: 1, lyrics: 2, artist: 3, about: 4 }
 
-/**
- * The lyrics recording.
- *
- * A screen capture of the shipping build, re-encoded for the web: no audio
- * track (it autoplays, so it has to be silent anyway), 30fps, and small enough
- * that it costs less than the screenshot beside it.
- */
+/** Screen capture, re-encoded for the web: 30fps, no audio track, ~230KB. */
 export const LYRICS_VIDEO = {
   src: '/media/lyrics.mp4',
   poster: '/media/lyrics-poster.jpg',
@@ -106,11 +91,9 @@ export const LYRICS = [
 ]
 
 /**
- * The eight, in the order the gallery runs them.
- *
- * `visual` names the miniature drawn on that card — see `Gallery`. Order is
- * deliberate: the two everyone wants first, then the two that leave the phone,
- * then the two that talk to other services, then the two about keeping things.
+ * `visual` names the miniature drawn on the card (see `Gallery`). Ordered:
+ * the two everyone wants, the two that leave the phone, the two that talk to
+ * other services, the two about keeping things.
  */
 export const FEATURES = [
   {
@@ -155,12 +138,7 @@ export const FEATURES = [
   },
 ]
 
-/**
- * The build facts, each with the thing it came out of.
- *
- * `art` names the card's illustration — see `Specs`. The numbers are read off
- * `app/build.gradle.kts`; nothing here is rounded or aspirational.
- */
+/** `art` names the card's illustration (see `Specs`). Numbers off Gradle. */
 export const SPECS = [
   {
     art: 'sdk',
@@ -189,13 +167,7 @@ export const SPECS = [
   },
 ]
 
-/**
- * The three things worth knowing before you tap Download.
- *
- * Read off the release itself, not off an About screen from a build that no
- * longer ships: there is one APK now and it is universal, so "Architecture:
- * arm64" was describing a flavour nobody is offered any more.
- */
+/** What's worth knowing before tapping Download. Read off the release. */
 export const ABOUT_FACTS = [
   { label: 'Version', value: VERSION },
   { label: 'Architecture', value: 'Universal' },
