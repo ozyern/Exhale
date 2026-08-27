@@ -1285,6 +1285,20 @@ svg {
    and deliberately so. A gallery card is one statement you look at; these are
    five facts you compare, and comparing them means the sentences have to line
    up in a row of their own. */
+/* The panel is the conclusion of the section above it, so it sits closer to
+   the cards than a section break would put it, and the cards get the section's
+   bottom padding back. */
+.build .getit {
+  margin-top: clamp(40px, 5vw, 76px);
+}
+
+.getit-note {
+  margin-top: 26px;
+  max-width: 44ch;
+  margin-inline: auto;
+  text-wrap: balance;
+}
+
 .build .lede,
 .build .subnote {
   max-width: 54ch;
@@ -1577,10 +1591,11 @@ svg {
 }
 
 .facts {
-  margin: 30px auto 0;
+  margin: 32px auto 0;
   display: flex;
+  flex-wrap: wrap;
   justify-content: center;
-  gap: 44px;
+  gap: 18px clamp(30px, 4vw, 52px);
 }
 
 .facts div {

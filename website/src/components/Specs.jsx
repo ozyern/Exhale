@@ -59,12 +59,15 @@ const License = () => (
 
 const Abi = () => (
   <div className="s-art s-abi">
+    {/* The published build is the highlighted one. The others are flavours the
+        Gradle project still defines — reachable if you compile it, not offered
+        as a choice on the release page. */}
     {[
-      ['arm64-v8a', true],
+      ['universal', true],
+      ['arm64-v8a', false],
       ['armeabi-v7a', false],
       ['x86_64', false],
       ['x86', false],
-      ['universal', false],
     ].map(([name, on]) => (
       <span key={name} data-on={on}>
         {name}

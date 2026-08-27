@@ -397,9 +397,11 @@ export default function App() {
           <Gallery items={FEATURES} />
         </section>
 
-        {/* Centred kicker, a two-line headline, a grey lede and a smaller grey
-            line under it — then the cards, running off the right edge of the
-            window rather than stopping at the text column. */}
+        {/* The build and the download were two sections making one argument,
+            back to back: here is what it is made of, here is how to get it.
+            Split, the second one had to re-introduce itself and the first ended
+            on a spec sheet with nowhere to go. Joined, the cards are the
+            evidence and the panel below them is the conclusion. */}
         <section className="block build" id="build">
           <div className="shell center">
             <p className="kicker reveal">The build</p>
@@ -413,24 +415,21 @@ export default function App() {
               <code>build.gradle.kts</code> the release APK is built from.
               Nothing here is rounded, and nothing is a plan.
             </p>
-            <p className="subnote reveal" style={{ '--d': '220ms' }}>
-              Split per architecture. No store, no account, nothing phoning home.
-            </p>
           </div>
-          <Specs items={SPECS} />
-        </section>
 
-        <section className="block-tight" id="download">
+          <Specs items={SPECS} />
+
           <div className="shell">
-            <div className="getit reveal">
+            <div className="getit reveal" id="download">
               <h2 className="headline-sm">
-                <Words text="Put it on your phone." />
+                <Words text="So put it on your phone." />
               </h2>
               <p className="lede reveal" style={{ '--d': '160ms' }}>
-                One APK, split by architecture. No account, no ads, nothing
-                phoning home. If you would rather build it yourself, it is three
-                commands.
+                One APK that runs on every architecture. No account, no ads,
+                nothing phoning home, and no store deciding whether you may have
+                it. If you would rather build it yourself, it is three commands.
               </p>
+
               <div className="btnrow reveal" style={{ '--d': '240ms' }}>
                 <a className="btn" href={RELEASES} target="_blank" rel="noreferrer">
                   Download v{VERSION}
@@ -445,7 +444,7 @@ export default function App() {
                 </a>
               </div>
 
-              <dl className="facts">
+              <dl className="facts reveal" style={{ '--d': '300ms' }}>
                 {ABOUT_FACTS.map((fact) => (
                   <div key={fact.label}>
                     <dt>{fact.label}</dt>
@@ -454,14 +453,20 @@ export default function App() {
                 ))}
               </dl>
 
-              <pre className="code">
+              <pre className="code reveal" style={{ '--d': '360ms' }}>
                 <b>git</b> clone {REPO}.git{'\n'}
                 <b>cd</b> Exhale{'\n'}
-                <b>./gradlew</b> assembleArm64Debug
+                <b>./gradlew</b> assembleUniversalDebug
               </pre>
+
+              <p className="subnote getit-note">
+                Android 13 or newer. Sideloading asks for permission once; the
+                app checks GitHub for its own updates after that.
+              </p>
             </div>
           </div>
         </section>
+
       </main>
 
       <footer className="footer">

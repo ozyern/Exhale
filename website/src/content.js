@@ -179,8 +179,8 @@ export const SPECS = [
   },
   {
     art: 'abi',
-    value: 'Five builds',
-    body: 'arm64, arm32 and both x86 targets get their own APK, plus a universal one. Each carries only the native code it can actually run.',
+    value: 'One APK',
+    body: 'arm64, arm32 and both x86 targets in a single universal build, so there is nothing to pick. The project still defines a flavour per ABI if you would rather compile a smaller one yourself.',
   },
   {
     art: 'release',
@@ -189,8 +189,15 @@ export const SPECS = [
   },
 ]
 
-/** Read straight off the app's own About screen, so the two cannot disagree. */
+/**
+ * The three things worth knowing before you tap Download.
+ *
+ * Read off the release itself, not off an About screen from a build that no
+ * longer ships: there is one APK now and it is universal, so "Architecture:
+ * arm64" was describing a flavour nobody is offered any more.
+ */
 export const ABOUT_FACTS = [
   { label: 'Version', value: VERSION },
-  { label: 'Architecture', value: 'arm64' },
+  { label: 'Architecture', value: 'Universal' },
+  { label: 'Size', value: '40 MB' },
 ]
