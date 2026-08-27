@@ -48,12 +48,27 @@ export function useHeroScroll() {
     const node = document.querySelector('.ribbon')
     if (!node) return
 
+    // The fan below the statement gets the same treatment for the same reason:
+    // a composition that holds perfectly still while the page moves past it
+    // reads as a picture of a product rather than the product.
+    const fan = document.querySelector('.fan')
+
     let frame = 0
     const apply = () => {
       frame = 0
       const progress = Math.min(1, window.scrollY / (window.innerHeight * 0.9))
       node.style.setProperty('--hero-scale', (1 + progress * 0.12).toFixed(3))
       node.style.setProperty('--hero-fade', (1 - progress * 0.85).toFixed(3))
+
+      if (fan) {
+        // Signed: the cards drift one way approaching the middle of the screen
+        // and the other way leaving it, so the phone in front of them separates
+        // from the group in both directions rather than only on the way out.
+        const rect = fan.getBoundingClientRect()
+        const centre = rect.top + rect.height / 2
+        const away = (window.innerHeight / 2 - centre) / (window.innerHeight * 0.8)
+        fan.style.setProperty('--fan', Math.max(-1, Math.min(1, away)).toFixed(3))
+      }
     }
     const onScroll = () => {
       if (!frame) frame = requestAnimationFrame(apply)

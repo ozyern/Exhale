@@ -90,8 +90,12 @@ export default function Ribbon({ playing, onToggle }) {
     // past the tip — a halo as long as the band is what turns a pointed lens
     // into a streak with blunt ends.
     const PASSES = [
-      { width: 2.05, alpha: 0.3, fade: [0.14, 0.52, 0.9] },
-      { width: 1, alpha: 0.78, fade: [0.2, 0.58, 1] },
+      { width: 2.05, alpha: 0.28, fade: [0.14, 0.52, 0.9] },
+      { width: 1, alpha: 0.7, fade: [0.2, 0.58, 1] },
+      // The spine. Narrow and hot: five of these overlapping additively is what
+      // makes the white core the reference has running through the middle,
+      // rather than a white that only appears where two bands happen to cross.
+      { width: 0.4, alpha: 0.36, fade: [0.26, 0.62, 0.99] },
     ]
 
     // The bands read as one body or as five streaks depending on how far apart
@@ -99,20 +103,35 @@ export default function Ribbon({ playing, onToggle }) {
     // at the waist and only separate where the weave pushes them apart.
     const SPREAD = 0.82
 
-    const SCALE = 0.55
-    // Enough segments that the crest of a travelling wave stays a curve rather
-    // than a run of chords. At 55% scale and one fill per band this is cheap.
-    const STEPS = 88
     const TAU = Math.PI * 2
     let w = 0
     let h = 0
+    // Segment count follows the canvas: a crest needs enough points to stay a
+    // curve, and on a phone there are barely enough pixels for half as many.
+    let steps = 88
 
     const resize = () => {
       const rect = wrap.getBoundingClientRect()
-      w = Math.max(1, Math.round(rect.width * SCALE))
-      h = Math.max(1, Math.round(rect.height * SCALE))
+
+      // Resolution has to RISE as the element shrinks, which is the opposite of
+      // the intuition. Drawing at 55% is free on a 1020px hero because the blur
+      // hides the missing detail — but a phone's ribbon is a third that size, so
+      // 55% of it left each band about three pixels tall, and there was no
+      // detail left for the blur to soften. It read as a loading bar.
+      const scale = rect.width < 560 ? 0.9 : 0.55
+      steps = rect.width < 560 ? 56 : 88
+
+      w = Math.max(1, Math.round(rect.width * scale))
+      h = Math.max(1, Math.round(rect.height * scale))
       canvas.width = w
       canvas.height = h
+
+      // And the blur has to follow the object rather than being a fixed number.
+      // 9px over a 232px-tall hero is a soft edge; the same 9px over a 69px-tall
+      // phone ribbon is wider than the bands themselves, which is what turned
+      // five distinct ribbons into one grey smear.
+      const blur = Math.min(13, Math.max(3.5, rect.height * 0.041))
+      wrap.style.setProperty('--ribbon-blur', `${blur.toFixed(2)}px`)
     }
 
     resize()
@@ -150,6 +169,27 @@ export default function Ribbon({ playing, onToggle }) {
       const raw = Math.min(1, t / 1.6)
       const intro = raw * raw * (3 - 2 * raw)
 
+      // The spine every band follows.
+      //
+      // Individual drift made the bands weave, which is right, but weaving alone
+      // still reads as several ribbons sharing a neighbourhood. What the
+      // reference has is ONE path with an S in it that everything rides — so a
+      // band's own wander is a departure from a shared line rather than its
+      // whole existence. Two components on unrelated periods so the S migrates
+      // instead of standing still.
+      const spine = (u) =>
+        Math.sin(u * Math.PI * 0.92 + t * 0.17) * h * 0.055 +
+        Math.sin(u * Math.PI * 1.9 - t * 0.11) * h * 0.021
+
+      // The twist.
+      //
+      // A flat ribbon rotating in space goes thin where it turns edge-on, and
+      // that pinch travels along its length. It is the single cue that separates
+      // "a ribbon" from "a stack of glowing bars", and it costs one multiply.
+      const pinch = (u, band) =>
+        0.42 +
+        0.58 * Math.abs(Math.sin(u * Math.PI * 0.85 + t * 0.13 + band.xphase * 0.12))
+
       bands.forEach((band, index) => {
         const [r, g, b] = rgb[index]
 
@@ -162,6 +202,7 @@ export default function Ribbon({ playing, onToggle }) {
         // the other way keeps the profile from ever being symmetrical.
         const centre = (u) =>
           h * 0.5 +
+          spine(u) * intro +
           h * band.base * SPREAD * breath +
           (u - 0.5) * h * tilt +
           Math.sin((t / band.period) * TAU + band.phase) * h * band.drift * breath * intro +
@@ -177,7 +218,12 @@ export default function Ribbon({ playing, onToggle }) {
         // and finishes on a blunt edge; above it the profile falls away fast and
         // the band comes to a point, which is what the reference does.
         const half = (u) =>
-          Math.sin(Math.PI * u) ** 0.86 * h * band.thick * (0.32 + 0.68 * breath) * intro
+          Math.sin(Math.PI * u) ** 0.86 *
+          h *
+          band.thick *
+          pinch(u, band) *
+          (0.32 + 0.68 * breath) *
+          intro
 
         // Drawn twice: a wide, faint halo and a narrow core inside it. One pass
         // at a single width gives a band with an edge; light does not have an
@@ -195,14 +241,14 @@ export default function Ribbon({ playing, onToggle }) {
           ctx.fillStyle = gradient
 
           ctx.beginPath()
-          for (let i = 0; i <= STEPS; i += 1) {
-            const u = i / STEPS
+          for (let i = 0; i <= steps; i += 1) {
+            const u = i / steps
             const y = centre(u) - half(u) * pass.width
             if (i === 0) ctx.moveTo(u * w, y)
             else ctx.lineTo(u * w, y)
           }
-          for (let i = STEPS; i >= 0; i -= 1) {
-            const u = i / STEPS
+          for (let i = steps; i >= 0; i -= 1) {
+            const u = i / steps
             ctx.lineTo(u * w, centre(u) + half(u) * pass.width)
           }
           ctx.closePath()
@@ -233,6 +279,19 @@ export default function Ribbon({ playing, onToggle }) {
       frame = requestAnimationFrame(tick)
     }
 
+    // A hidden tab still services rAF in some browsers, and a background tab
+    // painting a canvas nobody is looking at is pure battery.
+    const onVisibility = () => {
+      if (document.hidden) {
+        if (frame) cancelAnimationFrame(frame)
+        frame = 0
+      } else if (onScreen && !frame && !prefersReducedMotion()) {
+        last = performance.now()
+        frame = requestAnimationFrame(tick)
+      }
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+
     const io = new IntersectionObserver(
       ([entry]) => {
         onScreen = entry.isIntersecting
@@ -247,6 +306,7 @@ export default function Ribbon({ playing, onToggle }) {
 
     return () => {
       if (frame) cancelAnimationFrame(frame)
+      document.removeEventListener('visibilitychange', onVisibility)
       observer.disconnect()
       io.disconnect()
     }

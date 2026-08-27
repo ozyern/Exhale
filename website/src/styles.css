@@ -383,7 +383,7 @@ svg {
      a CPU convolution per path per frame, this is one GPU pass on a layer that
      is already composited. Saturate/brightness bring the app's UI palette up
      to emitter strength without hard-coding a second set of colors. */
-  filter: blur(9px) saturate(1.5) brightness(1.02);
+  filter: blur(var(--ribbon-blur, 9px)) saturate(1.5) brightness(1.02);
 }
 
 /* Eats the outer edges into black so the light tapers into a room instead of
@@ -484,6 +484,11 @@ svg {
   inset: 0;
   z-index: 1;
   pointer-events: none;
+  /* Parallax against the phone in front of it — see `useHeroScroll`. Written as
+     one custom property so scrolling only ever re-composites a transform. */
+  transform: translateY(calc(var(--fan, 0) * -24px))
+    scale(calc(1 + var(--fan, 0) * 0.045));
+  will-change: transform;
 }
 
 /* Every offset is a multiple of a CARD's own size — a percentage in
@@ -2326,7 +2331,10 @@ video.phone-shot {
    deck rather than as something settling into place. */
 .reveal {
   opacity: 0;
-  transform: translateY(18px);
+  /* A hair of scale with the rise. Translation alone slides an element into
+     position; the two together read as it arriving from slightly further away,
+     which is the difference between a transition and an entrance. */
+  transform: translateY(18px) scale(0.988);
   transition: opacity 0.8s var(--ease), transform 0.9s var(--settle);
   transition-delay: var(--d, 0ms);
 }
@@ -2401,8 +2409,14 @@ video.phone-shot {
     padding: 24px 20px;
   }
 
+  /* Eight live backdrop blurs, seven of them off screen, on the device least
+     able to afford one. What they blur here is a soft radial on near-black — a
+     flat tint is indistinguishable and costs nothing. */
   .g-panel {
     width: 100%;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    background: rgba(255, 255, 255, 0.07);
   }
 
   .gcard-cap {
@@ -2449,6 +2463,15 @@ video.phone-shot {
      that fixes that: the text would have to be forbidden from entering space
      the device is not occupying in layout. So on narrow screens the device is
      shown once, at the top of the section, and the beats simply follow it. */
+  /* The hero is the object on this page, and at 78vw by 4.4:1 it was 304 by 69
+     CSS pixels on a phone — a hairline that reads as a progress bar rather than
+     as light. Wider, and much less flat, so it is something to look at. */
+  .ribbon {
+    width: 92vw;
+    aspect-ratio: 2.5 / 1;
+    max-height: 34vh;
+  }
+
   .stage-device {
     position: static;
     /* Static means it starts at the top of the section, which is exactly where
