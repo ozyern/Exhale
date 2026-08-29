@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import Changelog from './components/Changelog.jsx'
 import Dock from './components/Dock.jsx'
 import Gallery from './components/Gallery.jsx'
 import Words from './components/Words.jsx'
@@ -33,7 +34,7 @@ const SECTIONS = [
 
 /* ------------------------------------------------------------------ bars */
 
-function Bars({ active, onSelect }) {
+function Bars({ active, onSelect, onNotes }) {
   return (
     <>
       {/* One centred group rather than a left/right split. This row is about
@@ -50,14 +51,9 @@ function Bars({ active, onSelect }) {
           <a className="hide-sm" href={`${REPO}/releases`} target="_blank" rel="noreferrer">
             Releases
           </a>
-          <a
-            className="hide-sm"
-            href={`${REPO}/blob/master/CHANGELOG.md`}
-            target="_blank"
-            rel="noreferrer"
-          >
+          <button type="button" className="hide-sm" onClick={onNotes}>
             Changelog
-          </a>
+          </button>
           <a className="hide-sm" href={REPO} target="_blank" rel="noreferrer">
             Source
           </a>
@@ -285,6 +281,12 @@ function Stage({ running }) {
 export default function App() {
   const [ambient, setAmbient] = useState(!prefersReducedMotion())
   const [section, setSection] = useState(0)
+  const [notes, setNotes] = useState(false)
+
+  // Stable, because the sheet's effect takes it as a dependency and a fresh
+  // identity every render would tear the scroll lock down and rebuild it.
+  const closeNotes = useCallback(() => setNotes(false), [])
+  const openNotes = useCallback(() => setNotes(true), [])
 
   useReveals()
   useHeroScroll()
@@ -334,7 +336,7 @@ export default function App() {
 
   return (
     <div id="top">
-      <Bars active={section} onSelect={goToSection} />
+      <Bars active={section} onSelect={goToSection} onNotes={openNotes} />
 
       <main>
         <Ribbon playing={ambient} onToggle={() => setAmbient((p) => !p)} />
@@ -417,14 +419,9 @@ export default function App() {
                 <a className="btn" href={RELEASES} target="_blank" rel="noreferrer">
                   Download v{VERSION}
                 </a>
-                <a
-                  className="btn btn-ghost"
-                  href={`${REPO}/blob/master/CHANGELOG.md`}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  What changed
-                </a>
+                <button type="button" className="btn btn-ghost" onClick={openNotes}>
+                  What&rsquo;s new in {VERSION}
+                </button>
               </div>
 
               <dl className="facts reveal" style={{ '--d': '300ms' }}>
@@ -474,6 +471,11 @@ export default function App() {
                 </li>
                 <li>
                   <a href="#download">Download</a>
+                </li>
+                <li>
+                  <button type="button" onClick={openNotes}>
+                    What&rsquo;s new
+                  </button>
                 </li>
               </ul>
             </div>
@@ -595,6 +597,8 @@ export default function App() {
           </div>
         </div>
       </footer>
+
+      <Changelog open={notes} onClose={closeNotes} />
     </div>
   )
 }

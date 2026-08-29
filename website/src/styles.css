@@ -193,9 +193,19 @@ svg {
   color: rgba(245, 245, 247, 0.8);
 }
 
-.topbar-inner a {
+.topbar-inner a,
+.topbar-inner button {
   white-space: nowrap;
   transition: color 0.2s var(--ease), opacity 0.2s var(--ease);
+}
+
+.topbar-inner button {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
 }
 
 .topicon {
@@ -235,7 +245,8 @@ svg {
   display: block;
 }
 
-.topbar a:hover {
+.topbar a:hover,
+.topbar button:hover {
   color: var(--ink);
 }
 
@@ -2266,6 +2277,233 @@ video.phone-shot {
   transform: scale(0.88);
 }
 
+/* ======================================================== release notes */
+
+/* The sheet stays mounted and hidden so it has something to animate out of.
+   Visibility rather than display, because display cannot be transitioned and a
+   sheet that disappears on one frame is exactly what the app stopped doing. */
+.notes {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.notes[data-open='true'] {
+  visibility: visible;
+  pointer-events: auto;
+}
+
+.notes-veil {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.66);
+  backdrop-filter: saturate(140%) blur(22px);
+  -webkit-backdrop-filter: saturate(140%) blur(22px);
+  opacity: 0;
+  transition: opacity 0.42s var(--ease);
+}
+
+.notes[data-open='true'] .notes-veil {
+  opacity: 1;
+}
+
+.notes-sheet {
+  position: relative;
+  width: min(700px, 100%);
+  max-width: 100%;
+  max-height: min(84vh, 880px);
+  display: flex;
+  flex-direction: column;
+  border-radius: 26px;
+  border: 1px solid var(--hairline);
+  background: #0b0b0d;
+  box-shadow: 0 40px 120px rgba(0, 0, 0, 0.7);
+  overflow: hidden;
+  opacity: 0;
+  transform: translateY(16px) scale(0.985);
+  transition: opacity 0.34s var(--ease), transform 0.52s var(--settle);
+}
+
+.notes[data-open='true'] .notes-sheet {
+  opacity: 1;
+  transform: none;
+}
+
+.notes-sheet:focus {
+  outline: none;
+}
+
+/* The one place on the page where light comes from the surface rather than
+   from the ribbon: a sheet needs a top edge or it reads as a hole. */
+.notes-sheet::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.22),
+    transparent
+  );
+}
+
+.notes-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 26px 30px 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.notes-eyebrow {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--grey);
+}
+
+.notes-head h2 {
+  margin-top: 3px;
+  font-size: clamp(23px, 2.6vw, 30px);
+  font-weight: 600;
+  letter-spacing: -0.021em;
+}
+
+.notes-date {
+  margin-top: 5px;
+  font-size: 13px;
+  color: var(--grey);
+}
+
+.notes-close {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 999px;
+  background: #1c1c1e;
+  color: var(--grey);
+  cursor: pointer;
+  transition: background 0.2s var(--ease), color 0.2s var(--ease),
+    transform 0.4s var(--settle);
+}
+
+.notes-close:hover {
+  background: #262629;
+  color: var(--ink);
+}
+
+.notes-close:active {
+  transform: scale(0.9);
+}
+
+.notes-versions {
+  display: flex;
+  gap: 8px;
+  padding: 14px 30px 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.notes-versions button {
+  flex: none;
+  height: 30px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  background: #17171a;
+  color: var(--grey);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.25s var(--ease), color 0.25s var(--ease);
+}
+
+.notes-versions button[data-on='true'] {
+  background: var(--ink);
+  color: #000;
+}
+
+.notes-body {
+  padding: 22px 30px 32px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.notes-summary {
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--grey);
+  max-width: 52ch;
+}
+
+.notes-group {
+  margin-top: 30px;
+}
+
+/* Small, grey, sentence case. A group label names four items; it is not a
+   heading anyone reads on its own. */
+.notes-group h3 {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--grey);
+}
+
+.notes-group ul {
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.notes-group li {
+  padding: 15px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.notes-group li b {
+  display: block;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.012em;
+}
+
+.notes-group li span {
+  display: block;
+  margin-top: 4px;
+  font-size: 14.5px;
+  line-height: 1.52;
+  color: var(--grey);
+  max-width: 58ch;
+}
+
+.notes-foot {
+  margin-top: 30px;
+  padding-top: 18px;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--grey-dim);
+}
+
+.notes-foot a {
+  color: var(--grey);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.notes-foot a:hover {
+  color: var(--ink);
+}
+
 /* =============================================================== footer */
 
 .footer {
@@ -2299,7 +2537,18 @@ video.phone-shot {
   gap: 8px;
 }
 
-.footer a:hover {
+.footer button {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.footer a:hover,
+.footer button:hover {
   color: var(--ink);
   text-decoration: underline;
 }
@@ -2368,6 +2617,34 @@ video.phone-shot {
 /* =========================================================== responsive */
 
 @media (max-width: 999px) {
+  /* Anchored to the bottom edge and full width, which is where a sheet on a
+     phone comes from — and it is the only shape that leaves the notes a
+     readable measure once the gutters are gone. */
+  .notes {
+    padding: 0;
+    align-items: flex-end;
+  }
+
+  .notes-sheet {
+    width: 100%;
+    max-height: 88vh;
+    border-radius: 24px 24px 0 0;
+    border-bottom: 0;
+    transform: translateY(28px);
+  }
+
+  .notes-head,
+  .notes-versions,
+  .notes-body {
+    padding-inline: 22px;
+  }
+
+  .notes-veil {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    background: rgba(0, 0, 0, 0.8);
+  }
+
   :root {
     /* 24px of gutter each side, which is what the reference uses on a phone.
        14px read as edge-to-edge text and left the type nowhere to breathe. */
@@ -2578,6 +2855,10 @@ video.phone-shot {
   .scard,
   .stage-device {
     opacity: 1;
+    transform: none;
+  }
+
+  .notes[data-open='true'] .notes-sheet {
     transform: none;
   }
 

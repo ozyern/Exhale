@@ -97,6 +97,12 @@ export const ChevronIcon = () => (
   </Svg>
 )
 
+export const CloseIcon = () => (
+  <Svg width="17" height="17">
+    <path {...s} d="m7 7 10 10M17 7 7 17" />
+  </Svg>
+)
+
 export const GlassIcon = () => (
   <Svg width="20" height="20">
     <rect x="3" y="6.5" width="18" height="11" rx="5.5" {...s} />

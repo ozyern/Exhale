@@ -173,3 +173,128 @@ export const ABOUT_FACTS = [
   { label: 'Architecture', value: 'Universal' },
   { label: 'Size', value: '40 MB' },
 ]
+
+/**
+ * The release notes, written for someone deciding whether to update.
+ *
+ * CHANGELOG.md is the same release said properly — every fix, with the reason
+ * it broke. That is the right document for anyone reading the diff and the
+ * wrong one for anyone standing at a download button, so this is the short
+ * version: four groups, a sentence each. Newest first; the sheet reads
+ * `RELEASE_NOTES[0]` as current.
+ */
+export const RELEASE_NOTES = [
+  {
+    version: '1.0.102',
+    date: 'August 26, 2026',
+    tag: 'First public release',
+    summary:
+      'Everything below shipped in one go, so the list is longer than a release note usually is. From here on each one covers only what moved since the last.',
+    groups: [
+      {
+        title: 'New',
+        items: [
+          {
+            title: 'Your Sound Chem',
+            body: 'A listening capsule for each month: total time, your top artist and song, and the five artists that took up most of it. Step through the months with the arrows.',
+          },
+          {
+            title: 'Lyrics on the lock screen',
+            body: 'On OnePlus and Oppo phones the lock screen music panel shows real synced lyrics instead of "No lyrics". Off by default, under Settings → Content.',
+          },
+          {
+            title: 'Updates inside the app',
+            body: 'Exhale checks GitHub for newer versions, downloads them with real progress, and hands them to the installer. The notes for the build you are on are compiled in, so they work offline.',
+          },
+          {
+            title: 'A new Home screen',
+            body: 'Six shortcuts in a grid at the top, and a large title that slides under the toolbar as you scroll.',
+          },
+          {
+            title: 'Android Auto, Discord, scrobbling',
+            body: 'Your library on the dashboard, what you are playing on your Discord profile, and scrobbles to Last.fm, ListenBrainz or both.',
+          },
+          {
+            title: 'A breathing pacer, hidden',
+            body: 'Tap the app mark in About seven times. Four seconds in, six seconds out, and a hundred and fifty motes that move with it.',
+          },
+        ],
+      },
+      {
+        title: 'Improved',
+        items: [
+          {
+            title: 'One glass, everywhere',
+            body: 'The dock, the sheets, the search field and the player are all built from the same material now, so nothing on screen looks like it came from a different app.',
+          },
+          {
+            title: 'The dock moves as one object',
+            body: 'Opening and closing it is one shape changing rather than two panels fading through each other, and the selected tab stretches into the move before it settles.',
+          },
+          {
+            title: 'Sheets can be thrown away',
+            body: 'Drag the handle to dismiss one. The room behind it lightens as you drag, and the sheet springs back if you change your mind.',
+          },
+          {
+            title: 'Settings you can find things in',
+            body: 'A search field under the title, a label on every group, and dividers that line up with the text instead of stopping six pixels short.',
+          },
+          {
+            title: 'Highest quality means highest',
+            body: 'Max audio quality used to take the first source that answered. It now checks them all and keeps the best one.',
+          },
+          {
+            title: 'Recommendations in your language',
+            body: 'Picking a language during setup now actually takes effect, and the feed stops leaking songs in a language you did not ask for.',
+          },
+        ],
+      },
+      {
+        title: 'Fixed',
+        items: [
+          {
+            title: 'Update alerts could point backwards',
+            body: 'Anyone running a build newer than the latest release was told to "update" to an older one.',
+          },
+          {
+            title: 'Release builds were never signed',
+            body: 'Which meant no phone would install them. They are signed, named and built from a tag now.',
+          },
+          {
+            title: 'The dock was not really glass',
+            body: 'It was blurring an empty layer, so the only thing it ever drew was its own grey film. It blurs the real screen behind it now.',
+          },
+          {
+            title: 'Search stuttered while you typed',
+            body: 'Every keystroke opened its own connection and the results blanked between them. Seven letters used to mean seven requests to throw six away.',
+          },
+          {
+            title: 'Some songs showed another song\u2019s lyrics',
+            body: 'Lyrics were being matched on track length alone, so any song of about the same length could win. Title and artist decide it now.',
+          },
+          {
+            title: 'Home could crash when you opened it',
+            body: 'Two sections arriving with the same id was enough to take the whole screen down.',
+          },
+        ],
+      },
+      {
+        title: 'Removed',
+        items: [
+          {
+            title: 'The update channel picker',
+            body: 'There is one channel, so the choice was between one real option and one that does not exist.',
+          },
+          {
+            title: 'The commit feed on the Updates page',
+            body: 'Nobody standing on an update screen is asking what the last thirty commits were. The full history is still in the changelog.',
+          },
+          {
+            title: 'The pie chart of cropped artist photos',
+            body: 'Replaced by bars you can actually read a proportion off.',
+          },
+        ],
+      },
+    ],
+  },
+]
