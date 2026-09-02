@@ -1,234 +1,243 @@
+# Contributing to Exhale
 
+Exhale is a music player for Android, written entirely in Kotlin and Jetpack Compose.
+Pull requests are welcome — a bug fix, a UI tweak, a translation, even a typo.
 
-# Contribution Guide
-
-Thank you for your interest in contributing to **OpenTune**! This document outlines the guidelines and best practices for contributing to the project. By following these recommendations, you help us maintain high-quality code and a collaborative, inclusive community.
-
-> \[!NOTE]
-> Before you begin, make sure to read and understand our [Code of Conduct](CODE_OF_CONDUCT.md).
-
-## Table of Contents
-
-* [How to Contribute](#how-to-contribute)
-
-  * [Reporting Bugs](#reporting-bugs)
-  * [Suggesting Features](#suggesting-features)
-  * [Submitting Pull Requests](#submitting-pull-requests)
-* [Style Guide](#style-guide)
-
-  * [Code Style](#code-style)
-  * [Commit Messages](#commit-messages)
-  * [Documentation](#documentation)
-* [Development Process](#development-process)
-
-  * [Git Workflow](#git-workflow)
-  * [Pull Request Lifecycle](#pull-request-lifecycle)
-* [Development Environment Setup](#development-environment-setup)
-* [Translation Contributions](#translation-contributions)
-* [Design Contributions](#design-contributions)
+Before you start, please read the [Code of Conduct](CODE_OF_CONDUCT.md). Everything you
+contribute ships under the [GNU GPL v3](LICENSE), the same license as the rest of the app.
 
 ---
 
-## How to Contribute
+## Setting up
 
-### Reporting Bugs
+You need:
 
-We track bugs using [GitHub Issues](https://github.com/Arturo254/OpenTune/issues). Before creating a new issue, please search existing issues to see if the problem has already been reported. If you find a similar issue, feel free to add relevant information or insights as a comment.
+- **JDK 21.** Not 17 — the project compiles against `JavaVersion.VERSION_21` and targets
+  `JVM_21`, and an older JDK fails at configuration time. Android Studio ships a suitable
+  runtime in its bundled JBR.
+- **Android Studio** recent enough to run AGP with `compileSdk = 37`.
+- **SDK Platform 37** installed through the SDK Manager. The app *runs* on API 33+
+  (`minSdk = 33`, `targetSdk = 36`) but it *compiles* against 37.
 
-When creating a new issue, include:
+```bash
+git clone https://github.com/ozyern/Exhale.git
+cd Exhale
+./gradlew assembleUniversalDebug
+```
 
-* **Descriptive title** that summarizes the issue
-* **Steps to reproduce** the problem
-* **Expected behavior** vs. **actual behavior**
-* **Environment details** (e.g., app version, device model, Android version)
-* **Screenshots** if applicable
-* **Relevant logs** if available
+The APK lands in `app/build/outputs/apk/universal/debug/`.
 
-> \[!TIP]
-> Use the provided templates to ensure you include all the necessary details.
+> [!IMPORTANT]
+> Use `assembleUniversalDebug`, not `assembleDebug`. The app has five ABI product
+> flavors — `universal`, `arm64`, `armeabi`, `x86`, `x86_64` — so the flavorless task
+> builds all five and takes roughly five times as long. `universal` carries every ABI
+> and is the one to develop against; `arm64` is the fastest if you only ever test on a
+> modern phone.
+
+On Windows, point `JAVA_HOME` at the Studio runtime before invoking Gradle:
+
+```bash
+export JAVA_HOME="C:/Program Files/Android/Android Studio/jbr"
+```
+
+Debug builds sign themselves. Release builds need the signing keystore and will not work
+from a fork — see [RELEASING.md](RELEASING.md), which is maintainer-only.
 
 ---
 
-### Suggesting Features
+## Where the code lives
 
-We also handle feature suggestions through [GitHub Issues](https://github.com/Arturo254/OpenTune/issues). When suggesting a new feature:
+`:app` is the application: UI, playback, database, DI. Everything else is a library
+module wrapping one external service, so a change to a single provider stays contained.
 
-* **Describe the problem** the feature is intended to solve
-* **Explain the solution** and how it would work
-* **Provide examples** or use cases if possible
-* **Assess the scope** of the feature: is it minor, moderate, or large in terms of implementation effort?
+| Module | What it is |
+| --- | --- |
+| `:app` | The app. Compose UI, Media3 playback, Room database, Hilt graph, widgets |
+| `:innertube` | YouTube Music client — search, browse, streams |
+| `:spotify` | Spotify metadata and playlist import |
+| `:lrclib`, `:kugou`, `:betterlyrics`, `:simpmusic` | Lyrics providers, tried in order |
+| `:lastfm` | Last.fm scrobbling |
+| `:kizzy` | Discord Rich Presence |
+| `:canvas` | Looping canvas videos on the player |
+| `:shazamkit` | Audio recognition |
 
-> \[!IMPORTANT]
-> Please discuss the feature in an issue and obtain approval from the maintainers before starting development.
+Inside `:app`, the parts you are most likely to touch:
+
+```
+ui/screens     whole screens
+ui/component   reusable widgets, including the glass surfaces
+ui/player      the now-playing screen and its transitions
+ui/theme       color, typography, album-art color extraction
+playback       the Media3 service, queue, downloads
+lyrics         provider selection and sync
+db             Room entities, DAOs, migrations
+```
 
 ---
 
-### Submitting Pull Requests
+## Code style
 
-Pull Requests (PRs) are the primary way to contribute code to OpenTune. To ensure your PR is effective and easy to review, follow these steps:
+There is no ktlint, spotless, or detekt in this project. Review is the only formatter, so
+the rule is: **match the code around your change** — its comment density, its naming, its
+idiom.
 
-1. **Fork the repository** and create a feature branch from `main`.
-2. **Implement your changes** while following the [style guide](#style-guide).
-3. **Write or update tests** as needed to cover your changes.
-4. **Ensure all tests pass** before submitting your PR.
-5. **Update the documentation** if your changes affect the public API or usage instructions.
-6. **Submit your pull request** with a **clear, concise, and informative description**.
+- Follow the [Kotlin coding conventions](https://kotlinlang.org/docs/coding-conventions.html).
+  4 spaces, `camelCase` members, `PascalCase` types, `UPPER_SNAKE_CASE` constants.
+- Composables are `PascalCase`. Take `modifier: Modifier = Modifier` as the first
+  defaulted parameter, and hoist state to the caller rather than holding it inside.
+- User-visible text goes in `app/src/main/res/values/strings.xml`. Never hardcode a
+  string in Kotlin — it cannot be translated, and translators only ever see that file.
+- **American spelling** throughout, in code, strings, and comments. `color`, not `colour`.
+- Comments should say *why*, not *what*. The code already says what it does.
 
-Your PR description should include:
+### Two things that will bite you
 
-* **Purpose**: What problem does this PR solve? What feature or fix does it introduce?
-* **Motivation**: Why is this change necessary or useful? How does it improve the project?
-* **Implementation details**: Briefly explain how the changes were implemented.
-* **Related issues**: Link to any related issues using `Closes #123`, `Fixes #456`, etc.
+**Lint will not stop you from shipping a crash.** The app sets `abortOnError = false`, so
+a `NewApi` violation is a warning you can walk straight past. It becomes a
+`NoSuchMethodError` on a real device. If you call an API above `minSdk = 33`, guard it
+yourself, and write the check as a literal comparison at the call site:
 
-Example:
+```kotlin
+if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) { ... }
+```
+
+Lint only follows literal `SDK_INT` comparisons. Folding the check into a boolean variable
+is correct at runtime but invisible to lint, so nothing will warn you the next time
+someone moves the call.
+
+**The glass surfaces are shared.** The blur-and-translucency system under `ui/component`
+backs the dock, the sheets, and the player. It is tuned, it degrades deliberately on
+devices without cross-window blur, and it is easy to break everywhere at once. Change it
+in one place, explain why in the PR, and expect the visual result to be looked at closely.
+
+---
+
+## Tests
+
+Unit tests live in `app/src/test/`. There are no instrumentation tests.
+
+```bash
+./gradlew testUniversalDebugUnitTest
+```
+
+Add tests for logic that is worth being sure about — parsing, ordering, version
+comparison, sync planning. That is what the existing suites cover. Don't write Compose
+snapshot tests; nothing here is set up for them.
+
+---
+
+## Commits
+
+[Conventional Commits](https://www.conventionalcommits.org/), with a subject line that
+says what changed in plain language:
+
+```
+feat: one APK per release, named after the build it is
+fix: an empty release list is "up to date", not a failed check
+```
+
+Types in use: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `chore`,
+`revert`.
+
+---
+
+## Pull requests
+
+`master` is the only long-lived branch. Fork, branch off `master`, and open the PR against
+it.
+
+1. Make the change and check it runs on a device or emulator — this is a music player, and
+   most of what can go wrong is visible or audible, not compilable.
+2. Run the tests.
+3. Update `CHANGELOG.md` if the change is user-facing.
+4. Open the PR.
+
+CI builds a debug APK on every push to an open PR and comments with a link to it, so
+reviewers can install your branch without building it. Doc-only changes skip the build.
+
+Your description should cover:
+
+- **What** the change does
+- **Why** it is worth making
+- **How**, briefly, if the approach isn't obvious from the diff
+- **Screenshots or a screen recording** for anything visual — required, not optional
+- **Related issues**, as `Closes #123`
 
 ```
 ### Summary
-This PR adds offline playback support for downloaded audio files.
+Falls back to the next lyrics provider when LRCLIB returns a track with no
+timestamps, instead of showing an empty lyrics sheet.
 
 ### Motivation
-This feature improves the user experience for those who want to listen to music without an internet connection.
+LRCLIB will happily return a plain-text match for a song that has a synced
+version elsewhere, and we were treating any 200 as success.
 
 ### Changes
-- Added local media cache management
-- Updated playback logic to prefer local files when available
-- Modified UI to show offline availability
+- Treat a result with no timed lines as a miss, not a hit
+- Continue to KuGou / BetterLyrics instead of stopping
+- Added a test for the untimed-response case
 
-### Related Issues
 Closes #45
 ```
 
-> \[!TIP]
-> Well-written PRs that clearly explain their purpose and impact are more likely to be reviewed and merged quickly.
+Discuss anything large in an issue before you build it. A feature that doesn't fit the app
+is a painful thing to find out about after you've written it.
 
 ---
 
-## Style Guide
+## Translations
 
-### Code Style
+Translations are plain resource files — edit them directly and open a PR. There is no
+Crowdin project for Exhale.
 
-* **Kotlin**: Follow the [official Kotlin coding conventions](https://kotlinlang.org/docs/coding-conventions.html)
-* **XML**: Use 4 spaces for indentation
-* **Variable and function names**: Use `camelCase` (e.g., `playbackController`)
-* **Class names**: Use `PascalCase` (e.g., `AudioPlayer`)
-* **Constants**: Use `UPPER_SNAKE_CASE` (e.g., `MAX_VOLUME_LEVEL`)
+To improve an existing language, edit `app/src/main/res/values-<code>/strings.xml`.
+Currently translated: Arabic, German, Spanish, Estonian, French, Hindi, Indonesian,
+Italian, Hebrew, Japanese, Korean, Malayalam, Malay, Dutch, Portuguese (Brazil), Russian,
+Turkish, Ukrainian, Vietnamese, Chinese (Simplified).
 
----
+To add a language, create `values-<code>/strings.xml` using the Android locale code —
+`values-fi`, `values-pt-rPT` — and copy across only the strings you have translated.
+Missing strings fall back to English on purpose, so a partial translation is genuinely
+useful and lint won't complain about it.
 
-### Commit Messages
-
-We use [Conventional Commits](https://www.conventionalcommits.org/) to keep commit history clean and meaningful:
-
-```
-<type>(<optional scope>): <short description>
-
-[optional body]
-
-[optional footer]
-```
-
-**Common types**:
-
-* `feat`: A new feature
-* `fix`: A bug fix
-* `docs`: Documentation-only changes
-* `style`: Changes that do not affect functionality (formatting, whitespace, etc.)
-* `refactor`: Code changes that neither fix a bug nor add a feature
-* `perf`: Code changes that improve performance
-* `test`: Adding or fixing tests
-* `chore`: Changes to build scripts or auxiliary tools
-
-**Examples**:
-
-```
-feat(player): add support for offline playback
-fix(ui): resolve layout bug in song list
-docs(readme): update installation instructions
-```
+One hard rule: if you translate a `<plurals>`, include **every** quantity your language
+requires. `MissingQuantity` is set to error, and an incomplete plural fails the build.
 
 ---
 
-### Documentation
+## Design
 
-* Write documentation in **Markdown**
-* Document all public classes and functions
-* Include **usage examples** whenever possible
-* Keep the documentation **up to date** with code changes
-
----
-
-## Development Process
-
-### Git Workflow
-
-We use a structured branching model:
-
-* `main`: The production-ready branch
-* `develop`: The active development branch
-* `feature/xyz`: New feature branches
-* `fix/xyz`: Bug fix branches
-* `release/xyz`: Release preparation branches
+- The app is Material 3, extended with the glass surfaces and album-art color extraction.
+  Read [the M3 guidelines](https://m3.material.io/), then look at what the app actually
+  does — it deviates deliberately in places.
+- Mockups are welcome as an issue labeled `design`. Include what problem the design
+  solves; "it looks nicer" is hard to act on.
+- Dark and light both have to work, and so does dynamic color pulled from album art. A
+  design that only holds up against one wallpaper isn't finished.
 
 ---
 
-### Pull Request Lifecycle
+## Reporting bugs
 
-1. **Creation**: A contributor opens a PR from a feature/fix branch
-2. **Review**: Maintainers review the code and provide feedback
-3. **CI Validation**: Automated tests are run
-4. **Discussion**: Issues are resolved and necessary changes are made
-5. **Approval**: Once approved, the PR is ready for merging
-6. **Merge**: The PR is merged into the target branch
+Open an [issue](https://github.com/ozyern/Exhale/issues), searching first in case it is
+already there. Include:
 
----
+- What you expected, and what happened instead
+- Steps to reproduce
+- **App version** (Settings → About), **Android version**, and **device**
+- A screenshot or recording if it is visual
+- A log if you have one
 
-## Development Environment Setup
+The device matters more than you would think: manufacturer battery management, audio
+routing, and blur support all vary, and a bug that only appears on one OEM's ROM is a
+common outcome.
 
-To set up your local environment for contributing:
+## Suggesting features
 
-1. **Install Android Studio** (version 2022.1 or newer)
-2. **Configure Android SDK** (API level 33 recommended)
-3. **Install JDK** (version 11 or higher)
-4. **Clone the repository**:
-
-   ```bash
-   git clone https://github.com/Arturo254/OpenTune.git
-   cd OpenTune
-   ```
-5. **Build the project using Gradle**:
-
-   ```bash
-   ./gradlew build
-   ```
+Also an [issue](https://github.com/ozyern/Exhale/issues). Say what problem it solves
+rather than what button to add, and mention how you would expect it to behave. Wait for a
+maintainer to agree before writing the code.
 
 ---
 
-## Translation Contributions
-
-To help with translations:
-
-1. Sign up on [Crowdin](https://crowdin.com/project/opentune)
-2. Choose the language you want to contribute to
-3. Translate missing strings or improve existing translations
-4. The maintainer team will review and approve submissions
-
-If your language is not listed, contact us at [cervantesarturo254@gmail.com](mailto:cervantesarturo254@gmail.com).
-
----
-
-## Design Contributions
-
-To contribute design ideas:
-
-1. Review the [Material Design 3 Guidelines](https://m3.material.io/)
-2. Create mockups or interactive prototypes
-3. Submit your designs in a GitHub issue labeled `design`
-4. Include reasoning for how your designs improve the user experience
-
----
-
-Thank you for contributing to **OpenTune**! Your efforts help us build a better experience for all users.
-If you have any questions, feel free to open an issue labeled `question` or reach out directly to the development team.
-
-
+Thanks for contributing. Questions go in an issue labeled `question`.
