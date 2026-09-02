@@ -101,6 +101,50 @@ fun settingsGroupBorderBrush(): Brush {
 }
 
 /**
+ * The group card itself, as one modifier: a tonal floor, glass over it, and a rim.
+ *
+ * The two-tone grouped table above is the *structure* — a solid page colour and a card colour one
+ * step off it. This is that structure rendered as glass instead of as flat paint, and the tonal
+ * floor is what lets it be both. Settings now has the album-art wash behind it (see
+ * `SettingsPage`), so a fully translucent card would work on the landing page; but the same card
+ * is drawn on twenty deeper pages that have nothing behind them, and there it would collapse into
+ * a smudge. Floating the glass on a floor at 72% keeps the two-tone step intact everywhere, and
+ * lets the wash come through the remaining 28% where there is a wash to come through.
+ *
+ * The three things that make it read as glass rather than as a grey box are all here and all
+ * required: a vertical gradient so the top of the card catches more light than the bottom, a
+ * diagonal sheen falling off by the middle, and a hairline rim that is bright at the top edge and
+ * gone by the bottom. Drop any one and it stops working — no rim and it is a smudge, no gradient
+ * and it is a painted panel, no translucency and it is a bevel.
+ */
+@Composable
+fun Modifier.settingsGlassGroup(
+    shape: Shape = RoundedCornerShape(SettingsGroupCornerRadius),
+): Modifier {
+    val dark = isSystemInDarkTheme()
+
+    val fill = Brush.verticalGradient(
+        if (dark) {
+            listOf(Color.White.copy(alpha = 0.055f), Color.White.copy(alpha = 0.012f))
+        } else {
+            listOf(Color.White.copy(alpha = 0.45f), Color.White.copy(alpha = 0.14f))
+        },
+    )
+    val sheen = Brush.linearGradient(
+        0f to Color.White.copy(alpha = if (dark) 0.05f else 0.30f),
+        0.45f to Color.Transparent,
+        1f to Color.Transparent,
+    )
+
+    return this
+        .clip(shape)
+        .background(settingsGroupSurfaceColor().copy(alpha = 0.72f))
+        .background(fill)
+        .background(sheen)
+        .border(width = 0.8.dp, brush = settingsGroupBorderBrush(), shape = shape)
+}
+
+/**
  * The rounded-square plate every settings glyph sits on.
  *
  * One definition for what used to be seven copies of `background(accent.copy(alpha = 0.12f))`

@@ -77,6 +77,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import com.ozyern.exhale.ui.component.LiquidBackButton
 import com.ozyern.exhale.ui.component.liquid.LiquidToggle
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -250,15 +251,11 @@ fun BackupAndRestore(
             TopAppBar(
                 title = { Text(stringResource(R.string.backup_restore)) },
                 navigationIcon = {
-                    IconButton(
+                    LiquidBackButton(
                         onClick = navController::navigateUp,
                         onLongClick = navController::backToMain,
-                    ) {
-                        Icon(
-                            painterResource(R.drawable.arrow_back),
-                            contentDescription = null,
-                        )
-                    }
+                        icon = R.drawable.arrow_back,
+                    )
                 },
                 scrollBehavior = scrollBehavior,
             )

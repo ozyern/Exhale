@@ -43,6 +43,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.navigation.NavController
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -61,9 +62,11 @@ import com.ozyern.exhale.models.toMediaMetadata
 import com.ozyern.exhale.playback.queues.YouTubeQueue
 import com.ozyern.exhale.constants.InnerTubeCookieKey
 import com.ozyern.exhale.constants.ShowHomeCategoryChipsKey
+import com.ozyern.exhale.ui.component.AmbientArtworkGlow
 import com.ozyern.exhale.ui.component.ChipsRow
 import com.ozyern.exhale.ui.component.LocalBottomSheetPageState
 import com.ozyern.exhale.ui.component.LocalMenuState
+import com.ozyern.exhale.ui.component.rememberArtworkAmbientColors
 import com.ozyern.exhale.ui.component.NavigationTitle
 import com.ozyern.exhale.utils.rememberPreference
 import com.ozyern.exhale.viewmodels.HomeViewModel
@@ -165,11 +168,35 @@ fun HomeScreen(
         }
     }
 
+    // Ambient colour from the current cover, washing down from the top of the surface.
+    //
+    // This is NOT the old 5-blob mesh backdrop that used to live here — that one covered the whole
+    // screen, animated across all of it, and cost a full-screen overdraw every frame for a texture
+    // you read as noise. This is confined to the top, drawn in the draw phase only, and gone by
+    // mid-viewport, so the list below it sits on the plain surface exactly as before.
+    //
+    // Keyed to the current song when there is one and to the top of the feed when there is not.
+    // Keying it to playback alone meant the wash did not exist on a cold start — you opened the
+    // app, nothing was playing, and Home was the flat page this was added to fix, right up until
+    // you tapped something. The first artwork on the page is a perfectly good stand-in: it is the
+    // picture the user is looking at anyway, so the room is lit by what is on screen.
+    val ambientSource: Pair<String, String?>? = mediaMetadata?.let { it.id to it.thumbnailUrl }
+        ?: quickPicks?.firstOrNull { it.thumbnailUrl != null }?.let { it.id to it.thumbnailUrl }
+        ?: keepListening?.firstOrNull { it.thumbnailUrl != null }?.let { it.id to it.thumbnailUrl }
+
+    val ambientColors by rememberArtworkAmbientColors(
+        songId = ambientSource?.first,
+        thumbnailUrl = ambientSource?.second,
+    )
+
     Box(
         modifier = Modifier.fillMaxSize()
     ) {
-        // The old 5-blob mesh-gradient backdrop was visual clutter and cost a full-screen
-        // overdraw pass per frame; Apple Music's Home is a flat surface. Removed outright.
+        AmbientArtworkGlow(
+            colors = ambientColors,
+            modifier = Modifier.fillMaxSize(),
+        )
+
         BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
@@ -358,15 +385,21 @@ private fun HomeLargeTitle(modifier: Modifier = Modifier) {
             .windowInsetsPadding(WindowInsets.systemBars.only(WindowInsetsSides.Horizontal))
             .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 2.dp),
     ) {
+        // The eyebrow steps back: semibold at label size, not bold at title size. It was
+        // competing with the line under it, and an eyebrow that competes with its own headline is
+        // just a two-line heading.
         Text(
             text = weekday,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Text(
             text = stringResource(R.string.home),
-            style = MaterialTheme.typography.displaySmall,
+            // Tracked in hard. At 36sp the default fitting leaves visible gaps between letters —
+            // the difference between a word that has been *set* and one that has been typed. This
+            // is the largest type in the app, so it is where loose tracking shows most.
+            style = MaterialTheme.typography.displaySmall.copy(letterSpacing = (-0.03).em),
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface,
         )

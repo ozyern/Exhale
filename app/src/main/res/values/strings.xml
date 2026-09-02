@@ -890,6 +890,8 @@ Exhale will only extract your token, and everything else is stored locally.</str
     <string name="update_retry">Try Again</string>
     <string name="update_view_release">View Release</string>
     <string name="update_not_now">Not Now</string>
+    <string name="update_now">Update Now</string>
+    <string name="update_background_footnote">Exhale downloads the update in the background and hands it to the installer when it is ready. You can keep listening.</string>
     <string name="update_group_version">Version</string>
     <string name="update_latest_available">Latest available</string>
     <string name="update_check_now">Check for Updates</string>

@@ -9,10 +9,10 @@ package com.ozyern.exhale.ui.component
 import android.graphics.BitmapFactory
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -34,7 +34,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
@@ -55,14 +54,25 @@ import kotlin.math.hypot
  *
  *  1. **Bloom.** A warm amber glow swells out of pure black behind the mark. It starts on
  *     frame one — before the logo is even decoded — so the screen is never a dead black slab.
- *  2. **Impact.** The mark springs in from 0.70x with a live overshoot and unwinds a 10° tilt,
- *     while two shockwave rings expand out from underneath it and dissolve.
- *  3. **Sheen.** A specular highlight sweeps diagonally across the glass mark — masked to the
- *     artwork's own alpha (`BlendMode.SrcAtop`), so it glints off the logo rather than smearing
- *     a band across the canvas.
+ *  2. **Arrival.** The mark fades up and settles from 0.90x on a near-critically-damped spring.
+ *     One gesture, no bounce.
+ *  3. **Breath.** Through the hold the mark expands by 3.5% on a dead-linear ramp — slow enough
+ *     that you never catch it moving, fast enough that the frame is never frozen. The app is
+ *     called Exhale; the launch mark should be alive rather than parked.
  *  4. **Iris.** The exit is not a crossfade. A circular hole opens out of the centre of the mark
  *     (`BlendMode.Clear` into an offscreen layer) while the logo itself scales past the camera
- *     and fades — the app is revealed *through* the logo, like an aperture opening.
+ *     and fades — the app is revealed *through* the logo, like an aperture opening. The bloom
+ *     goes with it, so the last frames are clean rather than a coloured wash handing over to a
+ *     fully drawn app.
+ *
+ * ### What was taken out
+ *
+ * Two expanding shockwave rings, a 10° entrance tilt, and a specular band sweeping diagonally
+ * across the mark. Each was defensible in isolation; together they were four things competing for
+ * attention inside one second, which is what a splash screen looks like when it is trying to
+ * impress you. An Apple launch does exactly one thing — the app opens out of its own icon — and
+ * the reason it reads as expensive is that nothing else happens at the same time. The aperture is
+ * that one thing here, and everything left now serves it.
  *
  * ### Why it used to be slow
  *
@@ -88,23 +98,31 @@ import kotlin.math.hypot
  */
 
 // ---- Timeline (ms) -------------------------------------------------------------------------
-/** When the sheen starts its sweep, measured from the logo's entrance. */
-private const val SHEEN_START_MS = 260L
-private const val SHEEN_MS = 540
 /** How long the mark is on screen before the aperture opens. Short: it is a flourish, not a wait. */
-private const val ENTRANCE_MS = 760L
-/** The aperture opening. Also the crossfade, the zoom, and the hand-off — all one motion. */
-private const val IRIS_MS = 380
+private const val ENTRANCE_MS = 720L
+/**
+ * The aperture opening. Also the fade, the zoom and the hand-off — one motion on one easing,
+ * because two eases running at once is how a single gesture stops reading as single.
+ *
+ * Longer than the 380ms it was. The iris is the moment the whole animation exists for, and at 380
+ * it was over before the eye had followed the edge outward — the extra 120ms is the difference
+ * between a cut and an opening.
+ */
+private const val IRIS_MS = 500
 
 /** Fraction of the shorter viewport edge the square splash artwork occupies. */
 private const val SPLASH_ARTWORK_FRACTION = 0.56f
 
-// Brand palette, sampled from the artwork itself rather than guessed: the mean colour of every
-// opaque pixel in splash_logo.png is #BE851A, a rich amber, and the mark ranges from a #622B00
-// shadow to a #FFF234 highlight. It is a GOLD logo.
+// Brand palette, sampled from the artwork itself rather than guessed. splash_logo.png is a black
+// glyph wearing a gold rim light: 72% of the mark is near-black body, its rim averages #DEB41A,
+// and it ranges from a #000100 shadow to a #FFF07F highlight. It is a GOLD logo with a dark core.
 //
-// The bloom used to be crimson-magenta (#B01E45 over #3A0A1E) — a palette belonging to no part of
-// this artwork. A gold mark floating in a pink glow is the mismatch; these are its own colours.
+// That split is why the bloom matters more than it looks. On the black canvas the body is
+// invisible on its own and only the rim reads — the warm glow behind the mark is what gives the
+// body an edge to sit against, so the bloom is doing structural work, not decoration.
+//
+// (The bloom was once crimson-magenta, #B01E45 over #3A0A1E, a palette belonging to no part of
+// this artwork. A gold mark floating in a pink glow is the mismatch; these are its own colours.)
 private val SplashBase = Color.Black
 private val BloomDeep = Color(0xFFE0A020)   // warm amber core, the mark's mid-gold pushed brighter
 private val BloomDark = Color(0xFF33200A)   // deep brown-amber mid-tone, the mark's own shadow
@@ -127,12 +145,10 @@ fun BootSplash(
     var decodeFailed by remember { mutableStateOf(false) }
 
     val bloom = remember { Animatable(0f) }
-    val ringA = remember { Animatable(0f) }
-    val ringB = remember { Animatable(0f) }
-    val logoScale = remember { Animatable(0.70f) }
-    val logoRotation = remember { Animatable(-10f) }
+    // 0.90, not 0.70. A mark arriving from two thirds of its size has visibly *travelled*, which
+    // needs a bounce to land and then reads as a bounce. From 0.90 it simply settles.
+    val logoScale = remember { Animatable(0.90f) }
     val logoAlpha = remember { Animatable(0f) }
-    val sheen = remember { Animatable(0f) }
     val iris = remember { Animatable(0f) }
 
     // Frame one: the bloom is already breathing in while the artwork is still being decoded on a
@@ -155,34 +171,35 @@ fun BootSplash(
     LaunchedEffect(ready) {
         if (!ready) return@LaunchedEffect
 
-        // --- Entrance: one impact, four channels ---
+        // --- Arrival, then the breath ---
+        launch { logoAlpha.animateTo(1f, tween(durationMillis = 260, easing = LinearOutSlowInEasing)) }
         launch {
-            // Low damping, high stiffness: a real overshoot with a crisp settle. This is the beat
-            // the whole animation is built around, so it is allowed to be lively.
-            logoScale.animateTo(1f, spring(dampingRatio = 0.62f, stiffness = 340f))
-        }
-        launch { logoRotation.animateTo(0f, spring(dampingRatio = 0.62f, stiffness = 340f)) }
-        launch { logoAlpha.animateTo(1f, tween(durationMillis = 220, easing = LinearOutSlowInEasing)) }
-        launch {
-            delay(60)
-            ringA.animateTo(1f, tween(durationMillis = 760, easing = LinearOutSlowInEasing))
-        }
-        launch {
-            delay(180)
-            ringB.animateTo(1f, tween(durationMillis = 760, easing = LinearOutSlowInEasing))
-        }
-        launch {
-            delay(SHEEN_START_MS)
-            sheen.animateTo(1f, tween(durationMillis = SHEEN_MS, easing = FastOutSlowInEasing))
+            // Damping 0.88: it settles rather than bounces. The old 0.62 gave a visible rebound,
+            // which is a *toy* gesture — right for a game splash, wrong for the screen that opens
+            // in front of a music library every morning.
+            logoScale.animateTo(1f, spring(dampingRatio = 0.88f, stiffness = 300f))
+            // Linear on purpose. Any easing has an acceleration you can perceive, and a breath you
+            // can perceive is a zoom. You should only notice this one by comparing the first frame
+            // of the hold against the last.
+            logoScale.animateTo(
+                1.035f,
+                tween(durationMillis = ENTRANCE_MS.toInt(), easing = LinearEasing),
+            )
         }
 
         delay(ENTRANCE_MS)
 
         // --- Exit: the aperture opens and the mark flies past the camera ---
+        // The breath is still running here; `animateTo` on the same Animatable cancels it and
+        // carries on from wherever it had reached, so the hand-off has no seam in it.
         launch {
-            logoScale.animateTo(1.45f, tween(durationMillis = IRIS_MS, easing = FastOutSlowInEasing))
+            logoScale.animateTo(1.38f, tween(durationMillis = IRIS_MS, easing = FastOutSlowInEasing))
         }
-        launch { logoAlpha.animateTo(0f, tween(durationMillis = 300, easing = FastOutSlowInEasing)) }
+        launch { logoAlpha.animateTo(0f, tween(durationMillis = 340, easing = FastOutSlowInEasing)) }
+        // The glow leaves with the mark. Left up, it is a warm haze lying over the first frames of
+        // a fully drawn app, which is the one thing that can make an otherwise clean hand-off look
+        // like a rendering fault.
+        launch { bloom.animateTo(0f, tween(durationMillis = 340, easing = FastOutSlowInEasing)) }
         iris.animateTo(1f, tween(durationMillis = IRIS_MS, easing = FastOutSlowInEasing))
 
         onFinished()
@@ -237,62 +254,17 @@ fun BootSplash(
                 ),
         )
 
-        // ---- Shockwave rings ----
-        // Two stroked circles expanding out from under the mark and thinning as they dissolve.
-        // Reading the animatables inside the draw lambda keeps this a draw-phase-only animation.
-        Canvas(Modifier.fillMaxSize()) {
-            val from = artworkSize.toPx() * 0.42f
-            val to = size.maxDimension * 0.62f
-            listOf(ringA.value, ringB.value).forEach { progress ->
-                if (progress <= 0f || progress >= 1f) return@forEach
-                val fade = (1f - progress)
-                drawCircle(
-                    color = BloomDeep.copy(alpha = 0.40f * fade * fade),
-                    radius = lerp(from, to, progress),
-                    center = center,
-                    style = Stroke(width = lerp(5f.dp.toPx(), 0.8f.dp.toPx(), progress)),
-                )
-            }
-        }
-
         // ---- The mark ----
-        // Its own offscreen layer so the sheen can be masked to the artwork's alpha.
-        //
-        // The entrance transform lives on THIS layer, not on the Image inside it: an offscreen
-        // layer clips its content to its bounds, so a rotated/1.45x-scaled child would have its
-        // corners sliced off. Transforming the layer itself happens after rasterisation, so the
-        // mark scales and tilts freely — and the sheen tilts with it, as a real highlight would.
+        // The transform lives on this Box rather than on the Image inside it, so the whole thing
+        // scales as one rasterised object. No offscreen layer: that was only ever needed to mask
+        // the sheen sweep to the artwork's alpha, and the sweep is gone.
         Box(
             modifier = Modifier
                 .size(artworkSize)
                 .graphicsLayer {
-                    compositingStrategy = CompositingStrategy.Offscreen
                     scaleX = logoScale.value
                     scaleY = logoScale.value
-                    rotationZ = logoRotation.value
                     alpha = logoAlpha.value
-                }
-                .drawWithContent {
-                    drawContent()
-                    val progress = sheen.value
-                    if (progress <= 0f || progress >= 1f) return@drawWithContent
-                    val band = size.width * 0.55f
-                    val travel = lerp(-band, size.width + band, progress)
-                    // SrcAtop, not SrcIn: SrcIn would erase every pixel the gradient does not
-                    // cover, i.e. the entire logo except the band. SrcATop keeps the mark and
-                    // lays the highlight on top of it only where the mark already is.
-                    drawRect(
-                        brush = Brush.linearGradient(
-                            colorStops = arrayOf(
-                                0f to Color.Transparent,
-                                0.5f to Color.White.copy(alpha = 0.55f),
-                                1f to Color.Transparent,
-                            ),
-                            start = Offset(travel, 0f),
-                            end = Offset(travel + band, size.height),
-                        ),
-                        blendMode = BlendMode.SrcAtop,
-                    )
                 },
             contentAlignment = Alignment.Center,
         ) {

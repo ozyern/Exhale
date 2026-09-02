@@ -84,8 +84,8 @@ android {
         applicationId = "com.ozyern.exhale"
         minSdk = 33
         targetSdk = 36
-        versionCode = 102
-        versionName = "1.0.102"
+        versionCode = 203
+        versionName = "1.0.203"
 //        versionName = "3.0.2-$gitCommit"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

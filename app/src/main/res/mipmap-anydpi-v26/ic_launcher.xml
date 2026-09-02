@@ -1,14 +1,24 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+    Brand launcher mark: the Exhale "E))" (assets/icon.png).
+
+    The source art is already an app-icon-shaped tile — a black glyph on a gold squircle — and an
+    adaptive icon must NOT be handed one of those whole. Doing so draws a squircle inside the
+    launcher's own squircle, and insetting it into the 72dp safe zone instead leaves the tile's
+    edge floating as a visible plate on top of the background layer. Both read as a sticker
+    rather than as an icon.
+
+    So the tile is split along its own seams: the gold is the BACKGROUND layer, full-bleed, and
+    the glyph alone — carrying its rim light, shading and drop shadow — is the FOREGROUND, scaled
+    to 62% of the layer so it clears the safe zone under every mask. There is no plate edge left
+    to show, and the launcher masks gold at whatever shape it likes.
+
+    All three layers are per-density PNGs generated together from assets/icon.png; regenerate
+    them as a set, never by hand. NOTE: distinct from the splash mark (@drawable/splash_logo) —
+    do not conflate them.
+-->
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- Brand launcher mark: the Exhale glass "E))" (assets/icon.png), used exclusively for the
-         home-screen / app-drawer adaptive icon foreground. Its own dark radial backdrop is baked
-         in, so it sits over the black background layer seamlessly.
-         The foreground goes through @drawable/ic_launcher_foreground_inset, NOT the raw PNG —
-         the inset pulls the artwork back into the 72dp safe zone so the launcher's mask can no
-         longer clip the mark's outer strokes. See that file for the arithmetic.
-         NOTE: this is a distinct asset from the splash animation logo (@drawable/splash_logo) —
-         do not conflate them. -->
     <background android:drawable="@mipmap/ic_launcher_background" />
-    <foreground android:drawable="@drawable/ic_launcher_foreground_inset" />
+    <foreground android:drawable="@mipmap/ic_launcher_foreground" />
     <monochrome android:drawable="@mipmap/ic_launcher_monochrome" />
 </adaptive-icon>

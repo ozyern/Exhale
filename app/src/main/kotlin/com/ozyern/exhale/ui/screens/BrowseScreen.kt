@@ -32,6 +32,7 @@ package com.ozyern.exhale.ui.screens
  import com.ozyern.exhale.LocalPlayerConnection
  import com.ozyern.exhale.R
  import com.ozyern.exhale.constants.GridThumbnailHeight
+import com.ozyern.exhale.ui.component.LiquidBackButton
  import com.ozyern.exhale.ui.component.IconButton
  import com.ozyern.exhale.ui.component.LocalMenuState
  import com.ozyern.exhale.ui.component.YouTubeGridItem
@@ -138,15 +139,11 @@ package com.ozyern.exhale.ui.screens
      TopAppBar(
          title = { Text(title ?: "") },
          navigationIcon = {
-             IconButton(
+             LiquidBackButton(
                  onClick = navController::navigateUp,
-                 onLongClick = navController::backToMain
-             ) {
-                 Icon(
-                     painterResource(R.drawable.arrow_back),
-                     contentDescription = null
-                 )
-             }
+                 onLongClick = navController::backToMain,
+                 icon = R.drawable.arrow_back,
+             )
          }
      )
  }

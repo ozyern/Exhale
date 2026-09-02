@@ -192,8 +192,7 @@ fun PreferenceEntry(
                     scaleX = scale
                     scaleY = scale
                 }
-                .clip(RoundedCornerShape(SettingsGroupCornerRadius))
-                .background(settingsGroupSurfaceColor()),
+                .settingsGlassGroup(RoundedCornerShape(SettingsGroupCornerRadius)),
         ) {
             rowContent()
         }

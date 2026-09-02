@@ -38,6 +38,7 @@ import com.ozyern.exhale.constants.DataSyncIdKey
 import com.ozyern.exhale.constants.InnerTubeCookieKey
 import com.ozyern.exhale.constants.PoTokenKey
 import com.ozyern.exhale.constants.VisitorDataKey
+import com.ozyern.exhale.ui.component.LiquidBackButton
 import com.ozyern.exhale.ui.component.IconButton
 import com.ozyern.exhale.ui.utils.backToMain
 import com.ozyern.exhale.utils.rememberPreference
@@ -142,15 +143,11 @@ fun LoginScreen(
     TopAppBar(
         title = { Text(stringResource(R.string.login)) },
         navigationIcon = {
-            IconButton(
+            LiquidBackButton(
                 onClick = navController::navigateUp,
-                onLongClick = navController::backToMain
-            ) {
-                Icon(
-                    painterResource(R.drawable.arrow_back),
-                    contentDescription = null
-                )
-            }
+                onLongClick = navController::backToMain,
+                icon = R.drawable.arrow_back,
+            )
         }
     )
 

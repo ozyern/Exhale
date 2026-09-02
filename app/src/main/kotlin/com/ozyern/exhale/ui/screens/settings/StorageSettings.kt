@@ -55,6 +55,7 @@ import com.ozyern.exhale.constants.MaxSongCacheSizeKey
 import com.ozyern.exhale.constants.SmartTrimmerKey
 import com.ozyern.exhale.extensions.directorySizeBytes
 import com.ozyern.exhale.extensions.tryOrNull
+import com.ozyern.exhale.ui.component.LiquidBackButton
 import com.ozyern.exhale.ui.component.ActionPromptDialog
 import com.ozyern.exhale.ui.component.IconButton
 import com.ozyern.exhale.ui.component.ListPreference
@@ -404,15 +405,11 @@ fun StorageSettings(
     TopAppBar(
         title = { Text(stringResource(R.string.storage)) },
         navigationIcon = {
-            IconButton(
+            LiquidBackButton(
                 onClick = navController::navigateUp,
                 onLongClick = navController::backToMain,
-            ) {
-                Icon(
-                    painterResource(R.drawable.arrow_back),
-                    contentDescription = null,
-                )
-            }
+                icon = R.drawable.arrow_back,
+            )
         }
     )
 }

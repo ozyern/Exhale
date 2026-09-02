@@ -1,10 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+    Round variant of the brand launcher mark. Identical layers to @mipmap/ic_launcher — see that
+    file for why the source tile is split into a full-bleed gold background and a glyph-only
+    foreground rather than used whole.
+
+    The circular mask is the harshest crop of the set, which is what sets the foreground's 62%
+    span: at the safe zone's full 66.7% the outer stroke of the ")" grazes the circle.
+-->
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- Round variant of the brand launcher mark. Same safe-zone-inset Exhale glass "E))"
-         (assets/icon.png via @drawable/ic_launcher_foreground_inset) as the standard adaptive
-         icon foreground; NOT the splash logo. The circular mask is the harshest crop of the
-         lot, so the inset matters most here. -->
     <background android:drawable="@mipmap/ic_launcher_background" />
-    <foreground android:drawable="@drawable/ic_launcher_foreground_inset" />
+    <foreground android:drawable="@mipmap/ic_launcher_foreground" />
     <monochrome android:drawable="@mipmap/ic_launcher_monochrome" />
 </adaptive-icon>

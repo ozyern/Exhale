@@ -249,7 +249,11 @@ import com.ozyern.exhale.ui.component.FloatingNavigationToolbar
 import com.ozyern.exhale.ui.component.LiquidGlassBottomBar
 import com.ozyern.exhale.ui.component.SearchBottomBar
 import com.ozyern.exhale.ui.component.LiquidBackground
+import com.ozyern.exhale.ui.component.LiquidGlassIconButton
+import com.ozyern.exhale.ui.component.NewVersionSheet
 import com.ozyern.exhale.ui.component.liquid.LocalAppBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
+import com.ozyern.exhale.ui.component.liquid.LocalPageBackdrop
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.ozyern.exhale.ui.component.liquid.rememberAppBackdrop
 import com.ozyern.exhale.ui.component.LocalHazeState
@@ -543,76 +547,6 @@ class MainActivity : ComponentActivity() {
             val menuState = remember { MenuState() }
             val uriHandler = LocalUriHandler.current
             val releaseNotesState = remember { mutableStateOf<String?>(null) }
-            val updateSheetContent: @Composable ColumnScope.() -> Unit = { // receiver: ColumnScope
-                Text(
-                    text = stringResource(R.string.new_update_available),
-                    style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
-                    modifier = Modifier.padding(top = 16.dp)
-                )
-
-                Spacer(Modifier.height(8.dp))
-
-                OutlinedButton(
-                    onClick = {},
-                    shape = CircleShape,
-                    contentPadding = PaddingValues(
-                        horizontal = 5.dp,
-                        vertical = 5.dp
-                    )
-                ) {
-                    Text(text = latestVersionName, style = MaterialTheme.typography.labelLarge)
-                }
-
-                Spacer(Modifier.height(12.dp))
-
-                Box(modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f, fill = false)
-                    .verticalScroll(rememberScrollState())
-                ) {
-                    val notes = releaseNotesState.value
-                    if (!notes.isNullOrBlank()) {
-                        Markdown(
-                            content = notes,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(end = 8.dp)
-                        )
-                    } else {
-                        Text(
-                            text = stringResource(R.string.release_notes_unavailable),
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                    }
-                }
-
-                Spacer(Modifier.height(12.dp))
-
-                Button(
-                    onClick = {
-                        try {
-                            uriHandler.openUri(Updater.getLatestDownloadUrl())
-                        } catch (_: Exception) {}
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text(text = stringResource(R.string.update_text))
-                }
-            }
-
-            // fetch release notes and show sheet when a new version is detected
-            LaunchedEffect(latestVersionName) {
-                if (!Updater.isSameVersion(latestVersionName, BuildConfig.VERSION_NAME)) {
-                    Updater.getLatestReleaseNotes().onSuccess {
-                        releaseNotesState.value = it
-                    }.onFailure {
-                        releaseNotesState.value = null
-                    }
-
-                    bottomSheetPageState.show(updateSheetContent)
-                }
-            }
-
             val enableDynamicTheme by rememberPreference(DynamicThemeKey, defaultValue = true)
             val customThemeColorValue by rememberPreference(CustomThemeColorKey, defaultValue = "default")
             val darkTheme by rememberEnumPreference(DarkModeKey, defaultValue = DarkMode.AUTO)
@@ -721,19 +655,41 @@ class MainActivity : ComponentActivity() {
                     // Shared backdrop-blur source for all frosted "liquid glass" surfaces.
                     val hazeState = remember { HazeState() }
 
-                    // Ambient liquid background (opt-in via the Liquid Glass setting). Drawn
-                    // first so it sits behind every other layer; theme colors keep it
-                    // album-art reactive.
-                    if (liquidGlassNavBar) {
-                        LiquidBackground(
-                            colors = listOf(
-                                MaterialTheme.colorScheme.primary,
-                                MaterialTheme.colorScheme.tertiary,
-                                MaterialTheme.colorScheme.secondary,
+                    // The app's ground floor, recorded so that glass drawn on top of it can bend
+                    // it.
+                    //
+                    // This box is a sibling drawn *beneath* everything else in the window, which
+                    // is what makes it legal for in-content controls to refract: they are not
+                    // inside the layer they sample, so there is no re-entrant draw. Published as
+                    // `LocalPageBackdrop` below, and only when the ambient field is actually on —
+                    // refracting a flat surface colour yields a flat surface colour, and glass
+                    // that reveals nothing is better served by its tonal fallback.
+                    val rootBackdrop = rememberLayerBackdrop()
+                    Box(
+                        modifier = Modifier
+                            .matchParentSize()
+                            .layerBackdrop(rootBackdrop)
+                            // Opaque: a recording of transparent pixels refracts to nothing, which
+                            // is the same "glass is just a dark film" failure the NavHost layer
+                            // above had to be given a fill to fix.
+                            .background(
+                                if (pureBlack) Color.Black else MaterialTheme.colorScheme.surface
                             ),
-                            baseColor = if (pureBlack) Color.Black else MaterialTheme.colorScheme.surface,
-                            modifier = Modifier.matchParentSize(),
-                        )
+                    ) {
+                        // Ambient liquid background (opt-in via the Liquid Glass setting). Drawn
+                        // first so it sits behind every other layer; theme colors keep it
+                        // album-art reactive.
+                        if (liquidGlassNavBar) {
+                            LiquidBackground(
+                                colors = listOf(
+                                    MaterialTheme.colorScheme.primary,
+                                    MaterialTheme.colorScheme.tertiary,
+                                    MaterialTheme.colorScheme.secondary,
+                                ),
+                                baseColor = if (pureBlack) Color.Black else MaterialTheme.colorScheme.surface,
+                                modifier = Modifier.matchParentSize(),
+                            )
+                        }
                     }
 
                     val focusManager = LocalFocusManager.current
@@ -768,6 +724,61 @@ class MainActivity : ComponentActivity() {
                         .isWidthAtLeastBreakpoint(WindowSizeClass.WIDTH_DP_MEDIUM_LOWER_BOUND)
 
                     val navController = rememberNavController()
+
+                    // The update prompt lives HERE, not up beside the other top-level state.
+                    //
+                    // It used to be declared ~200 lines above this, and its "Update Now" read
+                    // `navController` from that scope — which resolved to the Activity's
+                    // `private lateinit var navController`, a property nothing ever assigns (see
+                    // `onNewIntent`, which guards it with `isInitialized` and quietly does
+                    // nothing). So the button compiled, looked correct, and threw
+                    // `UninitializedPropertyAccessException` the moment anyone pressed it. The
+                    // local `val` two lines up is the real controller; declaring the sheet after
+                    // it means the name can only resolve to the right one.
+                    val updateSheetContent: @Composable ColumnScope.() -> Unit = {
+                        NewVersionSheet(
+                            latestVersion = latestVersionName,
+                            currentVersion = BuildConfig.VERSION_NAME,
+                            notes = releaseNotesState.value,
+                            // Into the app, not out of it.
+                            //
+                            // This used to hand the download URL to the system browser: you left
+                            // Exhale, waited in a notification shade, found the file and installed
+                            // it by hand. The Updates page already owns a real transfer — byte
+                            // progress, a reused cache file, a hand-off straight to the package
+                            // installer — and it was reachable only by digging through Settings.
+                            // So the button goes there and starts it, which is what "Update Now"
+                            // has always implied.
+                            onUpdate = {
+                                bottomSheetPageState.dismiss()
+                                navController.navigate("settings/update/download")
+                            },
+                            onLater = { bottomSheetPageState.dismiss() },
+                        )
+                    }
+
+                    // fetch release notes and show sheet when a new version is detected
+                    LaunchedEffect(latestVersionName) {
+                        if (!Updater.isSameVersion(latestVersionName, BuildConfig.VERSION_NAME)) {
+                            Updater.getLatestReleaseNotes().onSuccess {
+                                releaseNotesState.value = it
+                            }.onFailure {
+                                releaseNotesState.value = null
+                            }
+
+                            bottomSheetPageState.show(updateSheetContent)
+                        }
+                    }
+
+                    // Publish the controller to the Activity so `onNewIntent` can route a deep
+                    // link that arrives while the app is already running. The property has been
+                    // declared since forever and assigned nowhere, so that branch has always
+                    // fallen through to `pendingIntent` and the link only opened if the process
+                    // happened to be cold. Same one-line omission that produced the crash above;
+                    // fixing it here closes both.
+                    LaunchedEffect(navController) {
+                        this@MainActivity.navController = navController
+                    }
                     val homeViewModel: HomeViewModel = hiltViewModel()
                     val accountImageUrl by homeViewModel.accountImageUrl.collectAsState()
                     val allLocalItems by homeViewModel.allLocalItems.collectAsState()
@@ -1292,6 +1303,11 @@ class MainActivity : ComponentActivity() {
 
                     CompositionLocalProvider(
                         LocalAppBackdrop provides appBackdrop,
+                        // What glass *inside* the NavHost refracts. The ambient colour field
+                        // painted at the very back of the window, which every screen is drawn
+                        // over. Pages that lay down their own opaque ground (Settings) override
+                        // this with their own so their glass bends what is genuinely behind it.
+                        LocalPageBackdrop provides rootBackdrop.takeIf { liquidGlassNavBar },
                         LocalDatabase provides database,
                         LocalContentColor provides if (pureBlack) Color.White else contentColorFor(MaterialTheme.colorScheme.surface),
                         LocalHapticFeedback provides customHaptic,
@@ -1658,7 +1674,12 @@ class MainActivity : ComponentActivity() {
                                                 Row {
                                                     if (active) {
                                                         if (query.text.isNotEmpty()) {
-                                                            IconButton(
+                                                            // Clearing the field is the one
+                                                            // destructive tap in this bar, so it
+                                                            // gets the glass disc: it reads as a
+                                                            // raised object you press rather than
+                                                            // as a glyph printed on the pill.
+                                                            LiquidGlassIconButton(
                                                                 onClick = {
                                                                     onQueryChange(
                                                                         TextFieldValue(
@@ -1666,12 +1687,14 @@ class MainActivity : ComponentActivity() {
                                                                         )
                                                                     )
                                                                 },
-                                                            ) {
-                                                                Icon(
-                                                                    painter = painterResource(R.drawable.close),
-                                                                    contentDescription = null,
-                                                                )
-                                                            }
+                                                                icon = R.drawable.close,
+                                                                diameter = 32.dp,
+                                                                iconSize = 16.dp,
+                                                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                                // Sitting inside the pill, so it
+                                                                // refracts what the pill refracts.
+                                                                backdrop = appBackdrop,
+                                                            )
                                                         }
                                                         IconButton(
                                                             onClick = {
@@ -2165,15 +2188,29 @@ class MainActivity : ComponentActivity() {
                                                 )
                                             )
                                         } else {
-                                            fadeIn(
-                                                animationSpec = tween(300)
-                                            ) + scaleIn(
-                                                initialScale = 0.95f,
-                                                animationSpec = spring(
-                                                    dampingRatio = 0.8f,
-                                                    stiffness = 300f
-                                                )
+                                        // Push, don't dissolve.
+                                        //
+                                        // Going *into* a screen and coming back out of it used to be the same
+                                        // animation played at two slightly different scales, which is why back
+                                        // never felt like anything: a crossfade has no direction, so there was
+                                        // nothing for the gesture to undo. These four transitions now form one
+                                        // reversible pair. Forward, the new screen comes in from the trailing
+                                        // edge and the old one recedes into depth; back, the current screen
+                                        // leaves the way it arrived and the one underneath rises back out.
+                                        //
+                                        // Only one of the two screens ever translates. Screens here are mostly
+                                        // transparent over the root surface, so sliding both at once would show
+                                        // them through each other for the whole transition — the far page
+                                        // recedes on scale instead, which reads as depth and never ghosts.
+                                        slideInHorizontally(
+                                            initialOffsetX = { (it * 0.18f).toInt() },
+                                            animationSpec = spring(
+                                                dampingRatio = 0.92f,
+                                                stiffness = 340f
                                             )
+                                        ) + fadeIn(
+                                            animationSpec = tween(200)
+                                        )
                                         }
                                     },
                                     exitTransition = {
@@ -2190,12 +2227,14 @@ class MainActivity : ComponentActivity() {
                                                 animationSpec = tween(200)
                                             )
                                         } else {
-                                            fadeOut(
-                                                animationSpec = tween(200)
-                                            ) + scaleOut(
-                                                targetScale = 0.98f,
-                                                animationSpec = tween(200)
-                                            )
+                                        // The page being covered. It falls away from the viewer rather than
+                                        // sliding, so the incoming screen is the only thing in motion.
+                                        fadeOut(
+                                            animationSpec = tween(180)
+                                        ) + scaleOut(
+                                            targetScale = 0.94f,
+                                            animationSpec = tween(220)
+                                        )
                                         }
                                     },
                                     popEnterTransition = {
@@ -2214,15 +2253,18 @@ class MainActivity : ComponentActivity() {
                                                 )
                                             )
                                         } else {
-                                            fadeIn(
-                                                animationSpec = tween(300)
-                                            ) + scaleIn(
-                                                initialScale = 0.98f,
-                                                animationSpec = spring(
-                                                    dampingRatio = 0.8f,
-                                                    stiffness = 300f
-                                                )
+                                        // Coming back: the screen underneath rises out of depth, from exactly
+                                        // the 0.94 it receded to. The mirror of the exit above, which is what
+                                        // makes back feel like an undo rather than another forward step.
+                                        fadeIn(
+                                            animationSpec = tween(220)
+                                        ) + scaleIn(
+                                            initialScale = 0.94f,
+                                            animationSpec = spring(
+                                                dampingRatio = 0.9f,
+                                                stiffness = 320f
                                             )
+                                        )
                                         }
                                     },
                                     popExitTransition = {
@@ -2238,12 +2280,17 @@ class MainActivity : ComponentActivity() {
                                                 animationSpec = tween(200)
                                             )
                                         } else {
-                                            fadeOut(
-                                                animationSpec = tween(200)
-                                            ) + scaleOut(
-                                                targetScale = 0.95f,
-                                                animationSpec = tween(200)
+                                        // The screen you backed out of leaves along the axis it came in on, and
+                                        // a little further than it arrived from so it clears the frame cleanly.
+                                        slideOutHorizontally(
+                                            targetOffsetX = { (it * 0.24f).toInt() },
+                                            animationSpec = spring(
+                                                dampingRatio = 0.95f,
+                                                stiffness = 340f
                                             )
+                                        ) + fadeOut(
+                                            animationSpec = tween(180)
+                                        )
                                         }
                                     },
                                     modifier = Modifier

@@ -93,6 +93,7 @@ import androidx.media3.exoplayer.offline.DownloadService
 import androidx.navigation.NavController
 import androidx.palette.graphics.Palette
 import coil3.compose.AsyncImage
+import com.ozyern.exhale.ui.component.LiquidBackButton
 import com.ozyern.exhale.ui.component.heroParallax
 import coil3.imageLoader
 import coil3.request.ImageRequest
@@ -1299,7 +1300,7 @@ fun AlbumScreen(
                 }
             },
             navigationIcon = {
-                IconButton(
+                LiquidBackButton(
                     onClick = {
                         if (selection) {
                             selection = false
@@ -1311,15 +1312,9 @@ fun AlbumScreen(
                         if (!selection) {
                             navController.backToMain()
                         }
-                    }
-                ) {
-                    Icon(
-                        painter = painterResource(
-                            if (selection) R.drawable.close else R.drawable.arrow_back
-                        ),
-                        contentDescription = null
-                    )
-                }
+                    },
+                    icon = if (selection) R.drawable.close else R.drawable.arrow_back,
+                )
             },
             actions = {
                 if (selection) {

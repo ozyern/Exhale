@@ -51,6 +51,7 @@ import com.ozyern.exhale.constants.HideExplicitKey
 import com.ozyern.exhale.extensions.toMediaItem
 import com.ozyern.exhale.extensions.togglePlayPause
 import com.ozyern.exhale.playback.queues.ListQueue
+import com.ozyern.exhale.ui.component.LiquidBackButton
 import com.ozyern.exhale.ui.component.HideOnScrollFAB
 import com.ozyern.exhale.ui.component.IconButton
 import com.ozyern.exhale.ui.component.LocalMenuState
@@ -191,15 +192,11 @@ fun ArtistSongsScreen(
         TopAppBar(
             title = { Text(artist?.artist?.name.orEmpty()) },
             navigationIcon = {
-                IconButton(
+                LiquidBackButton(
                     onClick = navController::navigateUp,
                     onLongClick = navController::backToMain,
-                ) {
-                    Icon(
-                        painterResource(R.drawable.arrow_back),
-                        contentDescription = null,
-                    )
-                }
+                    icon = R.drawable.arrow_back,
+                )
             },
         )
 

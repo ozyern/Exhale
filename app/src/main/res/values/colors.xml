@@ -1,9 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Vibrant Exhale brand red — matches DefaultThemeColor (Theme.kt). -->
-    <!-- The mark's own gold (mean of every opaque pixel in splash_logo.png). Was #ED5564, a red
-         that appears nowhere in the artwork. -->
-    <color name="splash_brand">#BE851A</color>
+    <!-- The mark's own gold, measured from splash_logo.png rather than picked: the mean of its
+         rim-light pixels, which are the only saturated ones. The flat mean of the whole mark is
+         #423715, but that is meaningless here — the artwork is a black glyph that is 72% body,
+         so its average is mud and the gold is entirely in the outline. -->
+    <color name="splash_brand">#DEB41A</color>
     <!-- Pure black splash canvas — matches BootSplash.SplashCanvasColor so window bg,
          system splash and Compose splash read as one continuous boot screen. -->
     <color name="splash_background">#000000</color>

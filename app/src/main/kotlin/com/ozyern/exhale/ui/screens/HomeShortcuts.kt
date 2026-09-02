@@ -53,6 +53,7 @@ import com.ozyern.exhale.constants.AquamorphicDampingRatio
 import com.ozyern.exhale.constants.AquamorphicStiffness
 import com.ozyern.exhale.db.entities.Artist
 import com.ozyern.exhale.db.entities.LocalItem
+import com.ozyern.exhale.ui.component.liquidGlassSurface
 
 /**
  * The shortcut grid at the top of Home.
@@ -139,28 +140,14 @@ private fun ShortcutTile(
                 scaleX = scale
                 scaleY = scale
             }
-            .clip(RoundedCornerShape(ShortcutCorner))
-            // A gradient plate with a hairline rim rather than a flat 7% ink wash. On a black
-            // page that wash is just a slightly-lighter black — the tiles read as smudges, not
-            // as objects, which is the difference the "doesn't feel premium" complaint is about.
-            .background(
-                Brush.verticalGradient(
-                    listOf(
-                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
-                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f),
-                    )
-                )
-            )
-            .border(
-                width = 0.7.dp,
-                brush = Brush.verticalGradient(
-                    listOf(
-                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.14f),
-                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.02f),
-                    )
-                ),
-                shape = RoundedCornerShape(ShortcutCorner),
-            )
+            // The shared glass plate, not a local copy of one. These tiles sit in the brightest
+            // part of the artwork wash at the top of Home, which is the one place on the page
+            // where translucency has something real to reveal — a flat ink wash here is a
+            // slightly-lighter black, and that is what made the block read as smudges rather
+            // than as objects. This was a hand-rolled gradient-and-rim that was already trying
+            // to be `liquidGlassSurface`; using the real one means it also gets the diagonal
+            // sheen, and cannot drift away from the rest of the app's glass.
+            .liquidGlassSurface(RoundedCornerShape(ShortcutCorner))
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,

@@ -64,6 +64,7 @@ import com.ozyern.exhale.constants.AudioCrossfadeDurationKey
 import com.ozyern.exhale.constants.PlayerStreamClient
 import com.ozyern.exhale.constants.PlayerStreamClientKey
 import com.ozyern.exhale.constants.SeekExtraSeconds
+import com.ozyern.exhale.ui.component.LiquidBackButton
 import com.ozyern.exhale.ui.component.ArtistSeparatorsDialog
 import com.ozyern.exhale.ui.component.TagsManagementDialog
 import com.ozyern.exhale.ui.component.TextFieldDialog
@@ -473,15 +474,11 @@ fun PlayerSettings(
     TopAppBar(
         title = { Text(stringResource(R.string.player_and_audio)) },
         navigationIcon = {
-            IconButton(
+            LiquidBackButton(
                 onClick = navController::navigateUp,
-                onLongClick = navController::backToMain
-            ) {
-                Icon(
-                    painterResource(R.drawable.arrow_back),
-                    contentDescription = null
-                )
-            }
+                onLongClick = navController::backToMain,
+                icon = R.drawable.arrow_back,
+            )
         }
     )
 }

@@ -43,6 +43,7 @@ import com.ozyern.exhale.LocalPlayerAwareWindowInsets
 import com.ozyern.exhale.LocalPlayerConnection
 import com.ozyern.exhale.constants.*
 import com.ozyern.exhale.db.entities.Song
+import com.ozyern.exhale.ui.component.LiquidBackButton
 import com.ozyern.exhale.ui.component.IconButton
 import com.ozyern.exhale.ui.component.PreferenceEntry
 import com.ozyern.exhale.ui.component.SwitchPreference
@@ -787,15 +788,11 @@ if (smallImageType == "custom") {
     TopAppBar(
         title = { Text(stringResource(R.string.discord_integration)) },
         navigationIcon = {
-            IconButton(
+            LiquidBackButton(
                 onClick = navController::navigateUp,
                 onLongClick = navController::backToMain,
-            ) {
-                Icon(
-                    painter = painterResource(R.drawable.arrow_back),
-                    contentDescription = null
-                )
-            }
+                icon = R.drawable.arrow_back,
+            )
         },
         actions = {
             var threeDotMenuExpanded by remember { mutableStateOf(false) }

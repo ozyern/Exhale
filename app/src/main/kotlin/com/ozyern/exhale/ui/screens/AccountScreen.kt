@@ -35,6 +35,7 @@ import androidx.navigation.NavController
 import com.ozyern.exhale.LocalPlayerAwareWindowInsets
 import com.ozyern.exhale.R
 import com.ozyern.exhale.constants.GridThumbnailHeight
+import com.ozyern.exhale.ui.component.LiquidBackButton
 import com.ozyern.exhale.ui.component.ChipsRow
 import com.ozyern.exhale.ui.component.IconButton
 import com.ozyern.exhale.ui.component.LocalMenuState
@@ -194,15 +195,11 @@ fun AccountScreen(
     TopAppBar(
         title = { Text(stringResource(R.string.account)) },
         navigationIcon = {
-            IconButton(
+            LiquidBackButton(
                 onClick = navController::navigateUp,
                 onLongClick = navController::backToMain,
-            ) {
-                Icon(
-                    painterResource(R.drawable.arrow_back),
-                    contentDescription = null,
-                )
-            }
+                icon = R.drawable.arrow_back,
+            )
         },
     )
 }

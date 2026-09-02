@@ -57,6 +57,8 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -89,6 +91,7 @@ import com.ozyern.exhale.R
 import com.ozyern.exhale.constants.AquamorphicDampingRatio
 import com.ozyern.exhale.constants.AquamorphicStiffness
 import com.ozyern.exhale.constants.EnableUpdateNotificationKey
+import com.ozyern.exhale.ui.component.LiquidBackButton
 import com.ozyern.exhale.ui.component.AuroraBackdrop
 import com.ozyern.exhale.ui.component.IconButton
 import com.ozyern.exhale.ui.component.LiquidGlassSheet
@@ -140,6 +143,14 @@ private sealed interface UpdateCheckState {
 fun UpdateScreen(
     navController: NavController,
     scrollBehavior: TopAppBarScrollBehavior,
+    /**
+     * Arrive checking, and start the transfer as soon as there is something to fetch.
+     *
+     * Set by the launch prompt's "Update Now", which navigates here instead of throwing the user
+     * out to a browser. Without it the prompt would land you on a page with the same button you
+     * just pressed, which is the kind of hand-off that makes people give up halfway.
+     */
+    autoStart: Boolean = false,
 ) {
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
@@ -201,10 +212,15 @@ fun UpdateScreen(
         }
     }
 
+    LaunchedEffect(autoStart) {
+        if (autoStart) checkForUpdate()
+    }
+
     if (showUpdateDialog) {
         pendingUpdateInfo?.let { info ->
             UpdateAvailableSheet(
                 info = info,
+                autoStart = autoStart,
                 onViewRelease = { showUpdateDialog = false; uriHandler.openUri(info.releasePageUrl) },
                 onDismiss = { showUpdateDialog = false }
             )
@@ -231,10 +247,11 @@ fun UpdateScreen(
                         )
                     },
                     navigationIcon = {
-                        IconButton(
+                        LiquidBackButton(
                             onClick = navController::navigateUp,
-                            onLongClick = navController::backToMain
-                        ) { Icon(painterResource(R.drawable.arrow_back), null) }
+                            onLongClick = navController::backToMain,
+                            icon = R.drawable.arrow_back,
+                        )
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = Color.Transparent,
@@ -783,6 +800,8 @@ private fun UpdateAvailableSheet(
     info: UpdateInfo,
     onViewRelease: () -> Unit,
     onDismiss: () -> Unit,
+    /** Begin the transfer on first frame — see [UpdateScreen]'s parameter of the same name. */
+    autoStart: Boolean = false,
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -812,6 +831,12 @@ private fun UpdateAvailableSheet(
                 state = DownloadState.Failed(error.message ?: "Download failed")
             }
         }
+    }
+
+    // Once, on arrival. Keyed on Unit rather than on `autoStart` so a recomposition that
+    // re-reads the flag cannot kick off a second download over the first.
+    LaunchedEffect(Unit) {
+        if (autoStart && state is DownloadState.Idle) startDownload()
     }
 
     LiquidGlassSheet(
@@ -1003,10 +1028,12 @@ private fun UpdateSheetActions(
                         textAlign = TextAlign.Center,
                     )
                     Spacer(Modifier.height(14.dp))
-                    LiquidButton(
+                    Button(
                         onClick = onGrantPermission,
-                        modifier = Modifier.fillMaxWidth(),
-                        tint = MaterialTheme.colorScheme.primary,
+                        shape = CircleShape,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(50.dp),
                     ) {
                         Text(
                             text = stringResource(R.string.update_open_settings),
@@ -1027,10 +1054,12 @@ private fun UpdateSheetActions(
                         textAlign = TextAlign.Center,
                     )
                     Spacer(Modifier.height(14.dp))
-                    LiquidButton(
+                    Button(
                         onClick = onDownload,
-                        modifier = Modifier.fillMaxWidth(),
-                        tint = MaterialTheme.colorScheme.primary,
+                        shape = CircleShape,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(50.dp),
                     ) {
                         Text(
                             text = stringResource(R.string.update_retry),
@@ -1040,19 +1069,23 @@ private fun UpdateSheetActions(
                     }
                 }
 
-                DownloadState.Idle -> LiquidButton(
+                // A solid, filled capsule with a two-word label and no icon.
+                //
+                // It was a translucent glass button reading "Download and Install" behind a
+                // download glyph. Three problems, all of them the same problem: a primary action
+                // should not be see-through (the one control on the sheet that must be
+                // unmissable was the one made of the same material as the background), should not
+                // need an icon to explain a verb, and should not describe its own implementation.
+                // Nobody is choosing between downloading and installing.
+                DownloadState.Idle -> Button(
                     onClick = onDownload,
-                    modifier = Modifier.fillMaxWidth(),
-                    tint = MaterialTheme.colorScheme.primary,
+                    shape = CircleShape,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(50.dp),
                 ) {
-                    Icon(
-                        painter = painterResource(R.drawable.download),
-                        contentDescription = null,
-                        modifier = Modifier.size(20.dp),
-                    )
-                    Spacer(Modifier.width(8.dp))
                     Text(
-                        text = stringResource(R.string.update_download_and_install),
+                        text = stringResource(R.string.update_now),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
                     )
@@ -1065,16 +1098,30 @@ private fun UpdateSheetActions(
         AnimatedVisibility(
             visible = state !is DownloadState.Downloading && state != DownloadState.Installing,
         ) {
+            // Accent text, not the muted grey, and directly under the primary rather than beside
+            // it. A greyed-out alternative reads as disabled and people stop seeing it; a pair of
+            // equal-weight buttons in a row makes a person stop and choose. Same accent, less
+            // weight, second position - the hierarchy is carried by everything except colour.
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 6.dp),
+                    .padding(top = 2.dp),
                 horizontalArrangement = Arrangement.Center,
             ) {
-                TextButton(onClick = onViewRelease) {
+                TextButton(
+                    onClick = onViewRelease,
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.primary,
+                    ),
+                ) {
                     Text(stringResource(R.string.update_view_release))
                 }
-                TextButton(onClick = onDismiss) {
+                TextButton(
+                    onClick = onDismiss,
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.primary,
+                    ),
+                ) {
                     Text(stringResource(R.string.update_not_now))
                 }
             }

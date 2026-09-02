@@ -36,6 +36,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.platform.LocalContext
@@ -44,10 +45,13 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.navigation.NavController
 import com.ozyern.exhale.BuildConfig
 import com.ozyern.exhale.R
+import com.ozyern.exhale.ui.component.LiquidBackButton
+import com.ozyern.exhale.ui.component.LiquidGlassIconButton
 import com.ozyern.exhale.ui.component.IconButton
 import com.ozyern.exhale.ui.component.TopSearch
 import com.ozyern.exhale.ui.utils.backToMain
@@ -196,26 +200,21 @@ fun SettingsScreen(
                         )
                     },
                     navigationIcon = {
-                        IconButton(
+                        LiquidBackButton(
                             onClick = navController::navigateUp,
                             onLongClick = navController::backToMain,
-                        ) {
-                            Icon(
-                                painterResource(R.drawable.arrow_back),
-                                contentDescription = null,
-                            )
-                        }
+                            icon = R.drawable.arrow_back,
+                        )
                     },
                     actions = {
-                        IconButton(
+                        // Same disc of glass as the back arrow opposite it. A bare Material icon
+                        // here was the tell that the glass was decoration rather than the app's
+                        // control surface: one side of the bar an object, the other a glyph.
+                        LiquidGlassIconButton(
                             onClick = { isSearching = true },
-                            onLongClick = {},
-                        ) {
-                            Icon(
-                                painter = painterResource(R.drawable.search),
-                                contentDescription = null,
-                            )
-                        }
+                            icon = R.drawable.search,
+                            contentDescription = stringResource(R.string.search),
+                        )
                     },
                     scrollBehavior = scrollBehavior,
                     // Opaque and identical to the page in both states: no tonal-elevation shift
@@ -227,7 +226,10 @@ fun SettingsScreen(
                 )
             }
         },
-        containerColor = pageBackground,
+        // Transparent, so the album-art wash `SettingsPage` lays down is what you see behind
+        // the groups. The app bar above stays opaque on purpose: the large title has rows
+        // sliding under it as the list scrolls, and a translucent bar there would show them.
+        containerColor = Color.Transparent,
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         modifier = Modifier.fillMaxSize(),
     ) { innerPadding ->
@@ -260,32 +262,26 @@ fun SettingsScreen(
                     },
                     placeholder = { Text(text = stringResource(R.string.search)) },
                     leadingIcon = {
-                        IconButton(
+                        LiquidBackButton(
                             onClick = { resetSearch() },
                             onLongClick = {
                                 if (queryText.isBlank()) {
                                     navController.backToMain()
                                 }
                             },
-                        ) {
-                            Icon(
-                                painterResource(R.drawable.arrow_back),
-                                contentDescription = null,
-                            )
-                        }
+                            icon = R.drawable.arrow_back,
+                        )
                     },
                     trailingIcon = {
                         Row {
                             if (query.text.isNotBlank()) {
-                                IconButton(
+                                LiquidGlassIconButton(
                                     onClick = { query = TextFieldValue() },
-                                    onLongClick = {},
-                                ) {
-                                    Icon(
-                                        painter = painterResource(R.drawable.close),
-                                        contentDescription = null,
-                                    )
-                                }
+                                    icon = R.drawable.close,
+                                    diameter = 32.dp,
+                                    iconSize = 16.dp,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
                             }
                         }
                     },

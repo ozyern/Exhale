@@ -58,10 +58,14 @@ Coming soon.
 ```bash
 git clone https://github.com/ozyern/Exhale.git
 cd Exhale
-./gradlew assembleDebug
+./gradlew assembleUniversalDebug
 ```
 
-The APK lands in `app/build/outputs/apk/debug/`. You'll need JDK 17 and the Android SDK for API 36.
+The APK lands in `app/build/outputs/apk/universal/debug/`. You'll need JDK 21 and SDK Platform 37.
+
+There are five ABI flavors, so plain `assembleDebug` builds all of them — use
+`assembleUniversalDebug` for one APK that runs anywhere, or `assembleArm64Debug` if you're
+only testing on a modern phone. More in the [Contributing Guidelines](CONTRIBUTING.md).
 
 ## Credits
 

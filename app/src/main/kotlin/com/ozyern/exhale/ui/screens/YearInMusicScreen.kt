@@ -59,6 +59,7 @@ import com.ozyern.exhale.db.entities.Album
 import com.ozyern.exhale.db.entities.Artist
 import com.ozyern.exhale.db.entities.Song
 import com.ozyern.exhale.db.entities.SongWithStats
+import com.ozyern.exhale.ui.component.LiquidBackButton
 import com.ozyern.exhale.ui.component.IconButton
 import com.ozyern.exhale.ui.component.LocalMenuState
 import com.ozyern.exhale.ui.menu.ArtistMenu
@@ -340,12 +341,12 @@ fun YearInMusicScreen(
                         .padding(horizontal = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    IconButton(
+                    LiquidBackButton(
                         onClick   = navController::navigateUp,
                         onLongClick = navController::backToMain,
-                    ) {
-                        Icon(painterResource(R.drawable.arrow_back), null, tint = Snow)
-                    }
+                        icon = R.drawable.arrow_back,
+                        tint = Snow,
+                    )
                     Spacer(Modifier.weight(1f))
                     // Brand label — centered
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {

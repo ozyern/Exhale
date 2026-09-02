@@ -30,6 +30,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import com.ozyern.exhale.R
 
 @Composable
@@ -68,16 +69,50 @@ fun NavigationTitle(
                 )
             }
 
-            // Apple-Music header: LARGE, heavy, high-contrast ink with generous air above
-            // each section — the whitespace itself does the separating, not dividers.
-            Text(
-                text = title,
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface,
-                overflow = TextOverflow.Ellipsis,
-                maxLines = 1,
-            )
+            // Title and chevron as one object, hard against each other.
+            //
+            // The chevron used to sit at the far trailing edge of the row, which is the Material
+            // list idiom: label on the left, affordance on the right, the gap between them
+            // meaning "this whole row is tappable". Apple Music does the opposite and it is the
+            // single most recognisable thing about its section headers — the disclosure mark
+            // follows the last letter of the title, so "Made For You ›" reads as one phrase you
+            // press rather than as a heading with a button parked across the screen from it.
+            //
+            // The title takes `weight(1f, fill = false)`: it shrinks and ellipsises when long, but
+            // a short one does not stretch, so the chevron stays glued to the text.
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = title,
+                    // Apple-Music header: LARGE, heavy, high-contrast ink with generous air above
+                    // each section — the whitespace does the separating, not dividers.
+                    style = MaterialTheme.typography.headlineSmall.copy(
+                        // Tightened. Letter fitting that is right at body size is visibly airy at
+                        // 24sp, and every typographic system that cares tracks large sizes in.
+                        // This is most of the answer to why an Apple heading looks set and ours
+                        // looked typed.
+                        letterSpacing = (-0.02).em,
+                    ),
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    overflow = TextOverflow.Ellipsis,
+                    maxLines = 1,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+
+                if (onClick != null) {
+                    // A small grey chevron, not a full-size forward arrow. The disclosure mark is
+                    // deliberately quieter than the title it follows — a 24dp filled arrow read
+                    // as an action button sitting inside a heading.
+                    Icon(
+                        painter = painterResource(R.drawable.chevron_right),
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                        modifier = Modifier
+                            .padding(start = 2.dp)
+                            .size(20.dp),
+                    )
+                }
+            }
 
             subtitle?.let {
                 Text(
@@ -88,18 +123,6 @@ fun NavigationTitle(
                     maxLines = 1,
                 )
             }
-        }
-
-        if (onClick != null) {
-            // A small grey chevron, not a full-size forward arrow. Apple Music's section headers
-            // end in a disclosure mark that is deliberately quieter than the title it follows —
-            // the 24dp filled arrow read as an action button sitting inside a heading.
-            Icon(
-                painter = painterResource(R.drawable.chevron_right),
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                modifier = Modifier.size(20.dp),
-            )
         }
     }
 }

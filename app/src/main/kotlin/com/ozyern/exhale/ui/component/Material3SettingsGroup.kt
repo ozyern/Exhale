@@ -54,8 +54,7 @@ fun Material3SettingsGroup(
             modifier = Modifier
                 .fillMaxWidth()
                 .animateContentSize()
-                .clip(RoundedCornerShape(SettingsGroupCornerRadius))
-                .background(settingsGroupSurfaceColor())
+                .settingsGlassGroup(RoundedCornerShape(SettingsGroupCornerRadius))
         ) {
             items.forEachIndexed { index, item ->
                 Material3SettingsItemRow(

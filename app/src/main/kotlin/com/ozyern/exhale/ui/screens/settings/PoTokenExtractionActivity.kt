@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.ozyern.exhale.R
 import com.ozyern.exhale.innertube.utils.PoTokenGenerator
+import com.ozyern.exhale.ui.component.LiquidBackButton
 import com.ozyern.exhale.ui.component.IconButton
 
 class PoTokenExtractionActivity : ComponentActivity() {
@@ -276,15 +277,11 @@ class PoTokenExtractionActivity : ComponentActivity() {
             TopAppBar(
                 title = { Text(stringResource(R.string.extracting_from_url)) },
                 navigationIcon = {
-                    IconButton(
+                    LiquidBackButton(
                         onClick = { closeCanceled() },
-                        onLongClick = { closeCanceled() }
-                    ) {
-                        Icon(
-                            painter = painterResource(R.drawable.arrow_back),
-                            contentDescription = null,
-                        )
-                    }
+                        onLongClick = { closeCanceled() },
+                        icon = R.drawable.arrow_back,
+                    )
                 }
             )
 

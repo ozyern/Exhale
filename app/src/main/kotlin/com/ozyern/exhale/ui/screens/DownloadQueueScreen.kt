@@ -31,6 +31,7 @@ import androidx.media3.exoplayer.offline.Download
 import androidx.navigation.NavController
 import coil3.compose.AsyncImage
 import com.ozyern.exhale.R
+import com.ozyern.exhale.ui.component.LiquidBackButton
 import com.ozyern.exhale.ui.component.EmptyPlaceholder
 import com.ozyern.exhale.viewmodels.DownloadItem
 import com.ozyern.exhale.viewmodels.DownloadQueueViewModel
@@ -49,12 +50,10 @@ fun DownloadQueueScreen(
             TopAppBar(
                 title = { Text(stringResource(R.string.download_queue)) },
                 navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(
-                            painter = painterResource(R.drawable.arrow_back),
-                            contentDescription = null
-                        )
-                    }
+                    LiquidBackButton(
+                        onClick = { navController.popBackStack() },
+                        icon = R.drawable.arrow_back,
+                    )
                 },
                 actions = {
                     if (downloads.isNotEmpty()) {

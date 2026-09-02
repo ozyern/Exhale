@@ -66,6 +66,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
@@ -94,6 +95,7 @@ import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.navigation.NavController
 import androidx.palette.graphics.Palette
 import coil3.compose.AsyncImage
+import com.ozyern.exhale.ui.component.LiquidBackButton
 import com.ozyern.exhale.ui.component.heroParallax
 import coil3.imageLoader
 import coil3.request.ImageRequest
@@ -601,133 +603,116 @@ fun ArtistScreen(
                     }
 
                     Column(modifier = Modifier.fillMaxWidth()) {
-                        Box(modifier = Modifier.fillMaxWidth()) {
-                            // The artist's own image, blurred past recognition and scrimmed, as the
-                            // ground the header sits on. Same URL as the portrait, so it costs one
-                            // more decode of an image already in Coil's cache and never a second
-                            // network request — and because it is the same picture, the header is
-                            // always tinted by the artist rather than by the theme.
-                            if (thumbnail != null && !disableBlur) {
+                        // The hero: the artist, full-bleed, sharp, with the page dissolving out
+                        // of the bottom of them.
+                        //
+                        // This replaces a 104dp circular avatar sitting in a row beside the name,
+                        // over a blurred copy of that same picture. That layout spent the most
+                        // valuable space on the screen — the first thing you see when you open a
+                        // person — on a thumbnail, and then used a destroyed version of the very
+                        // image it was shrinking as wallpaper behind it. The photo was doing two
+                        // jobs badly instead of one job well.
+                        //
+                        // Now it is the ground itself. The scrim is what makes that legible: the
+                        // image is untouched down to about a third of its height and then loses
+                        // itself into `surfaceColor`, so the name has solid contrast to sit on and
+                        // there is no seam where the header stops and the list begins. The old
+                        // blur is gone entirely — nothing is blurred here any more, which also
+                        // means one less full-screen RenderEffect on a scrolling surface.
+                        val configuration = LocalConfiguration.current
+                        val heroHeight = remember(configuration.screenHeightDp) {
+                            (configuration.screenHeightDp * 0.46f).dp.coerceIn(300.dp, 460.dp)
+                        }
+
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(heroHeight),
+                        ) {
+                            if (thumbnail != null) {
                                 AsyncImage(
-                                    model = thumbnail.resize(240, 240),
+                                    model = thumbnail.resize(1200, 1200),
                                     contentDescription = null,
                                     contentScale = ContentScale.Crop,
+                                    alignment = Alignment.TopCenter,
                                     modifier = Modifier
                                         .matchParentSize()
-                                        .graphicsLayer {
-                                            // Anchored to the top and over-scaled so the blur's
-                                            // soft edges are pushed off every side of the box
-                                            // instead of showing as a pale frame inside it.
-                                            transformOrigin = TransformOrigin(0.5f, 0f)
-                                            scaleX = 1.35f
-                                            scaleY = 1.35f
-                                            alpha = 0.55f
-                                        }
-                                        .blur(46.dp, edgeTreatment = BlurredEdgeTreatment.Unbounded),
+                                        // Lags the list so the page slides over the portrait
+                                        // instead of dragging it along. Draw-phase only.
+                                        .heroParallax(lazyListState, travel = 150.dp),
                                 )
+                            } else {
                                 Box(
                                     modifier = Modifier
                                         .matchParentSize()
-                                        .background(
-                                            Brush.verticalGradient(
-                                                listOf(
-                                                    surfaceColor.copy(alpha = 0.10f),
-                                                    surfaceColor.copy(alpha = 0.55f),
-                                                    surfaceColor,
-                                                ),
-                                            ),
-                                        ),
-                                )
-                            }
-
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(top = systemBarsTopPadding + AppBarHeight)
-                                    .padding(start = 20.dp, end = 20.dp, top = 4.dp, bottom = 18.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                val rimBrush = Brush.linearGradient(
-                                    listOf(
-                                        Color.White.copy(alpha = 0.55f),
-                                        Color.White.copy(alpha = 0.08f),
-                                    ),
-                                )
-                                Box(
-                                    // Still lags the list and fades as the page scrolls, so the
-                                    // content slides over the portrait rather than dragging it
-                                    // along. Shorter travel than before because the portrait now
-                                    // has a shorter distance to go. Draw-phase only.
-                                    modifier = Modifier.heroParallax(lazyListState, travel = 150.dp),
+                                        .background(MaterialTheme.colorScheme.surfaceVariant),
                                     contentAlignment = Alignment.Center,
                                 ) {
-                                    if (thumbnail != null) {
-                                        AsyncImage(
-                                            model = thumbnail.resize(400, 400),
-                                            contentDescription = null,
-                                            contentScale = ContentScale.Crop,
-                                            modifier = Modifier
-                                                .size(104.dp)
-                                                .shadow(18.dp, CircleShape, clip = false)
-                                                .clip(CircleShape)
-                                                .border(1.5.dp, rimBrush, CircleShape),
-                                        )
-                                    } else {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(104.dp)
-                                                .shadow(18.dp, CircleShape, clip = false)
-                                                .clip(CircleShape)
-                                                .background(MaterialTheme.colorScheme.surfaceVariant)
-                                                .border(1.5.dp, rimBrush, CircleShape),
-                                            contentAlignment = Alignment.Center,
-                                        ) {
-                                            Icon(
-                                                painter = painterResource(R.drawable.person),
-                                                contentDescription = null,
-                                                modifier = Modifier.size(46.dp),
-                                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            )
-                                        }
-                                    }
-                                }
-
-                                Spacer(Modifier.width(16.dp))
-
-                                Column(modifier = Modifier.weight(1f)) {
-                                    // An overline, so the name below it does not have to be
-                                    // enormous to say "this is a person". It is the cheapest way
-                                    // to buy back two type steps.
-                                    Text(
-                                        text = stringResource(R.string.artist).uppercase(),
-                                        style = MaterialTheme.typography.labelSmall,
-                                        fontWeight = FontWeight.Bold,
-                                        letterSpacing = 1.4.sp,
-                                        color = MaterialTheme.colorScheme.primary,
-                                        maxLines = 1,
+                                    Icon(
+                                        painter = painterResource(R.drawable.person),
+                                        contentDescription = null,
+                                        modifier = Modifier.size(96.dp),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
-                                    Spacer(Modifier.height(3.dp))
+                                }
+                            }
+
+                            // Two scrims, not one. The bottom carries the name; the top only has
+                            // to keep the back arrow and overflow legible against a photo that
+                            // could be anything, so it is much lighter and much shorter.
+                            Box(
+                                modifier = Modifier
+                                    .matchParentSize()
+                                    .background(
+                                        Brush.verticalGradient(
+                                            0f to surfaceColor.copy(alpha = 0.42f),
+                                            0.18f to Color.Transparent,
+                                            0.46f to Color.Transparent,
+                                            0.74f to surfaceColor.copy(alpha = 0.72f),
+                                            1f to surfaceColor,
+                                        ),
+                                    ),
+                            )
+
+                            Column(
+                                modifier = Modifier
+                                    .align(Alignment.BottomStart)
+                                    .fillMaxWidth()
+                                    .padding(start = 20.dp, end = 20.dp, bottom = 18.dp),
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.artist).uppercase(),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 1.4.sp,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    maxLines = 1,
+                                )
+                                Spacer(Modifier.height(4.dp))
+                                // Two type steps larger than the old header could afford. At this
+                                // size the name is the page, which is the point of a hero.
+                                Text(
+                                    text = artistName ?: stringResource(R.string.unknown_artist),
+                                    style = MaterialTheme.typography.displaySmall,
+                                    fontWeight = FontWeight.Black,
+                                    lineHeight = 42.sp,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                if (countsLine != null) {
+                                    Spacer(Modifier.height(6.dp))
                                     Text(
-                                        text = artistName ?: stringResource(R.string.unknown_artist),
-                                        style = MaterialTheme.typography.headlineSmall,
-                                        fontWeight = FontWeight.Bold,
-                                        lineHeight = 30.sp,
-                                        maxLines = 3,
+                                        text = countsLine,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,
                                     )
-                                    if (countsLine != null) {
-                                        Spacer(Modifier.height(5.dp))
-                                        Text(
-                                            text = countsLine,
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
-                                        )
-                                    }
                                 }
                             }
                         }
+
+                        Spacer(Modifier.height(14.dp))
 
                         // Artist Description (expandable)
                         //
@@ -1256,15 +1241,11 @@ fun ArtistScreen(
             )
         },
         navigationIcon = {
-            IconButton(
+            LiquidBackButton(
                 onClick = navController::navigateUp,
                 onLongClick = navController::backToMain,
-            ) {
-                Icon(
-                    painterResource(R.drawable.arrow_back),
-                    contentDescription = null,
-                )
-            }
+                icon = R.drawable.arrow_back,
+            )
         },
         actions = {
             // Share/Copy link button

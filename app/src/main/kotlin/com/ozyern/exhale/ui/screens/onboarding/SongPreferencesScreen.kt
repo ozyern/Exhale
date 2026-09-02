@@ -75,6 +75,7 @@ import coil3.request.CachePolicy
 import coil3.request.ImageRequest
 import coil3.request.crossfade
 import androidx.compose.ui.platform.LocalContext
+import com.ozyern.exhale.ui.component.LiquidBackButton
 import com.ozyern.exhale.LocalPlayerAwareWindowInsets
 import com.ozyern.exhale.R
 import com.ozyern.exhale.innertube.YouTube
@@ -508,21 +509,10 @@ private fun OnboardingHeader(
     Column(Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, top = 24.dp, bottom = 12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (onBack != null) {
-                Box(
-                    modifier = Modifier
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                        .clickable(onClick = onBack),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        painter = androidx.compose.ui.res.painterResource(R.drawable.arrow_back),
-                        contentDescription = "Back",
-                        tint = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.size(20.dp),
-                    )
-                }
+                LiquidBackButton(
+                    onClick = onBack,
+                    contentDescription = "Back",
+                )
                 Spacer(Modifier.width(12.dp))
             }
             Text(

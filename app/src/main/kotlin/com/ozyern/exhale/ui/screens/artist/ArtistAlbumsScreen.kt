@@ -54,6 +54,7 @@ import com.ozyern.exhale.R
 import com.ozyern.exhale.constants.CONTENT_TYPE_ALBUM
 import com.ozyern.exhale.constants.CONTENT_TYPE_HEADER
 import com.ozyern.exhale.constants.GridThumbnailHeight
+import com.ozyern.exhale.ui.component.LiquidBackButton
 import com.ozyern.exhale.ui.component.IconButton
 import com.ozyern.exhale.ui.component.LibraryAlbumGridItem
 import com.ozyern.exhale.ui.component.LocalMenuState
@@ -142,15 +143,11 @@ fun ArtistAlbumsScreen(
         TopAppBar(
             title = { Text(artist?.artist?.name.orEmpty()) },
             navigationIcon = {
-                IconButton(
+                LiquidBackButton(
                     onClick = navController::navigateUp,
-                    onLongClick = navController::backToMain
-                ) {
-                    Icon(
-                        painter = painterResource(id = R.drawable.arrow_back),
-                        contentDescription = null
-                    )
-                }
+                    onLongClick = navController::backToMain,
+                    icon = R.drawable.arrow_back,
+                )
             },
             scrollBehavior = scrollBehavior
         )

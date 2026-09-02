@@ -123,6 +123,15 @@ import com.ozyern.exhale.ui.utils.highRes
 import com.ozyern.exhale.utils.makeTimeString
 import com.skydoves.cloudy.cloudy
 
+/**
+ * Span tag marking each artist name in a rendered artist line, carrying that artist's id.
+ *
+ * One shared tag rather than a per-artist one: the tap only ever asks "which annotation is under
+ * this offset", so encoding the id in the tag as well as the value buys nothing and makes the
+ * lookup impossible to write without already knowing the answer.
+ */
+private const val ArtistAnnotationTag = "artist"
+
 @Composable
 fun PlayerTitleSection(
     mediaMetadata: MediaMetadata,
@@ -2807,22 +2816,73 @@ fun V8PlayerControlsContent(
 
                 Spacer(Modifier.height(6.dp))
 
-                // Artista
-                val artistsText = remember(mediaMetadata.artists) {
-                    mediaMetadata.artists.joinToString(separator = ", ") { it.name }
+                // Artista — the artist line is the navigation affordance in the player.
+                //
+                // Hit-tested per name rather than treated as one link. On a collaboration the
+                // line reads "A, B"; tapping B has to open B. Each name carries its own id as a
+                // span annotation and the tap is resolved against the text layout, which also
+                // leaves the ", " separator inert instead of silently belonging to whichever
+                // name happens to be first.
+                //
+                // This is the affordance the mini player used to carry. It was removed from
+                // there because the pill's artist line spans the capsule and swallowed the tap
+                // that should open the player; here the name is its own line with room around
+                // it, which is where people expect to find it anyway.
+                val artistAnnotated = remember(mediaMetadata.artists) {
+                    buildAnnotatedString {
+                        mediaMetadata.artists.forEachIndexed { index, artist ->
+                            pushStringAnnotation(ArtistAnnotationTag, artist.id.orEmpty())
+                            append(artist.name)
+                            pop()
+                            if (index != mediaMetadata.artists.lastIndex) append(", ")
+                        }
+                    }
                 }
                 AnimatedContent(
-                    targetState = artistsText,
+                    targetState = artistAnnotated,
                     transitionSpec = { fadeIn(tween(300)) togetherWith fadeOut(tween(300)) },
                     label = "v8_artist"
                 ) { artists ->
+                    var artistLayout by remember { mutableStateOf<TextLayoutResult?>(null) }
+                    var artistTap by remember { mutableStateOf<Offset?>(null) }
                     Text(
                         text = artists,
                         style = MaterialTheme.typography.titleMedium,
                         color = textBackgroundColor.copy(alpha = 0.7f),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.basicMarquee()
+                        onTextLayout = { artistLayout = it },
+                        modifier = Modifier
+                            .basicMarquee()
+                            // Records where the finger went down so the click below can ask the
+                            // layout which name was under it. Compose gives the click no
+                            // position of its own.
+                            .pointerInput(Unit) {
+                                awaitPointerEventScope {
+                                    while (true) {
+                                        awaitPointerEvent().changes.firstOrNull()?.position
+                                            ?.let { artistTap = it }
+                                    }
+                                }
+                            }
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                            ) {
+                                val pos = artistTap
+                                val layout = artistLayout
+                                if (pos != null && layout != null) {
+                                    val offset = layout.getOffsetForPosition(pos)
+                                    artists.getStringAnnotations(ArtistAnnotationTag, offset, offset)
+                                        .firstOrNull()
+                                        ?.item
+                                        ?.takeIf { it.isNotBlank() }
+                                        ?.let { artistId ->
+                                            navController.navigate("artist/$artistId")
+                                            state.collapseSoft()
+                                        }
+                                }
+                            }
                     )
                 }
 

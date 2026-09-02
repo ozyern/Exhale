@@ -67,6 +67,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.runtime.collectAsState
+import com.ozyern.exhale.ui.component.liquid.PageBackdropHost
+import androidx.compose.runtime.mutableStateOf
+import com.ozyern.exhale.ui.component.rememberArtworkAmbientColors
+import com.ozyern.exhale.ui.component.AmbientArtworkGlow
+import com.ozyern.exhale.models.MediaMetadata
+import com.ozyern.exhale.LocalPlayerConnection
+import com.ozyern.exhale.ui.component.settingsGlassGroup
 import com.ozyern.exhale.BuildConfig
 import com.ozyern.exhale.R
 import com.ozyern.exhale.ui.component.settingsIconPuck
@@ -89,15 +97,55 @@ import com.ozyern.exhale.ui.component.settingsIconPuck
 @Composable
 fun SettingsPage(content: @Composable BoxScope.() -> Unit) {
     val pageBackground = SettingsDimensions.screenBackgroundColor()
+    val mediaMetadata by LocalPlayerConnection.current?.mediaMetadata?.collectAsState()
+        ?: remember { mutableStateOf<MediaMetadata?>(null) }
+    val ambientColors by rememberArtworkAmbientColors(
+        songId = mediaMetadata?.id,
+        thumbnailUrl = mediaMetadata?.thumbnailUrl,
+    )
+
     MaterialTheme(
         colorScheme = MaterialTheme.colorScheme.copy(surface = pageBackground),
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(pageBackground),
-            content = content,
-        )
+        // Recorded, not just painted.
+        //
+        // The ground and the wash go into their own layer, drawn as a sibling beneath everything
+        // the settings routes put on the page. That makes them something the glass on this page
+        // can legally *sample* — so the back button, the search icon and the grouped cards bend
+        // the album-art wash at their rims instead of merely being translucent over it. It also
+        // overrides the app-wide backdrop published in MainActivity, which is the right call
+        // here: the settings ground is opaque, so the ambient field behind the window is not
+        // visible anywhere on this screen and refracting it would be inventing a reflection of
+        // something that is not there.
+        PageBackdropHost(
+            modifier = Modifier.fillMaxSize(),
+            background = {
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .background(pageBackground),
+                )
+                AmbientArtworkGlow(
+                    colors = ambientColors,
+                    modifier = Modifier.matchParentSize(),
+                    intensity = 0.66f,
+                )
+            },
+        ) {
+            // The wash the glass cards are glass *of*.
+            //
+            // This is the whole reason the settings surfaces can be translucent at all: an inset
+            // grouped list on a flat page has nothing behind it, so a translucent card there is a
+            // smudge, not a lens. Wired in at the page wrapper rather than per screen because
+            // every settings route already goes through here (`settingsComposable`), so this is
+            // the one place all ~30 of them can be given the same ground without any of them
+            // knowing about it.
+            //
+            // Pulled back to two thirds: settings pages are dense small text, and the intensity
+            // that reads as atmosphere behind Home's artwork cards reads as a stain behind a
+            // paragraph of labels.
+            content()
+        }
     }
 }
 
@@ -127,8 +175,11 @@ fun SettingsSearchPill(
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
+    // Only the press wash is animated now; the resting fill is the shared glass recipe, so this
+    // pill is made of the same material as the cards under it instead of being the one element on
+    // the page mixing its own flat grey.
     val bgAlpha by animateFloatAsState(
-        targetValue = if (isPressed) 0.14f else 0.08f,
+        targetValue = if (isPressed) 0.07f else 0f,
         animationSpec = SettingsAnimations.pressSpring(),
         label = "searchPillBg",
     )
@@ -136,7 +187,7 @@ fun SettingsSearchPill(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .settingsGlassGroup(RoundedCornerShape(14.dp))
             .background(MaterialTheme.colorScheme.onSurface.copy(alpha = bgAlpha))
             .clickable(
                 interactionSource = interactionSource,
@@ -179,8 +230,7 @@ fun SettingsProfileHeader(
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(SettingsDimensions.HeroCardCornerRadius))
-            .background(SettingsDimensions.groupSurfaceColor())
+            .settingsGlassGroup(RoundedCornerShape(SettingsDimensions.HeroCardCornerRadius))
             .then(
                 if (onClick != null) {
                     Modifier.clickable(
@@ -293,8 +343,7 @@ fun SettingsPermissionBanner(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(SettingsDimensions.BannerCardCornerRadius))
-            .background(SettingsDimensions.groupSurfaceColor())
+            .settingsGlassGroup(RoundedCornerShape(SettingsDimensions.BannerCardCornerRadius))
             .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -373,8 +422,7 @@ fun SettingsUpdateBanner(
         modifier = modifier
             .fillMaxWidth()
             .scale(scale)
-            .clip(RoundedCornerShape(SettingsDimensions.BannerCardCornerRadius))
-            .background(SettingsDimensions.groupSurfaceColor())
+            .settingsGlassGroup(RoundedCornerShape(SettingsDimensions.BannerCardCornerRadius))
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
@@ -436,8 +484,7 @@ fun SettingsSearchEmpty(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(SettingsDimensions.GroupCardCornerRadius))
-            .background(SettingsDimensions.groupSurfaceColor())
+            .settingsGlassGroup(RoundedCornerShape(SettingsDimensions.GroupCardCornerRadius))
             .padding(32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -518,13 +565,7 @@ fun SettingsGroupCard(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(SettingsDimensions.GroupCardCornerRadius))
-                .background(SettingsDimensions.groupSurfaceColor())
-                .border(
-                    0.8.dp,
-                    SettingsDimensions.groupBorderBrush(),
-                    RoundedCornerShape(SettingsDimensions.GroupCardCornerRadius),
-                ),
+                .settingsGlassGroup(RoundedCornerShape(SettingsDimensions.GroupCardCornerRadius)),
         ) {
             group.items.forEachIndexed { index, item ->
                 SettingsRow(
@@ -552,13 +593,7 @@ fun InsetGroup(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(SettingsDimensions.GroupCardCornerRadius))
-                .background(SettingsDimensions.groupSurfaceColor())
-                .border(
-                    0.8.dp,
-                    SettingsDimensions.groupBorderBrush(),
-                    RoundedCornerShape(SettingsDimensions.GroupCardCornerRadius),
-                ),
+                .settingsGlassGroup(RoundedCornerShape(SettingsDimensions.GroupCardCornerRadius)),
         ) {
             rows.forEachIndexed { index, row ->
                 row()

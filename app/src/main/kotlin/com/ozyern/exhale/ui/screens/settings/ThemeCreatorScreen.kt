@@ -65,6 +65,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
+import com.ozyern.exhale.ui.component.LiquidBackButton
 import com.ozyern.exhale.ui.component.liquid.LiquidSlider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
@@ -240,15 +241,11 @@ fun ThemeCreatorScreen(
             TopAppBar(
                 title = { Text(text = stringResource(R.string.theme_creator_title)) },
                 navigationIcon = {
-                    IconButton(
+                    LiquidBackButton(
                         onClick = navController::navigateUp,
                         onLongClick = navController::backToMain,
-                    ) {
-                        Icon(
-                            painter = painterResource(R.drawable.arrow_back),
-                            contentDescription = null,
-                        )
-                    }
+                        icon = R.drawable.arrow_back,
+                    )
                 },
                 actions = {
                     TextButton(

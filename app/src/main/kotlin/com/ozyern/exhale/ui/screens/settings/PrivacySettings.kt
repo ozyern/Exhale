@@ -39,6 +39,7 @@ import com.ozyern.exhale.R
 import com.ozyern.exhale.constants.DisableScreenshotKey
 import com.ozyern.exhale.constants.PauseListenHistoryKey
 import com.ozyern.exhale.constants.PauseSearchHistoryKey
+import com.ozyern.exhale.ui.component.LiquidBackButton
 import com.ozyern.exhale.ui.component.DefaultDialog
 import com.ozyern.exhale.ui.component.IconButton
 import com.ozyern.exhale.ui.component.PreferenceEntry
@@ -198,15 +199,11 @@ fun PrivacySettings(
     TopAppBar(
         title = { Text(stringResource(R.string.privacy)) },
         navigationIcon = {
-            IconButton(
+            LiquidBackButton(
                 onClick = navController::navigateUp,
                 onLongClick = navController::backToMain,
-            ) {
-                Icon(
-                    painterResource(R.drawable.arrow_back),
-                    contentDescription = null,
-                )
-            }
+                icon = R.drawable.arrow_back,
+            )
         }
     )
 }

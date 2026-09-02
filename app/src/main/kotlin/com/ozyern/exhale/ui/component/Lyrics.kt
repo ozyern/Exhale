@@ -941,8 +941,12 @@ fun Lyrics(
                             LyricsPosition.RIGHT -> TransformOrigin(1f, 0.5f)
                         }
 
+                        // Focus is racked forward only — lines already sung stay sharp and recede
+                        // on alpha alone. See the long note in LyricsV2 for why symmetric blur
+                        // reads as a hole in frosted glass rather than as depth.
                         val targetBlur = when {
                             !isSynced || index == displayedCurrentLineIndex || (isSelectionModeActive && isSelected) || isManualScrolling -> 0f
+                            index < displayedCurrentLineIndex -> 0f
                             distance == 1 -> 2f
                             distance == 2 -> 5f
                             else -> 12f

@@ -121,6 +121,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.ozyern.exhale.ui.component.LiquidBackButton
 import com.ozyern.exhale.R
 import com.ozyern.exhale.shazamkit.Shazam
 import com.ozyern.exhale.shazamkit.ShazamSignatureGenerator
@@ -220,22 +221,11 @@ fun MusicRecognitionScreen(
             LargeFlexibleTopAppBar(
                 title = { Text(stringResource(R.string.music_recognition)) },
                 navigationIcon = {
-                    Surface(
-                        modifier =
-                            Modifier
-                                .padding(horizontal = 8.dp)
-                                .size(40.dp),
-                        shape = CircleShape,
-                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    LiquidBackButton(
                         onClick = navController::navigateUp,
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                painter = painterResource(R.drawable.arrow_back),
-                                contentDescription = stringResource(R.string.back_button_desc),
-                            )
-                        }
-                    }
+                        modifier = Modifier.padding(horizontal = 8.dp),
+                        contentDescription = stringResource(R.string.back_button_desc),
+                    )
                 },
                 colors =
                     TopAppBarDefaults.largeTopAppBarColors(

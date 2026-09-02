@@ -428,6 +428,12 @@ fun NavGraphBuilder.navigationBuilder(
     settingsComposable("settings/update") {
         UpdateScreen(navController, scrollBehavior)
     }
+    // Same screen, arriving with the transfer already starting. A separate route rather than a
+    // query argument because `settingsComposable` takes a plain route string, and one extra line
+    // here is cheaper than threading NavBackStackEntry through all thirty settings destinations.
+    settingsComposable("settings/update/download") {
+        UpdateScreen(navController, scrollBehavior, autoStart = true)
+    }
     settingsComposable("settings/changelog") {
         ChangelogScreen(navController, scrollBehavior)
     }

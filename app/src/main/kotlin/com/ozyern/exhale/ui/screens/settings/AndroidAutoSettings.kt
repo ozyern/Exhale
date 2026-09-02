@@ -48,6 +48,7 @@ import com.ozyern.exhale.constants.AlbumSortType
 import com.ozyern.exhale.constants.AndroidAutoConstants
 import com.ozyern.exhale.constants.ArtistSortType
 import com.ozyern.exhale.constants.SongSortType
+import com.ozyern.exhale.ui.component.LiquidBackButton
 import com.ozyern.exhale.ui.component.EnumListPreference
 import com.ozyern.exhale.ui.component.NumberPickerPreference
 import com.ozyern.exhale.ui.component.PreferenceGroup
@@ -109,21 +110,17 @@ fun AndroidAutoSettings(
         modifier = Modifier
             .fillMaxSize()
             .nestedScroll(scrollBehavior.nestedScrollConnection),
-        containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
+        containerColor = Color.Transparent,
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             LargeFlexibleTopAppBar(
                 title = { Text(stringResource(R.string.android_auto)) },
                 navigationIcon = {
-                    com.ozyern.exhale.ui.component.IconButton(
+                    com.ozyern.exhale.ui.component.LiquidBackButton(
                         onClick = navController::navigateUp,
                         onLongClick = navController::backToMain,
-                    ) {
-                        Icon(
-                            painter = painterResource(R.drawable.arrow_back),
-                            contentDescription = null,
-                        )
-                    }
+    icon = R.drawable.arrow_back,
+)
                 },
                 colors = TopAppBarDefaults.largeTopAppBarColors(
                     containerColor = Color.Transparent,

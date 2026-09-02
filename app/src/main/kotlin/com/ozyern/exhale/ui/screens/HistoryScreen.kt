@@ -69,6 +69,7 @@ import com.ozyern.exhale.extensions.togglePlayPause
 import com.ozyern.exhale.models.toMediaMetadata
 import com.ozyern.exhale.playback.queues.ListQueue
 import com.ozyern.exhale.playback.queues.YouTubeQueue
+import com.ozyern.exhale.ui.component.LiquidBackButton
 import com.ozyern.exhale.ui.component.ChipsRow
 import com.ozyern.exhale.ui.component.HideOnScrollFAB
 import com.ozyern.exhale.ui.component.IconButton
@@ -434,7 +435,7 @@ fun HistoryScreen(
             }
         },
         navigationIcon = {
-            IconButton(
+            LiquidBackButton(
                 onClick = {
                     when {
                         isSearching -> {
@@ -455,15 +456,9 @@ fun HistoryScreen(
                     if (!isSearching && !selection) {
                         navController.backToMain()
                     }
-                }
-            ) {
-                Icon(
-                    painter = painterResource(
-                        if (selection) R.drawable.close else R.drawable.arrow_back
-                    ),
-                    contentDescription = null
-                )
-            }
+                },
+                icon = if (selection) R.drawable.close else R.drawable.arrow_back,
+            )
         },
         actions = {
             if (selection) {

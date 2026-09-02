@@ -104,6 +104,7 @@ import com.ozyern.exhale.spotify.SpotifyPlaybackResolver
 import com.ozyern.exhale.spotify.SpotifyPlaylistQueue
 import com.ozyern.exhale.spotify.SpotifyPlaylistViewModel
 import com.ozyern.exhale.spotify.models.SpotifyTrack
+import com.ozyern.exhale.ui.component.LiquidBackButton
 import com.ozyern.exhale.ui.component.DraggableScrollbar
 import com.ozyern.exhale.ui.component.EmptyPlaceholder
 import com.ozyern.exhale.ui.component.IconButton
@@ -792,7 +793,7 @@ fun SpotifyPlaylistScreen(
                 }
             },
             navigationIcon = {
-                IconButton(
+                LiquidBackButton(
                     onClick = {
                         if (isSearching) {
                             isSearching = false
@@ -804,15 +805,8 @@ fun SpotifyPlaylistScreen(
                     onLongClick = {
                         if (!isSearching) navController.backToMain()
                     },
-                ) {
-                    Icon(
-                        painter =
-                            painterResource(
-                                if (isSearching) R.drawable.close else R.drawable.arrow_back,
-                            ),
-                        contentDescription = null,
-                    )
-                }
+                    icon = if (isSearching) R.drawable.close else R.drawable.arrow_back,
+                )
             },
             actions = {
                 if (!isSearching) {

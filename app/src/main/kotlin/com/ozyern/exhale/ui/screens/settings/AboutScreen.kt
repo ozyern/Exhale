@@ -76,9 +76,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import coil3.compose.AsyncImage
+import com.ozyern.exhale.ui.component.settingsGlassGroup
 import com.ozyern.exhale.BuildConfig
 import com.ozyern.exhale.LocalPlayerAwareWindowInsets
 import com.ozyern.exhale.R
+import com.ozyern.exhale.ui.component.LiquidBackButton
 import com.ozyern.exhale.ui.component.settingsIconPuck
 import com.ozyern.exhale.constants.AquamorphicDampingRatio
 import com.ozyern.exhale.constants.AquamorphicStiffness
@@ -184,7 +186,10 @@ fun AboutScreen(
         modifier = Modifier
             .fillMaxSize()
             .nestedScroll(scrollBehavior.nestedScrollConnection),
-        containerColor = pageBackground,
+        // Transparent, so the album-art wash `SettingsPage` lays down is what you see behind
+        // the groups. The app bar above stays opaque on purpose: the large title has rows
+        // sliding under it as the list scrolls, and a translucent bar there would show them.
+        containerColor = Color.Transparent,
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             LargeTopAppBar(
@@ -195,15 +200,11 @@ fun AboutScreen(
                     )
                 },
                 navigationIcon = {
-                    IconButton(
+                    LiquidBackButton(
                         onClick = navController::navigateUp,
                         onLongClick = navController::backToMain,
-                    ) {
-                        Icon(
-                            painterResource(R.drawable.arrow_back),
-                            contentDescription = null,
-                        )
-                    }
+                        icon = R.drawable.arrow_back,
+                    )
                 },
                 // Flat and identical in both states, like every other settings destination.
                 colors = TopAppBarDefaults.largeTopAppBarColors(
@@ -505,8 +506,7 @@ private fun AboutHero(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(SettingsDimensions.HeroCardCornerRadius))
-            .background(SettingsDimensions.groupSurfaceColor())
+            .settingsGlassGroup(RoundedCornerShape(SettingsDimensions.HeroCardCornerRadius))
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
@@ -654,8 +654,7 @@ private fun AboutStatCard(
 ) {
     Column(
         modifier = modifier
-            .clip(RoundedCornerShape(SettingsDimensions.GroupCardCornerRadius))
-            .background(SettingsDimensions.groupSurfaceColor())
+            .settingsGlassGroup(RoundedCornerShape(SettingsDimensions.GroupCardCornerRadius))
             .padding(horizontal = 18.dp, vertical = 18.dp),
     ) {
         Icon(
@@ -694,8 +693,7 @@ private fun AboutGroup(content: @Composable () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(SettingsDimensions.GroupCardCornerRadius))
-            .background(SettingsDimensions.groupSurfaceColor()),
+            .settingsGlassGroup(RoundedCornerShape(SettingsDimensions.GroupCardCornerRadius)),
     ) {
         content()
     }

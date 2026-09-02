@@ -62,6 +62,7 @@ import com.ozyern.exhale.constants.ListItemHeight
 import com.ozyern.exhale.extensions.togglePlayPause
 import com.ozyern.exhale.models.toMediaMetadata
 import com.ozyern.exhale.playback.queues.YouTubeQueue
+import com.ozyern.exhale.ui.component.LiquidBackButton
 import com.ozyern.exhale.ui.component.IconButton
 import com.ozyern.exhale.ui.component.LocalMenuState
 import com.ozyern.exhale.ui.component.NavigationTitle
@@ -271,15 +272,11 @@ fun YouTubeBrowseScreen(
     TopAppBar(
         title = { Text(browseResult?.title.orEmpty()) },
         navigationIcon = {
-            IconButton(
+            LiquidBackButton(
                 onClick = navController::navigateUp,
-                onLongClick = navController::backToMain
-            ) {
-                Icon(
-                    painterResource(R.drawable.arrow_back),
-                    contentDescription = null
-                )
-            }
+                onLongClick = navController::backToMain,
+                icon = R.drawable.arrow_back,
+            )
         }
     )
 }

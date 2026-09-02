@@ -31,6 +31,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.navigation.NavController
 import com.ozyern.exhale.LocalPlayerAwareWindowInsets
 import com.ozyern.exhale.constants.DiscordTokenKey
+import com.ozyern.exhale.ui.component.LiquidBackButton
 import com.ozyern.exhale.ui.component.IconButton
 import com.ozyern.exhale.ui.utils.backToMain
 import com.ozyern.exhale.utils.rememberPreference
@@ -203,15 +204,11 @@ fun DiscordLoginScreen(navController: NavController) {
     TopAppBar(
         title = { Text(stringResource(R.string.action_login)) },
         navigationIcon = {
-            IconButton(
+            LiquidBackButton(
                 onClick = navController::navigateUp,
-                onLongClick = navController::backToMain
-            ) {
-                Icon(
-                    painterResource(R.drawable.arrow_back),
-                    contentDescription = null
-                )
-            }
+                onLongClick = navController::backToMain,
+                icon = R.drawable.arrow_back,
+            )
         }
     )
 

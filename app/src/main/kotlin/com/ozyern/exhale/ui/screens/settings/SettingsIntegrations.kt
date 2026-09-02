@@ -35,6 +35,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.ozyern.exhale.ui.component.settingsGlassGroup
 import com.ozyern.exhale.R
 import com.ozyern.exhale.ui.component.settingsIconPuck
 
@@ -56,8 +57,7 @@ fun SettingsIntegrationsSection(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(SettingsDimensions.GroupCardCornerRadius))
-                .background(SettingsDimensions.groupSurfaceColor()),
+                .settingsGlassGroup(RoundedCornerShape(SettingsDimensions.GroupCardCornerRadius)),
         ) {
             integrations.forEachIndexed { index, action ->
                 IntegrationRow(

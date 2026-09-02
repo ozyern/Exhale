@@ -32,13 +32,18 @@ import androidx.compose.ui.unit.dp
  * the Updates page so the two cannot drift apart.
  *
  * Cards using this need something behind them worth seeing — a colour wash, artwork, a blur. On a
- * flat `surface` page the translucency has nothing to reveal and an inset grouped list
- * ([settingsGroupSurfaceColor]) is the better surface.
+ * flat `surface` page there is nothing for the translucency to reveal, and the card lands as a
+ * grey smudge with a bright edge. [base] is the way out of that: an opaque-ish tonal floor laid
+ * under the glass so the plate is guaranteed to exist whatever is or is not behind it. Pass it
+ * for controls that have to work on every screen in the app (see `LiquidBackButton`); leave it
+ * unspecified for cards that are only ever placed over artwork, where a floor would just throw
+ * away the effect.
  */
 @Composable
 fun Modifier.liquidGlassSurface(
     shape: Shape,
     tint: Color = Color.Unspecified,
+    base: Color = Color.Unspecified,
 ): Modifier {
     val dark = isSystemInDarkTheme()
 
@@ -69,6 +74,8 @@ fun Modifier.liquidGlassSurface(
 
     return this
         .clip(shape)
+        // The tonal floor, under everything, so a control on a flat page still has a body.
+        .then(if (base.isSpecified) Modifier.background(base) else Modifier)
         .background(fill)
         // An optional wash of the card's own accent, laid under the sheen. Kept deliberately faint
         // — the point is that a row of cards is visibly *not* the same colour, not that any one of

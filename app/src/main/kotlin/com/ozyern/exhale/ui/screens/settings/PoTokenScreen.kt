@@ -80,6 +80,7 @@ import com.ozyern.exhale.constants.PoTokenSourceUrlKey
 import com.ozyern.exhale.constants.UseVisitorDataKey
 import com.ozyern.exhale.constants.VisitorDataKey
 import com.ozyern.exhale.constants.WebClientPoTokenEnabledKey
+import com.ozyern.exhale.ui.component.LiquidBackButton
 import com.ozyern.exhale.ui.component.IconButton
 import com.ozyern.exhale.ui.component.PreferenceGroupTitle
 import com.ozyern.exhale.ui.component.SwitchPreference
@@ -410,15 +411,11 @@ fun PoTokenScreen(
     TopAppBar(
         title = { Text(stringResource(R.string.po_token_generation)) },
         navigationIcon = {
-            IconButton(
+            LiquidBackButton(
                 onClick = navController::navigateUp,
-                onLongClick = navController::backToMain
-            ) {
-                Icon(
-                    painterResource(R.drawable.arrow_back),
-                    contentDescription = null
-                )
-            }
+                onLongClick = navController::backToMain,
+                icon = R.drawable.arrow_back,
+            )
         }
     )
 }

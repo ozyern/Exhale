@@ -53,6 +53,7 @@ import com.ozyern.exhale.models.toMediaMetadata
 import com.ozyern.exhale.extensions.toMediaItem
 import com.ozyern.exhale.playback.queues.ListQueue
 import com.ozyern.exhale.playback.queues.YouTubeQueue
+import com.ozyern.exhale.ui.component.LiquidBackButton
 import com.ozyern.exhale.ui.component.IconButton
 import com.ozyern.exhale.ui.component.LocalMenuState
 import com.ozyern.exhale.ui.component.YouTubeGridItem
@@ -296,15 +297,11 @@ fun ArtistItemsScreen(
     TopAppBar(
         title = { Text(title) },
         navigationIcon = {
-            IconButton(
+            LiquidBackButton(
                 onClick = navController::navigateUp,
                 onLongClick = navController::backToMain,
-            ) {
-                Icon(
-                    painterResource(R.drawable.arrow_back),
-                    contentDescription = null,
-                )
-            }
+                icon = R.drawable.arrow_back,
+            )
         },
         actions = {
             val songs = itemsPage?.items.orEmpty().filterIsInstance<SongItem>()

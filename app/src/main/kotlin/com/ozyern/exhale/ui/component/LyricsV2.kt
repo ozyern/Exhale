@@ -157,6 +157,33 @@ private const val MANUAL_SCROLL_TIMEOUT_MS = 3000L
  */
 private const val VISUAL_TUNING_OFFSET_MS = 150L
 
+/**
+ * Optical tracking for lyric type.
+ *
+ * Display-size text set at a body-text default reads loose — letter fitting that is right at 14sp
+ * is visibly airy at 28sp, because the tracking a face needs falls as the size rises. Every
+ * typographic system that cares (Apple's included) tightens large sizes, and lyrics are the one
+ * place in this app running genuinely large type. -2.2% is enough to pull a line together into a
+ * single object the eye reads at once, and not so much that the letters start to touch at the
+ * largest user size.
+ */
+private val LyricTracking = (-0.022).em
+
+/**
+ * How far ahead of the highlight the *scroll* runs, in milliseconds of track.
+ *
+ * The list used to start moving at the instant a line became active, so the line lit up wherever
+ * it happened to be sitting and then travelled to the anchor over the next few hundred
+ * milliseconds. You read it in the wrong place and it arrived late — which is the specific way
+ * word-perfect sync can still feel out of step with the song.
+ *
+ * Running the scroll on its own slightly-earlier clock fixes it without touching the highlight:
+ * the column is already in motion as the previous line finishes, and the new line is at the
+ * anchor about when it lights. This is deliberately separate from the highlight's lead, which
+ * compensates for something else entirely (frame latency and the eye reaching the line).
+ */
+private const val SCROLL_LEAD_MS = 220L
+
 private val V2Easing = CubicBezierEasing(0.25f, 0.1f, 0.25f, 1.0f)
 
 /** Liquid fill easing: fast attack, very smooth deceleration (Apple Music-like). */
@@ -353,6 +380,8 @@ fun LyricsV2(
     val leadMs = if (isTtmlFormat) TTML_LEAD_MS else LRC_LEAD_MS
     var currentPositionMs by remember { mutableLongStateOf(0L) }
     var currentLineIndex by remember { mutableIntStateOf(0) }
+    // The line the *scroll* is chasing. Usually the same as the highlighted one, briefly the next.
+    var scrollLineIndex by remember { mutableIntStateOf(0) }
 
     // ── Position loop ──
     //
@@ -377,6 +406,11 @@ fun LyricsV2(
 
             currentPositionMs = pos + ((leadMs + VISUAL_TUNING_OFFSET_MS) * speed).toLong()
             currentLineIndex = findCurrentLineIndex(entriesWithWords, currentPositionMs, 0L)
+            scrollLineIndex = findCurrentLineIndex(
+                entriesWithWords,
+                currentPositionMs + (SCROLL_LEAD_MS * speed).toLong(),
+                0L,
+            )
 
             val live = sliderPos != null || player.isPlaying
             delay(if (live) 16L else 200L)
@@ -409,10 +443,23 @@ fun LyricsV2(
         }
     }
 
-    // Auto-scroll to active line
-    LaunchedEffect(currentLineIndex, isManualScrolling, lyricsScroll) {
+    // Where the column was last asked to go. Distinguishes a line advancing by one from a seek
+    // that jumped halfway through the song — the two want completely different scrolls, and
+    // without this the code could only ask "is the target on screen right now", which a line one
+    // row below the fold also fails.
+    var lastTrackedIndex by remember { mutableIntStateOf(-1) }
+
+    // ── Auto-scroll ──
+    //
+    // Driven by `scrollLineIndex`, which runs SCROLL_LEAD_MS ahead of the highlight, so the
+    // column is already moving when the line lights rather than starting then.
+    LaunchedEffect(scrollLineIndex, isManualScrolling, lyricsScroll) {
         if (!lyricsScroll || isManualScrolling || !isSynced) return@LaunchedEffect
-        if (currentLineIndex < 0 || currentLineIndex >= entriesWithWords.size) return@LaunchedEffect
+        if (scrollLineIndex < 0 || scrollLineIndex >= entriesWithWords.size) return@LaunchedEffect
+
+        val target = scrollLineIndex
+        val step = if (lastTrackedIndex < 0) Int.MAX_VALUE else abs(target - lastTrackedIndex)
+        lastTrackedIndex = target
 
         val layoutInfo = listState.layoutInfo
         val viewportHeight = layoutInfo.viewportEndOffset - layoutInfo.viewportStartOffset
@@ -420,32 +467,55 @@ fun LyricsV2(
         // leaving more room below for the upcoming lines.
         val anchorY = layoutInfo.viewportStartOffset + (viewportHeight * 0.42f)
 
-        val itemInfo = layoutInfo.visibleItemsInfo.firstOrNull { it.index == currentLineIndex }
-        if (itemInfo != null) {
-            // Visible: glide the measured item center onto the anchor with a smooth,
-            // non-bouncy spring — the same continuous track the line animations ride.
-            val itemCenter = itemInfo.offset + itemInfo.size / 2f
-            val delta = itemCenter - anchorY
-            if (abs(delta) > 4f) {
-                try {
-                    listState.animateScrollBy(
-                        value = delta,
-                        animationSpec = spring(
-                            dampingRatio = Spring.DampingRatioNoBouncy,
-                            stiffness = Spring.StiffnessLow,
-                        ),
-                    )
-                } catch (_: Exception) {
-                    // A newer line interrupted this scroll — the new effect takes over.
+        // Firm, and critically damped. This was StiffnessLow (200), which takes the better part of
+        // a second to cover a line — longer than plenty of lines last. Every time the next line
+        // arrived mid-glide it cancelled this coroutine and started a fresh spring from wherever
+        // the list had drifted to, so through a fast verse the column never actually reached the
+        // anchor and the active line wandered up and down the screen. At 340 a normal line-to-line
+        // move completes in roughly a third of a second, comfortably inside the gap, and the
+        // column arrives and *sits* — which is what reads as locked to the song.
+        val glide = spring<Float>(
+            dampingRatio = Spring.DampingRatioNoBouncy,
+            stiffness = 340f,
+        )
+
+        val itemInfo = layoutInfo.visibleItemsInfo.firstOrNull { it.index == target }
+        when {
+            itemInfo != null -> {
+                // Measured and on screen: glide its centre onto the anchor.
+                val delta = itemInfo.offset + itemInfo.size / 2f - anchorY
+                if (abs(delta) > 4f) {
+                    try {
+                        listState.animateScrollBy(value = delta, animationSpec = glide)
+                    } catch (_: Exception) {
+                        // A newer line interrupted this scroll — the new effect takes over.
+                    }
                 }
             }
-        } else {
-            // Off-screen (seek / far jump): snap into the vicinity, then settle centered.
-            listState.scrollToItem((currentLineIndex - 2).coerceAtLeast(0))
-            listState.animateScrollToItem(
-                index = currentLineIndex,
-                scrollOffset = -(viewportHeight * 0.42f).toInt(),
-            )
+
+            step <= 2 -> {
+                // Just past the fold. Ordinary playback walking off the bottom of the viewport
+                // used to land here and get the seek treatment — a hard `scrollToItem` snap
+                // followed by a settle — which is why the column would occasionally lurch for no
+                // reason mid-song. It is one line further on; animate to it like any other.
+                try {
+                    listState.animateScrollToItem(
+                        index = target,
+                        scrollOffset = -(viewportHeight * 0.42f).toInt(),
+                    )
+                } catch (_: Exception) {
+                }
+            }
+
+            else -> {
+                // A genuine jump (seek, or opening the tab mid-song): snap into the vicinity so
+                // the animation is not a thousand-line flight, then settle onto the anchor.
+                listState.scrollToItem((target - 2).coerceAtLeast(0))
+                listState.animateScrollToItem(
+                    index = target,
+                    scrollOffset = -(viewportHeight * 0.42f).toInt(),
+                )
+            }
         }
     }
 
@@ -611,12 +681,28 @@ fun LyricsV2(
                     animationSpec = lineSpring,
                     label = "lineLift",
                 )
+                // Depth-of-field, and it only points forward.
+                //
+                // Blur used to be symmetric around the active line, because it keyed off
+                // `distanceFromActive`, which is an absolute value. That is wrong for the thing
+                // it is imitating: a lens racks focus onto what you are about to read. Words you
+                // have already sung are not out of focus, they are *behind* you — Apple Music
+                // leaves them sharp and simply dims them, and so does a karaoke prompter. Blurring
+                // them makes the whole column feel like it is being read through frosted glass
+                // with a hole punched in it, and it fights the scroll: the line leaving the top of
+                // the viewport softens exactly as your eye is trying to leave it.
+                //
+                // So: past lines get 0 blur and lean on alpha alone for their recession, and the
+                // blur ramp is spent entirely on what is coming. Because it now only has to cover
+                // one direction it can be steeper, which buys a stronger sense of depth for the
+                // same peak radius.
                 val animatedLineBlur by animateFloatAsState(
                     targetValue = when {
-                        !isSynced || isActive || isManualScrolling -> 0f
-                        distanceFromActive == 1 -> 1.5f
-                        distanceFromActive == 2 -> 3f
-                        else -> 5f
+                        !isSynced || isActive || isManualScrolling || isPast -> 0f
+                        distanceFromActive == 1 -> 2f
+                        distanceFromActive == 2 -> 4.5f
+                        distanceFromActive == 3 -> 6.5f
+                        else -> 8f
                     },
                     animationSpec = lineSpring,
                     label = "lineBlur",
@@ -727,6 +813,7 @@ fun LyricsV2(
                                 fontStyle = if (isAllBackground) FontStyle.Italic else FontStyle.Normal,
                                 lineHeight = (lyricsTextSize * lyricsLineSpacing).sp,
                                 fontFamily = lyricsFontFamily ?: MaterialTheme.typography.headlineMedium.fontFamily,
+                                letterSpacing = LyricTracking,
                             ),
                             color = textColor.copy(alpha = if (isActive) 1f else inactiveAlpha),
                             textAlign = textAlign,
@@ -1282,6 +1369,7 @@ private fun LyricsLineV2(
                         style = MaterialTheme.typography.headlineMedium.copy(
                             fontSize = if (isLineAllBackground) (baseFontSize * 0.82f).sp else baseFontSize.sp,
                             fontFamily = lyricsFontFamily ?: MaterialTheme.typography.headlineMedium.fontFamily,
+                            letterSpacing = LyricTracking,
                         ),
                         color = Color.Transparent,
                     )
@@ -1324,6 +1412,7 @@ private fun LyricsLineV2(
                         style = MaterialTheme.typography.headlineMedium.copy(
                             fontSize = (baseFontSize * 0.65f).sp,
                             fontFamily = lyricsFontFamily ?: MaterialTheme.typography.headlineMedium.fontFamily,
+                            letterSpacing = LyricTracking,
                         ),
                         color = Color.Transparent,
                     )
@@ -1379,29 +1468,72 @@ private fun AnimatedWordV2(
         else -> ((currentPositionMs - wordStartMs).toFloat() / wordDuration).coerceIn(0f, 1f)
     }
 
-    // ── Bounce and Float animation ──
-    // Subtle scale up peaking halfway through the word. Exact timing sync!
-    val sinProgress = kotlin.math.sin(progress * kotlin.math.PI).toFloat()
-    val wordScale = 1f + (0.015f * sinProgress)
+    // ── The swell: one envelope, shared by lift, scale and glow ──
+    //
+    // This used to be `sin(pi * progress)` — a symmetric arch that peaks exactly halfway
+    // through the word. A sung note is not symmetric. It attacks fast, sits while it is being
+    // held, and releases as the singer moves off it, and on a long held syllable the sine spends
+    // the entire first half still climbing, so the word reaches its brightest moment long after
+    // you have heard it. That lag is the reason word-sync could look subtly *behind* the audio
+    // even when the timestamps were perfect.
+    //
+    // So it is an ADSR envelope instead: up in the first 18% of the word, a small decay to a
+    // sustain that holds for as long as the note does, and a release over the last quarter.
+    // Short words are essentially all attack and release — a pop. Long words rise, hold lit, and
+    // set down. That is the shape the ear is already expecting.
+    val swell = when {
+        progress < 0.18f -> progress / 0.18f
+        progress < 0.75f -> 1f - 0.28f * ((progress - 0.18f) / 0.57f)
+        else -> 0.72f * (1f - (progress - 0.75f) / 0.25f)
+    }.coerceIn(0f, 1f)
+
+    // Big enough to actually see. The old 1.5% scale was below the threshold at which a glyph
+    // reads as having moved at all, so the "bounce" was costing a layer and buying nothing.
+    val wordScale = 1f + (if (isBackground) 0.018f else 0.032f) * swell
 
     // Float is only applied when the word is actively sung, making it pop from the line.
-    // We use animateFloatAsState so that when it finishes (and drops to 0f), 
-    // it smoothly decays back into place rather than a harsh mathematical snap.
-    val targetFloat = if (isWordActive) -4f * sinProgress else 0f
+    // The animatable is kept for the tail: when the word ends the target drops to 0 and this
+    // eases it home over 350ms instead of snapping, so the word sets down rather than dropping.
+    val targetFloat = if (isWordActive) -5.5f * swell else 0f
     val floatOffset by androidx.compose.animation.core.animateFloatAsState(
         targetValue = targetFloat,
         animationSpec = androidx.compose.animation.core.tween(
             durationMillis = if (isWordActive) 50 else 350,
             easing = androidx.compose.animation.core.FastOutSlowInEasing
-        )
+        ),
+        label = "wordFloat",
     )
 
     // ── Glow intensity ──
-    // "lines and words that are done animating shouldnt continue to glow"
-    // Make glow build up faster: reach max intensity at 50% progress
-    val glowProgress = (progress * 2f).coerceAtMost(1f)
-    val glowAlpha = if (isWordActive) glowProgress * 0.45f else 0f
-    val glowRadius = if (isWordActive) glowProgress * 12f else 0f
+    // "lines and words that are done animating shouldnt continue to glow" — so the target is a
+    // hard 0 the moment the word ends. It is animated rather than assigned so the glow *fades*
+    // over ~200ms as the next word lights up; two words briefly overlapping in light is what
+    // makes the line read as one moving highlight instead of a row of bulbs switching.
+    val targetGlow = if (isWordActive) swell else 0f
+    val glow by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = targetGlow,
+        animationSpec = androidx.compose.animation.core.tween(
+            durationMillis = if (isWordActive) 60 else 200,
+            easing = androidx.compose.animation.core.FastOutSlowInEasing
+        ),
+        label = "wordGlow",
+    )
+    val glowAlpha = glow * 0.5f
+    val glowRadius = glow * 14f
+
+    // How bright a word is *before* the highlight reaches it.
+    //
+    // Every unlit word used to sit at `inactiveAlpha` — the same value as a line three rows away.
+    // So the words you are about to sing were as faint as words you will not reach for ten
+    // seconds, and the only readable thing on screen was the part already sung. That is backwards
+    // for a prompter: the whole reason a karaoke line is on screen ahead of time is to be read
+    // ahead of time. Lifting the *active* line's unlit words well clear of the column gives the
+    // line three distinct states — sung, singing-next, elsewhere — instead of two.
+    val restingAlpha = if (isLineActive) {
+        (inactiveAlpha * 1.6f).coerceIn(inactiveAlpha, 0.62f)
+    } else {
+        inactiveAlpha
+    }
 
     val actualFontSize = if (isBackground) fontSize * 0.85f else fontSize
     val fontWeight = FontWeight.SemiBold // Consistent weight — no thin→bold jump
@@ -1413,6 +1545,13 @@ private fun AnimatedWordV2(
                 translationY = floatOffset * density
                 scaleX = wordScale
                 scaleY = wordScale
+                // Pivot on the baseline, not the middle of the glyph box. Scaling from the
+                // centre pushes a growing word down into the descender space of the line as
+                // hard as it pushes it up, which cancels half of the lift; pivoting at the
+                // bottom means the word grows *upward* out of the line, the way a struck key
+                // rises. It also keeps the baseline of the active word aligned with the words
+                // either side of it, so a swelling word does not appear to sink.
+                transformOrigin = TransformOrigin(0.5f, 1f)
             }
     ) {
         // Layer 1: Base text (always dimmed)
@@ -1424,8 +1563,9 @@ private fun AnimatedWordV2(
                 fontStyle = FontStyle.Normal,
                 lineHeight = (actualFontSize * 1.35f).sp,
                 fontFamily = lyricsFontFamily ?: MaterialTheme.typography.headlineMedium.fontFamily,
+                letterSpacing = LyricTracking,
             ),
-            color = textColor.copy(alpha = if (isBackground) inactiveAlpha * 0.7f else inactiveAlpha),
+            color = textColor.copy(alpha = if (isBackground) restingAlpha * 0.7f else restingAlpha),
         )
 
         // Layer 2: Filled overlay with liquid sweep mask + glow
@@ -1438,6 +1578,7 @@ private fun AnimatedWordV2(
                     fontStyle = FontStyle.Normal,
                     lineHeight = (actualFontSize * 1.35f).sp,
                     fontFamily = lyricsFontFamily ?: MaterialTheme.typography.headlineMedium.fontFamily,
+                    letterSpacing = LyricTracking,
                     shadow = if (glowAlpha > 0f) {
                         Shadow(
                             color = textColor.copy(alpha = glowAlpha),
@@ -1454,11 +1595,25 @@ private fun AnimatedWordV2(
                         .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
                         .drawWithContent {
                             drawContent()
-                            val edgeWidth = 8.dp.toPx()
+                            // The wipe that reveals the lit word, softened at its leading edge.
+                            //
+                            // A fixed 8dp edge is a different thing on a three-letter word than
+                            // on a twelve-letter one: on the short word it is most of the glyph
+                            // (so the fill never looks solid) and on the long one it is a hard
+                            // line sliding across (so it looks like a wiper blade). Scaling the
+                            // feather with the word's own width keeps the *proportion* of the
+                            // sweep that is soft constant, which is what the eye actually reads.
+                            //
+                            // Three stops rather than two: black → half → transparent gives the
+                            // edge a shoulder, so the highlight trails off into the unlit text
+                            // instead of ending on a visible boundary.
+                            val edgeWidth = (size.width * 0.22f).coerceIn(6.dp.toPx(), 22.dp.toPx())
                             val center = (size.width + edgeWidth * 2) * progress - edgeWidth
                             drawRect(
                                 brush = androidx.compose.ui.graphics.Brush.horizontalGradient(
-                                    colors = listOf(Color.Black, Color.Transparent),
+                                    0f to Color.Black,
+                                    0.55f to Color.Black.copy(alpha = 0.45f),
+                                    1f to Color.Transparent,
                                     startX = center - edgeWidth,
                                     endX = center + edgeWidth,
                                 ),

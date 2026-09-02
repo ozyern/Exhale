@@ -14,34 +14,36 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.zIndex
 import androidx.navigation.NavController
 import com.ozyern.exhale.LocalDatabase
+import com.ozyern.exhale.LocalPlayerConnection
 import com.ozyern.exhale.R
 import com.ozyern.exhale.constants.ChipSortTypeKey
 import com.ozyern.exhale.constants.DisableBlurKey
 import com.ozyern.exhale.constants.LibraryFilter
 import com.ozyern.exhale.constants.PlaylistTagsFilterKey
 import com.ozyern.exhale.constants.ShowTagsInLibraryKey
+import com.ozyern.exhale.models.MediaMetadata
+import com.ozyern.exhale.ui.component.AmbientArtworkGlow
 import com.ozyern.exhale.ui.component.ChipsRow
 import com.ozyern.exhale.ui.component.TagsFilterChips
+import com.ozyern.exhale.ui.component.liquidGlassSurface
+import com.ozyern.exhale.ui.component.rememberArtworkAmbientColors
 import com.ozyern.exhale.utils.rememberEnumPreference
 import com.ozyern.exhale.utils.rememberPreference
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.mutableStateOf
 
 @Composable
 fun LibraryScreen(navController: NavController) {
@@ -68,7 +70,18 @@ fun LibraryScreen(navController: NavController) {
                 color = MaterialTheme.colorScheme.onBackground,
                 modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 8.dp, bottom = 14.dp),
             )
-            Row {
+            // The filter row sits on a glass plate rather than loose on the page.
+            //
+            // Chips on a bare surface are five separate objects with nothing holding them
+            // together, and against the colour wash behind them they had no ground of their own to
+            // sit on. One plate makes the row a single control — which is what it is — and gives
+            // the wash something to be seen *through*, which is the entire point of the material.
+            Row(
+                modifier = Modifier
+                    .padding(horizontal = 16.dp)
+                    .liquidGlassSurface(RoundedCornerShape(22.dp))
+                    .padding(vertical = 6.dp),
+            ) {
                 ChipsRow(
                     chips =
                     listOf(
@@ -116,85 +129,31 @@ fun LibraryScreen(navController: NavController) {
         }
     }
 
-    // Captured outside `drawBehind` so the draw lambda reads no composition state.
-    val color1 = MaterialTheme.colorScheme.primary
-    val color2 = MaterialTheme.colorScheme.secondary
-    val color3 = MaterialTheme.colorScheme.tertiary
-    val surfaceColor = MaterialTheme.colorScheme.surface
+    // Library takes the same ambient wash as Home and the player: the colour of whatever is
+    // playing, bleeding down from the top.
+    //
+    // This replaces a three-blob mesh built from the *theme's* primary/secondary/tertiary. That
+    // version was fixed — the same wash under every song, on a page where nothing else moved
+    // either — and it was the only surface in the app painting its own background instead of
+    // reacting to the record. Sharing the component means Library cannot drift from Home again,
+    // and the glass on top of it finally has something worth revealing.
+    // Not `?: return` as Home does: Library is reachable before the playback service has bound,
+    // and a blank tab is a worse failure than a wash that has not arrived yet.
+    val mediaMetadata by LocalPlayerConnection.current?.mediaMetadata?.collectAsState()
+        ?: remember { mutableStateOf<MediaMetadata?>(null) }
+    val ambientColors by rememberArtworkAmbientColors(
+        songId = mediaMetadata?.id,
+        thumbnailUrl = mediaMetadata?.thumbnailUrl,
+    )
 
     Box(
         modifier = Modifier.fillMaxSize()
     ) {
-        // M3E Mesh gradient background layer at the top
         if (!disableBlur) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .fillMaxSize(0.7f) // Cover top 70% of screen
-                    .align(Alignment.TopCenter)
-                    .zIndex(-1f) // Place behind all content
-                .drawBehind {
-                    val width = size.width
-                    val height = size.height
-
-                    // Three blobs, not five. Each `drawRect` here covers the top 70% of the
-                    // display with a full-size radial gradient, and every one of them is a
-                    // separate full-surface fill — on a 1080p panel that was five overlapping
-                    // screen-sized paints plus a sixth for the fade, on every invalidation of
-                    // this layer. Three carries the same mesh read (warm left, cool right, a
-                    // lift through the middle) at just over half the fill cost, and the fade
-                    // to surface is folded into the same pass.
-                    drawRect(
-                        brush = Brush.radialGradient(
-                            colors = listOf(
-                                color1.copy(alpha = 0.38f),
-                                color1.copy(alpha = 0.18f),
-                                Color.Transparent,
-                            ),
-                            center = Offset(width * 0.15f, height * 0.10f),
-                            radius = width * 0.72f,
-                        ),
-                    )
-
-                    drawRect(
-                        brush = Brush.radialGradient(
-                            colors = listOf(
-                                color2.copy(alpha = 0.34f),
-                                color2.copy(alpha = 0.15f),
-                                Color.Transparent,
-                            ),
-                            center = Offset(width * 0.88f, height * 0.20f),
-                            radius = width * 0.78f,
-                        ),
-                    )
-
-                    drawRect(
-                        brush = Brush.radialGradient(
-                            colors = listOf(
-                                color3.copy(alpha = 0.26f),
-                                color3.copy(alpha = 0.11f),
-                                Color.Transparent,
-                            ),
-                            center = Offset(width * 0.42f, height * 0.52f),
-                            radius = width * 0.85f,
-                        ),
-                    )
-
-                    // Fade the whole thing into the page so the mesh has no visible edge.
-                    drawRect(
-                        brush = Brush.verticalGradient(
-                            colors = listOf(
-                                Color.Transparent,
-                                surfaceColor.copy(alpha = 0.30f),
-                                surfaceColor.copy(alpha = 0.72f),
-                                surfaceColor,
-                            ),
-                            startY = height * 0.42f,
-                            endY = height,
-                        ),
-                    )
-                }
-        ) {}
+            AmbientArtworkGlow(
+                colors = ambientColors,
+                modifier = Modifier.fillMaxSize(),
+            )
         }
 
         when (filterType) {

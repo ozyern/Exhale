@@ -137,6 +137,7 @@ import com.ozyern.exhale.models.toMediaMetadata
 import com.ozyern.exhale.playback.ExoDownloadService
 import com.ozyern.exhale.playback.queues.ListQueue
 import com.ozyern.exhale.playback.queues.LocalMixQueue
+import com.ozyern.exhale.ui.component.LiquidBackButton
 import com.ozyern.exhale.ui.component.DefaultDialog
 import com.ozyern.exhale.ui.component.EditPlaylistDialog
 import com.ozyern.exhale.ui.component.DraggableScrollbar
@@ -1431,7 +1432,7 @@ fun LocalPlaylistScreen(
                 }
             },
             navigationIcon = {
-                IconButton(
+                LiquidBackButton(
                     onClick = {
                         if (isSearching) {
                             isSearching = false
@@ -1446,15 +1447,9 @@ fun LocalPlaylistScreen(
                         if (!isSearching) {
                             navController.backToMain()
                         }
-                    }
-                ) {
-                    Icon(
-                        painter = painterResource(
-                            if (selection) R.drawable.close else R.drawable.arrow_back
-                        ),
-                        contentDescription = null
-                    )
-                }
+                    },
+                    icon = if (selection) R.drawable.close else R.drawable.arrow_back,
+                )
             },
             actions = {
                 if (selection) {

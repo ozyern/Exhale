@@ -121,6 +121,7 @@ import com.ozyern.exhale.innertube.models.SongItem
 import com.ozyern.exhale.innertube.models.WatchEndpoint
 import com.ozyern.exhale.models.toMediaMetadata
 import com.ozyern.exhale.playback.queues.YouTubeQueue
+import com.ozyern.exhale.ui.component.LiquidBackButton
 import com.ozyern.exhale.ui.component.DraggableScrollbar
 import com.ozyern.exhale.ui.component.IconButton
 import com.ozyern.exhale.ui.component.LocalMenuState
@@ -1064,7 +1065,7 @@ fun OnlinePlaylistScreen(
                 }
             },
             navigationIcon = {
-                IconButton(
+                LiquidBackButton(
                     onClick = {
                         if (isSearching) {
                             isSearching = false
@@ -1079,16 +1080,9 @@ fun OnlinePlaylistScreen(
                         if (!isSearching && !selection) {
                             navController.backToMain()
                         }
-                    }
-                ) {
-                    Icon(
-                        painter =
-                            painterResource(
-                                if (selection) R.drawable.close else R.drawable.arrow_back
-                            ),
-                        contentDescription = null
-                    )
-                }
+                    },
+                    icon = if (selection) R.drawable.close else R.drawable.arrow_back,
+                )
             },
             actions = {
                 if (selection) {

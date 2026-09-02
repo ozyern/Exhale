@@ -29,5 +29,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v7
         with:
-          name: OpenTune-arm64
+          name: Exhale-arm64
           path: app/build/outputs/apk/arm64/debug/*.apk

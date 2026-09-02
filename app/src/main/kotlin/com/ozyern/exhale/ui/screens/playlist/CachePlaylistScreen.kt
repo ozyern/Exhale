@@ -102,6 +102,7 @@ import com.ozyern.exhale.constants.SongSortTypeKey
 import com.ozyern.exhale.extensions.toMediaItem
 import com.ozyern.exhale.extensions.togglePlayPause
 import com.ozyern.exhale.playback.queues.ListQueue
+import com.ozyern.exhale.ui.component.LiquidBackButton
 import com.ozyern.exhale.ui.component.DraggableScrollbar
 import com.ozyern.exhale.ui.component.EmptyPlaceholder
 import com.ozyern.exhale.ui.component.IconButton
@@ -709,7 +710,8 @@ fun CachePlaylistScreen(
                 }
             },
             navigationIcon = {
-                IconButton(onClick = {
+                LiquidBackButton(
+                    onClick = {
                     when {
                         isSearching -> {
                             isSearching = false
@@ -727,14 +729,9 @@ fun CachePlaylistScreen(
                     if (!isSearching && !selection) {
                         navController.backToMain()
                     }
-                }) {
-                    Icon(
-                        painter = painterResource(
-                            if (selection) R.drawable.close else R.drawable.arrow_back
-                        ),
-                        contentDescription = null
-                    )
-                }
+                },
+                    icon = if (selection) R.drawable.close else R.drawable.arrow_back,
+                )
             },
             actions = {
                 if (selection) {

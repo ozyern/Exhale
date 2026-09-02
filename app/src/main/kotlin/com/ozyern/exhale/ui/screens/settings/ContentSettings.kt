@@ -28,6 +28,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.navigation.NavController
+import com.ozyern.exhale.ui.component.LiquidBackButton
 import com.ozyern.exhale.innertube.YouTube
 import com.ozyern.exhale.LocalPlayerAwareWindowInsets
 import com.ozyern.exhale.R
@@ -477,15 +478,11 @@ fun ContentSettings(
     TopAppBar(
         title = { Text(stringResource(R.string.content)) },
         navigationIcon = {
-            IconButton(
+            LiquidBackButton(
                 onClick = navController::navigateUp,
                 onLongClick = navController::backToMain,
-            ) {
-                Icon(
-                    painterResource(R.drawable.arrow_back),
-                    contentDescription = null,
-                )
-            }
+                icon = R.drawable.arrow_back,
+            )
         }
     )
 }

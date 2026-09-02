@@ -26,6 +26,7 @@ import kotlinx.coroutines.launch
 import com.ozyern.exhale.LocalPlayerAwareWindowInsets
 import com.ozyern.exhale.constants.UpdateChannel
 import com.ozyern.exhale.constants.UpdateChannelKey
+import com.ozyern.exhale.ui.component.LiquidBackButton
 import com.ozyern.exhale.ui.component.IconButton
 import com.ozyern.exhale.ui.component.MarkdownText
 import com.ozyern.exhale.ui.utils.backToMain
@@ -135,15 +136,11 @@ fun ChangelogScreen(
                     )
                 },
                 navigationIcon = {
-                    IconButton(
+                    LiquidBackButton(
                         onClick = navController::navigateUp,
                         onLongClick = navController::backToMain,
-                    ) {
-                        Icon(
-                            painterResource(R.drawable.arrow_back),
-                            contentDescription = null,
-                        )
-                    }
+                        icon = R.drawable.arrow_back,
+                    )
                 },
                 scrollBehavior = scrollBehavior
             )

@@ -106,6 +106,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.lerp
 import androidx.compose.ui.util.lerp
+import com.ozyern.exhale.ui.component.liquid.LocalAppBackdrop
 import com.ozyern.exhale.R
 import com.ozyern.exhale.constants.AppBarHeight
 import kotlin.math.max
@@ -380,15 +381,25 @@ fun TopSearch(
                                 shrinkTowards = Alignment.Start,
                             ),
                         ) {
-                            Icon(
-                                painter = painterResource(R.drawable.close),
+                            // The cancel affordance, as glass rather than as a bare glyph.
+                            //
+                            // It sits immediately beside a frosted pill, which is what made the
+                            // old version stand out: one half of the row was a surface and the
+                            // other was ink printed on the background. Same disc, same lens, same
+                            // press as the back arrow and the app-bar search icon.
+                            LiquidGlassIconButton(
+                                onClick = { onActiveChange(false) },
+                                icon = R.drawable.close,
                                 contentDescription = stringResource(R.string.action_cancel),
                                 tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(percent = 50))
-                                    .clickable { onActiveChange(false) }
-                                    .padding(start = 14.dp, end = 6.dp, top = 12.dp, bottom = 12.dp)
-                                    .size(20.dp),
+                                diameter = 34.dp,
+                                iconSize = 17.dp,
+                                modifier = Modifier.padding(start = 6.dp),
+                                // The pill's own backdrop. This sits in chrome, immediately beside
+                                // the bar, so it can and should bend exactly the pixels the bar is
+                                // bending — anything else and two touching surfaces would be
+                                // showing two different views of what is behind them.
+                                backdrop = LocalAppBackdrop.current,
                             )
                         }
                     }

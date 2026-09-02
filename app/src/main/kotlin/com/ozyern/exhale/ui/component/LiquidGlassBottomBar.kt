@@ -474,6 +474,14 @@ private fun NavGlyph(iconRes: Int, contentDescription: String?, tint: Color) {
 }
 
 /* ----------------------------------------------------------------------- */
+/**
+ * How much of the release velocity is added to the landing position, in tab units.
+ *
+ * Deliberately small and always clamped to half a tab by the caller: this only has to decide
+ * whether a quick flick counts as "one more tab", never how many.
+ */
+private const val FlingProjection = 0.25f
+
 /* State A tab row with sliding accent indicator                            */
 /* ----------------------------------------------------------------------- */
 
@@ -615,7 +623,23 @@ private fun LiquidTabBar(
             },
             onDragStopped = {
                 val ended = dragValue.floatValue
-                val landed = ended.fastRoundToInt().fastCoerceIn(0, lastIndex)
+
+                // Land where the gesture was HEADING, not merely where the finger stopped.
+                //
+                // Rounding the release position alone ignores momentum: flick hard from Home
+                // towards Library, let go at 1.35, and the capsule snaps back to 1 even though
+                // nothing about that gesture was aimed at 1. Every pager gets this right and a
+                // dock that does not feels sticky in a way people notice without being able to
+                // name.
+                //
+                // The projection is clamped to half a tab, so it can only ever shift the outcome
+                // by one — a violent swipe still moves one tab, never three. That bound is also
+                // what makes the constant safe: `dragVelocity` is an exponentially smoothed
+                // figure in tab-units, not a calibrated velocity, so the clamp is doing the real
+                // work and the multiplier only decides how little of a flick counts.
+                val projected = ended +
+                    (dragVelocity.floatValue * FlingProjection).fastCoerceIn(-0.5f, 0.5f)
+                val landed = projected.fastRoundToInt().fastCoerceIn(0, lastIndex)
 
                 // One coroutine for the whole settle: snap to where the finger left it, hand
                 // drawing back to the animation, then spring onto the tab.
@@ -944,10 +968,23 @@ private fun TabButton(
     ) { sel ->
         if (sel) MaterialTheme.colorScheme.primary else itemContentColor(pureBlack)
     }
+    // Overshoots on the way in. At damping 0.8 the icon simply grew, which reads as a size
+    // difference between two tabs rather than as one tab reacting to being chosen; the
+    // under-damped spring gives it a beat of its own, so selection is something you watch happen
+    // instead of something you notice afterwards.
     val iconScale by transition.animateFloat(
-        transitionSpec = { spring(dampingRatio = 0.8f, stiffness = 300f) },
+        transitionSpec = { spring(dampingRatio = 0.42f, stiffness = 700f) },
         label = "tabIconScale",
-    ) { sel -> if (sel) 1.12f else 1f }
+    ) { sel -> if (sel) 1.18f else 1f }
+
+    // The label used to jump straight from Medium to SemiBold on the frame the route changed --
+    // the one part of the transition that was instant while everything around it eased. Animating
+    // the numeric weight lets it thicken with the rest; on a font with no variable axis the
+    // renderer snaps to the nearest face, which is exactly the old behaviour and no worse.
+    val labelWeight by transition.animateFloat(
+        transitionSpec = { spring(dampingRatio = 0.9f, stiffness = 400f) },
+        label = "tabLabelWeight",
+    ) { sel -> if (sel) 600f else 500f }
 
     var pressed by remember { mutableStateOf(false) }
     val pressScale by animateFloatAsState(
@@ -993,7 +1030,7 @@ private fun TabButton(
             color = contentColor,
             style = MaterialTheme.typography.labelSmall,
             fontSize = 10.sp,
-            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+            fontWeight = FontWeight(labelWeight.fastRoundToInt().coerceIn(1, 1000)),
             maxLines = 1,
             softWrap = false,
             overflow = TextOverflow.Ellipsis,

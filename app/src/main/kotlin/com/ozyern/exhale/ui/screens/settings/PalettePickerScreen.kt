@@ -87,6 +87,7 @@ import androidx.navigation.compose.rememberNavController
 import com.ozyern.exhale.LocalPlayerAwareWindowInsets
 import com.ozyern.exhale.R
 import com.ozyern.exhale.constants.CustomThemeColorKey
+import com.ozyern.exhale.ui.component.LiquidBackButton
 import com.ozyern.exhale.ui.component.IconButton
 import com.ozyern.exhale.ui.theme.ThemeSeedPalette
 import com.ozyern.exhale.ui.theme.ThemeSeedPaletteCodec
@@ -926,15 +927,11 @@ fun PalettePickerScreen(
             TopAppBar(
                 title = { Text(stringResource(R.string.color_palette)) },
                 navigationIcon = {
-                    IconButton(
+                    LiquidBackButton(
                         onClick = navController::navigateUp,
-                        onLongClick = navController::backToMain
-                    ) {
-                        Icon(
-                            painterResource(R.drawable.arrow_back),
-                            contentDescription = null
-                        )
-                    }
+                        onLongClick = navController::backToMain,
+                        icon = R.drawable.arrow_back,
+                    )
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = Color.Transparent

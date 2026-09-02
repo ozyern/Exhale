@@ -38,6 +38,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import coil3.compose.AsyncImage
+import com.ozyern.exhale.ui.component.LiquidBackButton
 import com.ozyern.exhale.constants.PlayerBackgroundStyle
 import com.ozyern.exhale.R
 import com.ozyern.exhale.constants.PlayerCustomBrightnessKey
@@ -73,9 +74,10 @@ fun CustomizeBackground(
             TopAppBar(
                 title = { Text(stringResource(R.string.customize_background_title)) },
                 navigationIcon = {
-                    IconButton(onClick = { navController.navigateUp() }) {
-                        Icon(painterResource(R.drawable.arrow_back), contentDescription = null)
-                    }
+                    LiquidBackButton(
+                        onClick = { navController.navigateUp() },
+                        icon = R.drawable.arrow_back,
+                    )
                 }
             )
         },

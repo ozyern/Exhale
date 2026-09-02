@@ -38,6 +38,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.ozyern.exhale.ui.component.settingsGlassGroup
 import com.ozyern.exhale.R
 import com.ozyern.exhale.ui.component.settingsIconPuck
 
@@ -105,8 +106,7 @@ private fun QuickActionTile(
     Column(
         modifier = modifier
             .scale(scale)
-            .clip(RoundedCornerShape(SettingsDimensions.QuickActionCardCornerRadius))
-            .background(SettingsDimensions.groupSurfaceColor())
+            .settingsGlassGroup(RoundedCornerShape(SettingsDimensions.QuickActionCardCornerRadius))
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,

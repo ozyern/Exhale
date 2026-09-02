@@ -30,9 +30,11 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.GraphicsLayerScope
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.drawBackdrop
 import com.kyant.backdrop.effects.blur
 import com.kyant.backdrop.effects.lens
@@ -67,16 +69,23 @@ val supportsLiveBlur: Boolean
  * it at the edges (`lens`), which is the part a plain blur can never fake and the reason
  * Apple's chrome reads as a physical pane rather than a frosted rectangle.
  *
- * **Chrome only — never call this from inside the NavHost.** [LocalAppBackdrop] is a
- * recording of the NavHost content. A component that lives inside that content and then
- * consumes it is a re-entrant `GraphicsLayer` draw: the layer would have to draw itself, and
- * it throws on the first frame. (That was the old "Settings crashes on click".) In-content
- * glass must record its own local layer the way `LiquidToggle` does with its track. Chrome is
- * safe because the dock and top bar are Scaffold slots — siblings drawn *over* the NavHost,
- * not descendants of it.
+ * **The default backdrop is chrome-only.** [LocalAppBackdrop] is a recording of the NavHost
+ * content, so a component that lives *inside* that content and then consumes it is a re-entrant
+ * `GraphicsLayer` draw: the layer would have to draw itself, and it throws on the first frame.
+ * (That was the old "Settings crashes on click".) The dock and the search bar are Scaffold slots
+ * — siblings drawn *over* the NavHost — so they are safe with the default.
+ *
+ * In-content callers pass [backdrop] explicitly, and must pass one recorded by something drawn
+ * *beneath* them; `LocalPageBackdrop` is that. They get the identical material either way, which
+ * is the point of routing everything through this one function: the round controls are made of
+ * the same glass as the search bar because they are literally calling the same code with the
+ * same numbers, not because two recipes were tuned to look alike.
  *
  * @param tintAlpha opacity of the film laid over the refraction. Higher = milkier, more legible.
  * @param blurRadius blur strength of the pane's interior.
+ * @param backdrop the pixels to refract. Defaults to the app content, i.e. chrome.
+ * @param layerBlock optional transform applied to the pane itself (not its content) — how a
+ *   pressable control squashes its glass without moving the label sitting on it.
  * @param quality retained for source compatibility with the previous Haze implementation;
  *   Kyant renders the effect in one shader pass, so there is no resolution lever to pull.
  */
@@ -87,8 +96,18 @@ fun rememberChromeGlassModifier(
     tintAlpha: Float = 0.32f,
     blurRadius: Dp = 48.dp,
     @Suppress("UNUSED_PARAMETER") quality: Float = 0.5f,
+    backdrop: Backdrop = LocalAppBackdrop.current,
+    layerBlock: (GraphicsLayerScope.() -> Unit)? = null,
 ): Modifier {
-    val backdrop = LocalAppBackdrop.current
+
+    // Flat tint, hairline highlight, symmetric shadow — deliberately.
+    //
+    // A later pass "upgraded" this to a vertical gradient film, a two-tone ambient bevel and an
+    // offset shadow. All three are textbook-correct and all three made it visibly worse here: the
+    // gradient ran a light-to-dark ramp down a pane whose whole job is to be an even sheet, and
+    // the dark half of the ambient bevel dragged a grey smear round the bottom of the dock. What
+    // reads as clean over this app's artwork is an even film with a bright rim the whole way
+    // round. Do not re-derive that change from first principles — it was tried and reverted.
     val tint = if (dark) Color.Black.copy(alpha = tintAlpha) else Color.White.copy(alpha = tintAlpha)
     val shadowColor = if (dark) Color.Black.copy(alpha = 0.45f) else Color.Black.copy(alpha = 0.16f)
 
@@ -107,6 +126,7 @@ fun rememberChromeGlassModifier(
             },
             highlight = { Highlight.Default },
             shadow = { Shadow(radius = 14f.dp, color = shadowColor) },
+            layerBlock = layerBlock,
             onDrawSurface = { drawRect(tint) },
         )
 }

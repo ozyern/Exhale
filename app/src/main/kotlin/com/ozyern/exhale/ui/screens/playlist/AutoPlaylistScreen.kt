@@ -116,6 +116,7 @@ import com.ozyern.exhale.extensions.toMediaItem
 import com.ozyern.exhale.extensions.togglePlayPause
 import com.ozyern.exhale.playback.ExoDownloadService
 import com.ozyern.exhale.playback.queues.ListQueue
+import com.ozyern.exhale.ui.component.LiquidBackButton
 import com.ozyern.exhale.ui.component.DefaultDialog
 import com.ozyern.exhale.ui.component.DraggableScrollbar
 import com.ozyern.exhale.ui.component.EmptyPlaceholder
@@ -837,7 +838,7 @@ fun AutoPlaylistScreen(
                 }
             },
             navigationIcon = {
-                IconButton(
+                LiquidBackButton(
                     onClick = {
                         when {
                             isSearching -> {
@@ -857,15 +858,9 @@ fun AutoPlaylistScreen(
                         if (!isSearching && !selection) {
                             navController.backToMain()
                         }
-                    }
-                ) {
-                    Icon(
-                        painter = painterResource(
-                            if (selection) R.drawable.close else R.drawable.arrow_back
-                        ),
-                        contentDescription = null
-                    )
-                }
+                    },
+                    icon = if (selection) R.drawable.close else R.drawable.arrow_back,
+                )
             },
             actions = {
                 if (selection) {

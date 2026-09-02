@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
+import com.ozyern.exhale.ui.component.LiquidBackButton
 import com.ozyern.exhale.ui.component.liquid.LiquidToggle
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -42,9 +43,10 @@ fun DiscordExperimental(
             TopAppBar(
                 title = { Text(stringResource(R.string.experiment_settings)) },
                 navigationIcon = {
-                    IconButton(onClick = navController::navigateUp) {
-                        Icon(painterResource(R.drawable.arrow_back), contentDescription = null)
-                    }
+                    LiquidBackButton(
+                        onClick = navController::navigateUp,
+                        icon = R.drawable.arrow_back,
+                    )
                 }
             )
 

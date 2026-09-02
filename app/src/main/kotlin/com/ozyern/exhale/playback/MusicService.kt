@@ -293,6 +293,9 @@ class MusicService :
         PlayerStreamClient.ANDROID_VR
     )
     private val playbackUrlCache = ConcurrentHashMap<String, Pair<String, Long>>()
+    private var streamPrefetchJob: Job? = null
+    @Volatile
+    private var streamPrefetchMediaId: String? = null
     private val streamRecoveryState = ConcurrentHashMap<String, Pair<Int, Long>>()
     @Volatile
     private var pendingStreamRefreshValidationMediaId: String? = null
@@ -4023,6 +4026,9 @@ class MusicService :
 
     crossfadeAudio?.onMediaItemTransition(mediaItem, reason)
 
+    // Resolve the next track's stream URL now, so skipping to it does not block on the network.
+    prefetchNextStreamUrl()
+
     // Pre-load lyrics for upcoming songs in queue
     val currentIndex = player.currentMediaItemIndex
     // Convert media items to MediaMetadata for lyrics pre-loading
@@ -4835,41 +4841,113 @@ class MusicService :
                 getString(R.string.error_unknown)
             }
             run {
-                val format = nonNullPlayback.format
-                val loudnessDb = nonNullPlayback.audioConfig?.loudnessDb
-                val perceptualLoudnessDb = nonNullPlayback.audioConfig?.perceptualLoudnessDb
-                
-                Timber.tag("AudioNormalization").d("Storing format for $mediaId with loudnessDb: $loudnessDb, perceptualLoudnessDb: $perceptualLoudnessDb")
-                if (loudnessDb == null && perceptualLoudnessDb == null) {
-                    Timber.tag("AudioNormalization").w("No loudness data available from YouTube for video: $mediaId")
-                }
-
-                database.query {
-                    upsert(
-                        FormatEntity(
-                            id = mediaId,
-                            itag = format.itag,
-                            mimeType = format.mimeType.split(";")[0],
-                            codecs = format.mimeType.split("codecs=")[1].removeSurrounding("\""),
-                            bitrate = format.bitrate,
-                            sampleRate = format.audioSampleRate,
-                            contentLength = format.contentLength!!,
-                            loudnessDb = loudnessDb,
-                            perceptualLoudnessDb = perceptualLoudnessDb,
-                            playbackUrl = nonNullPlayback.playbackTracking?.videostatsPlaybackUrl?.baseUrl
-                        )
-                    )
-                }
-                scope.launch(Dispatchers.IO) { recoverSong(mediaId, nonNullPlayback) }
-
-                val streamUrl = nonNullPlayback.streamUrl
-
-                playbackUrlCache[mediaId] =
-                    streamUrl to System.currentTimeMillis() + (nonNullPlayback.streamExpiresInSeconds * 1000L)
+                val streamUrl = storeResolvedStream(mediaId, nonNullPlayback)
                 val length = if (dataSpec.length >= 0) minOf(dataSpec.length, CHUNK_LENGTH) else CHUNK_LENGTH
                 return@Factory dataSpec.withUri(streamUrl.toUri()).subrange(dataSpec.uriPositionOffset, length)
             }
         }
+    }
+
+    /**
+     * Records a freshly resolved player response and returns the stream URL to play.
+     *
+     * Shared by the resolving data source and by [prefetchNextStreamUrl], so a prefetched track
+     * arrives at playback indistinguishable from one resolved on demand: same format row, same
+     * loudness data, same cache entry with the same expiry. Only the timing differs.
+     */
+    private fun storeResolvedStream(
+        mediaId: String,
+        playbackData: YTPlayerUtils.PlaybackData,
+    ): String {
+        val format = playbackData.format
+        val loudnessDb = playbackData.audioConfig?.loudnessDb
+        val perceptualLoudnessDb = playbackData.audioConfig?.perceptualLoudnessDb
+
+        Timber.tag("AudioNormalization").d("Storing format for $mediaId with loudnessDb: $loudnessDb, perceptualLoudnessDb: $perceptualLoudnessDb")
+        if (loudnessDb == null && perceptualLoudnessDb == null) {
+            Timber.tag("AudioNormalization").w("No loudness data available from YouTube for video: $mediaId")
+        }
+
+        database.query {
+            upsert(
+                FormatEntity(
+                    id = mediaId,
+                    itag = format.itag,
+                    mimeType = format.mimeType.split(";")[0],
+                    codecs = format.mimeType.split("codecs=")[1].removeSurrounding("\""),
+                    bitrate = format.bitrate,
+                    sampleRate = format.audioSampleRate,
+                    contentLength = format.contentLength!!,
+                    loudnessDb = loudnessDb,
+                    perceptualLoudnessDb = perceptualLoudnessDb,
+                    playbackUrl = playbackData.playbackTracking?.videostatsPlaybackUrl?.baseUrl
+                )
+            )
+        }
+        scope.launch(Dispatchers.IO) { recoverSong(mediaId, playbackData) }
+
+        val streamUrl = playbackData.streamUrl
+        playbackUrlCache[mediaId] =
+            streamUrl to System.currentTimeMillis() + (playbackData.streamExpiresInSeconds * 1000L)
+        return streamUrl
+    }
+
+    /**
+     * Resolves the NEXT track's stream URL while the current one is still playing.
+     *
+     * Without this, skipping to the next song pays for a full YouTube player-response round trip
+     * before a single byte of audio is requested - and it is paid on ExoPlayer's loading thread,
+     * inside runBlocking, in the resolving data source. Nothing can start until it returns, so the
+     * gap between hitting next and hearing anything is however long that network call takes:
+     * a second or two on a good connection, ten or more on a bad one.
+     *
+     * The resolver already prefers [playbackUrlCache] over the network, so the whole fix is to
+     * make sure the entry is there before it is asked for. By the time the transition happens the
+     * URL is a map lookup, and playback starts at the speed of the audio fetch alone.
+     *
+     * Deliberately quiet: a failed prefetch changes nothing, because the resolver will make the
+     * same call for real and raise a proper error then. It must never throw, never retry, and
+     * never surface anything to the user.
+     */
+    private fun prefetchNextStreamUrl() {
+        val nextIndex = player.nextMediaItemIndex
+        if (nextIndex == C.INDEX_UNSET) return
+        val mediaId = runCatching { player.getMediaItemAt(nextIndex).mediaId }
+            .getOrNull()
+            ?.takeIf { it.isNotBlank() }
+            ?: return
+
+        if (mediaId == streamPrefetchMediaId && streamPrefetchJob?.isActive == true) return
+        // Already covered: a URL that has not expired yet.
+        if (playbackUrlCache[mediaId]?.second?.let { it > System.currentTimeMillis() } == true) return
+
+        streamPrefetchJob?.cancel()
+        streamPrefetchMediaId = mediaId
+        streamPrefetchJob = ioScope.launch {
+            runCatching {
+                // A completed download never touches the network, so resolving it would burn a
+                // request to fill a cache entry nothing will read.
+                if (isDownloadedLocally(mediaId)) return@runCatching
+                val playbackData = YTPlayerUtils.playerResponseForPlayback(
+                    mediaId,
+                    audioQuality = audioQuality,
+                    connectivityManager = connectivityManager,
+                    preferredStreamClient = preferredStreamClient,
+                    avoidCodecs = avoidStreamCodecs,
+                ).getOrNull() ?: return@runCatching
+                storeResolvedStream(mediaId, playbackData)
+                Timber.tag("StreamPrefetch").d("Prefetched stream for %s", mediaId)
+            }
+        }
+    }
+
+    /** True when [mediaId] is complete in the download cache, so playback never asks the network. */
+    private fun isDownloadedLocally(mediaId: String): Boolean {
+        val contentLength = runCatching {
+            downloadCache.getContentMetadata(mediaId)
+                .get(ContentMetadata.KEY_CONTENT_LENGTH, -1L)
+        }.getOrNull()?.takeIf { it > 0L } ?: return false
+        return downloadCache.isCached(mediaId, 0, contentLength)
     }
 
     fun retryCurrentFromFreshStream() {

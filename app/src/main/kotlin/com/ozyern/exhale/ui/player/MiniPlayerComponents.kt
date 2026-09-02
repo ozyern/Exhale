@@ -270,9 +270,6 @@ fun SwipeableMiniPlayerBox(
 @Composable
 fun RowScope.MiniPlayerInfo(
     mediaMetadata: MediaMetadata,
-    // Non-null when the current track has an artist worth opening. The artist line becomes the
-    // navigation affordance, replacing the separate person button that used to sit in the row.
-    onArtistClick: (() -> Unit)? = null,
     // Drops one type step so two lines still fit the slim pill without the artist clipping.
     compact: Boolean = false,
 ) {
@@ -318,18 +315,13 @@ fun RowScope.MiniPlayerInfo(
                 // line you least need to read to the end — the screenshot that prompted this was
                 // caught mid-loop, showing the tail of one pass, a gap, and the head of the next,
                 // which reads as a layout fault rather than as a long name.
-                modifier = Modifier
-                    .then(
-                        if (onArtistClick != null) {
-                            Modifier.clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null,
-                                onClick = onArtistClick,
-                            )
-                        } else {
-                            Modifier
-                        },
-                    )
+                //
+                // Deliberately NOT clickable. This line used to open the artist, which sounds
+                // harmless until you notice the text sits in a weight(1f) column: its tap target
+                // was most of the pill's width, so the ordinary gesture — tap the capsule to open
+                // the player — landed on the artist instead and threw you onto a different screen.
+                // The pill has one job at this size. Artist navigation lives in the full player,
+                // where the name is its own line with room around it.
             )
         }
     }
@@ -426,8 +418,10 @@ private fun MiniPlayerArtwork(
  *  * **Artwork is a rounded square**, like every other piece of album art in the app. It used to
  *    be a disc wearing a circular progress ring, so the actual thumbnail got 36dp of a 44dp box
  *    and was cropped to a circle - the least legible way to show a square image.
- *  * **The artist line navigates**, which is the affordance people already try, so the separate
- *    person button that existed only to do that is gone and the row got a 40dp slot back.
+ *  * **Nothing inside the row navigates.** Tapping anywhere on the pill opens the player, full
+ *    stop. The artist line used to be a link, but it spans the whole middle of the capsule, so
+ *    the tap most people make was being answered by a jump to the artist screen. Artist
+ *    navigation belongs in the full player, and lives there instead.
  *  * **Play/pause is the loudest thing in the pill**, because it is the one control the pill
  *    exists for. See [MiniPlayerPlayPauseButton].
  *
@@ -508,13 +502,6 @@ fun NewMiniPlayerContent(
                 MiniPlayerInfo(
                     mediaMetadata = it,
                     compact = compact,
-                    onArtistClick = {
-                        val artistId = it.artists.firstOrNull()?.id
-                        if (!artistId.isNullOrBlank()) {
-                            navController.navigate("artist/$artistId")
-                            state.collapseSoft()
-                        }
-                    },
                 )
             } ?: Spacer(Modifier.weight(1f))
 

@@ -86,6 +86,7 @@ import com.ozyern.exhale.LocalPlayerConnection
 import com.ozyern.exhale.R
 import com.ozyern.exhale.innertube.models.AlbumItem
 import com.ozyern.exhale.innertube.models.AlbumReleaseType
+import com.ozyern.exhale.ui.component.LiquidBackButton
 import com.ozyern.exhale.ui.component.IconButton
 import com.ozyern.exhale.ui.component.LocalMenuState
 import com.ozyern.exhale.ui.component.shimmer.ShimmerHost
@@ -369,15 +370,11 @@ fun NewReleaseScreen(
             modifier = Modifier.align(Alignment.TopCenter),
             title = { Text(stringResource(R.string.new_release_albums)) },
             navigationIcon = {
-                IconButton(
+                LiquidBackButton(
                     onClick = navController::navigateUp,
                     onLongClick = navController::backToMain,
-                ) {
-                    Icon(
-                        painterResource(R.drawable.arrow_back),
-                        contentDescription = null,
-                    )
-                }
+                    icon = R.drawable.arrow_back,
+                )
             },
             scrollBehavior = scrollBehavior,
         )

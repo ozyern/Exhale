@@ -69,6 +69,7 @@ import com.ozyern.exhale.innertube.models.WatchEndpoint
 import com.ozyern.exhale.models.toMediaMetadata
 import com.ozyern.exhale.playback.queues.ListQueue
 import com.ozyern.exhale.playback.queues.YouTubeQueue
+import com.ozyern.exhale.ui.component.LiquidBackButton
 import com.ozyern.exhale.ui.component.AuroraBackdrop
 import com.ozyern.exhale.ui.component.HideOnScrollFAB
 import com.ozyern.exhale.ui.component.IconButton
@@ -564,15 +565,11 @@ fun StatsScreen(
                 )
             },
             navigationIcon = {
-                IconButton(
+                LiquidBackButton(
                     onClick = navController::navigateUp,
                     onLongClick = navController::backToMain,
-                ) {
-                    Icon(
-                        painterResource(R.drawable.arrow_back),
-                        contentDescription = null,
-                    )
-                }
+                    icon = R.drawable.arrow_back,
+                )
             },
             actions = {
                 IconButton(
