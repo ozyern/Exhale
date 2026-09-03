@@ -40,7 +40,7 @@ fun DiscordExperimental(
 ) {
     Scaffold { inner ->
         Column(Modifier.fillMaxSize()) {
-            TopAppBar(
+            SettingsTopAppBar(
                 title = { Text(stringResource(R.string.experiment_settings)) },
                 navigationIcon = {
                     LiquidBackButton(

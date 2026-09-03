@@ -17,6 +17,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -175,14 +176,25 @@ fun LiquidSlider(
             onValueChange(snapped)
         }
 
+        // `value` is a plain parameter, not state, so `snapshotFlow { value }` reads nothing the
+        // snapshot system can invalidate: it emits once, with whatever the value was on the
+        // composition that first ran this effect, and never again. The effect is keyed on
+        // `dampedDragAnimation`, which never changes, so it is never restarted either.
+        //
+        // The consequence was a slider that only ever moved under a finger. Anything that set the
+        // value from outside — a preset chip, a reset button, a stepper beside it — changed the
+        // number and left the thumb where it was, because release-from-a-drag was the only path
+        // that ever wrote back to the animation. Routing the parameter through a State makes the
+        // flow read something that actually changes.
+        val currentValue by rememberUpdatedState(value)
         LaunchedEffect(dampedDragAnimation) {
-            snapshotFlow { value }
-                .collectLatest { value ->
+            snapshotFlow { currentValue }
+                .collectLatest { latest ->
                     // Ignored mid-gesture. The host is echoing back what this very drag just
                     // published — often rounded — and letting that steer the thumb is the
                     // feedback loop described in the KDoc.
-                    if (!dragging && dampedDragAnimation.targetValue != value) {
-                        dampedDragAnimation.updateValue(value)
+                    if (!dragging && dampedDragAnimation.targetValue != latest) {
+                        dampedDragAnimation.updateValue(latest)
                     }
                 }
         }

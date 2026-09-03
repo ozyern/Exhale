@@ -517,7 +517,7 @@ fun LastFMSettings(
         )
     }
 
-    TopAppBar(
+    SettingsTopAppBar(
         title = { Text(stringResource(R.string.lastfm_integration)) },
         navigationIcon = {
             LiquidBackButton(

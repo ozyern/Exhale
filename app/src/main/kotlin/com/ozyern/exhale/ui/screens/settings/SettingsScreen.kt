@@ -182,15 +182,21 @@ fun SettingsScreen(
         onSearchClick = { isSearching = true },
     )
 
-    // Solid, distinct page colour — the ground the inset groups float on. Hoisted so the app bar
-    // can sit on exactly the same colour and the header reads as part of the page, not as a
-    // separate elevated Material surface.
-    val pageBackground = SettingsDimensions.screenBackgroundColor()
-
     Scaffold(
         topBar = {
             if (!showSearchBar) {
-                LargeTopAppBar(
+                Box {
+                    // The bar is made of the page rather than laid on top of it.
+                    //
+                    // It has to stay opaque -- the large title has rows sliding under it as the
+                    // list scrolls -- but "opaque" was being spelled as a flat fill of the page
+                    // colour, which meant the album-art wash `SettingsPage` lays down stopped dead
+                    // at the bar's bottom edge. On any screen with something playing that is a
+                    // large title's worth of dead grey across the top of a page that is otherwise
+                    // taking its colour from the artwork. See SettingsBarGround.
+                    SettingsBarGround(modifier = Modifier.matchParentSize())
+
+                    LargeTopAppBar(
                     title = {
                         Text(
                             text = stringResource(R.string.settings),
@@ -217,13 +223,15 @@ fun SettingsScreen(
                         )
                     },
                     scrollBehavior = scrollBehavior,
-                    // Opaque and identical to the page in both states: no tonal-elevation shift
-                    // on scroll, which is the single most "Android" tell a settings screen has.
+                    // Transparent in both states, because the ground behind it is doing the work
+                    // now. Still no tonal-elevation shift on scroll, which is the single most
+                    // "Android" tell a settings screen has.
                     colors = TopAppBarDefaults.largeTopAppBarColors(
-                        containerColor = pageBackground,
-                        scrolledContainerColor = pageBackground,
+                        containerColor = Color.Transparent,
+                        scrolledContainerColor = Color.Transparent,
                     ),
-                )
+                    )
+                }
             }
         },
         // Transparent, so the album-art wash `SettingsPage` lays down is what you see behind

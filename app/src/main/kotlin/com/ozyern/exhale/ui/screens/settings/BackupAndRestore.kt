@@ -248,7 +248,7 @@ fun BackupAndRestore(
 
     Scaffold(
         topBar = {
-            TopAppBar(
+            SettingsTopAppBar(
                 title = { Text(stringResource(R.string.backup_restore)) },
                 navigationIcon = {
                     LiquidBackButton(

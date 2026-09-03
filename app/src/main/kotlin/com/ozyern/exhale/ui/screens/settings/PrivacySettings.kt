@@ -196,7 +196,7 @@ fun PrivacySettings(
         )
     }
 
-    TopAppBar(
+    SettingsTopAppBar(
         title = { Text(stringResource(R.string.privacy)) },
         navigationIcon = {
             LiquidBackButton(

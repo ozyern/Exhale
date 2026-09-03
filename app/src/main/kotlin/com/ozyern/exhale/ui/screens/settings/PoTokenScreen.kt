@@ -408,7 +408,7 @@ fun PoTokenScreen(
         }
     }
 
-    TopAppBar(
+    SettingsTopAppBar(
         title = { Text(stringResource(R.string.po_token_generation)) },
         navigationIcon = {
             LiquidBackButton(

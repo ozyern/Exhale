@@ -13,6 +13,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.tween
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Box
@@ -274,8 +275,23 @@ fun HomeScreen(
                             } else {
                                 height
                             }
-                            alpha = 1f - (scrolled / height).coerceIn(0f, 1f)
+                            val t = (scrolled / height).coerceIn(0f, 1f)
+
+                            alpha = 1f - t
                             translationY = scrolled * LargeTitleParallax
+
+                            // And it shrinks on its way out, toward the size the compact bar's
+                            // title already is. Fading alone leaves a display-size word sitting
+                            // still while a small one appears somewhere above it; shrinking is
+                            // what makes the eye read the two as one title changing state.
+                            //
+                            // Anchored bottom-left, because that is the corner the two titles
+                            // share -- scaling about the centre would walk the word inward off
+                            // the margin every other element on the page lines up on.
+                            val shrink = 1f - LargeTitleShrink * t
+                            scaleX = shrink
+                            scaleY = shrink
+                            transformOrigin = TransformOrigin(0f, 1f)
                         },
                     )
                 }
@@ -299,9 +315,22 @@ fun HomeScreen(
                         HomeShortcutsGrid(
                             items = items.take(6),
                             onItemClick = onShortcutClick,
-                            modifier = Modifier
-                                .animateItem()
-                                .feedIntro(0, introProgress),
+                            modifier = Modifier.animateItem(),
+                            // The one shelf that arrives tile by tile rather than as a block.
+                            //
+                            // It can, because it is the only shelf whose parts are laid out at
+                            // once instead of scrolled through: six tiles all on screen, so a
+                            // cascade across them is a thing you can actually watch. It is also
+                            // the first thing on the page, and a page that starts by assembling
+                            // itself in front of you sets a different expectation for everything
+                            // below it than one that simply appears.
+                            //
+                            // A third of a slot apart, so the whole cascade is over in about
+                            // seventy milliseconds -- read as one gesture with a grain to it, not
+                            // as six things taking turns.
+                            tileIntro = { index ->
+                                Modifier.feedIntro(index * ShortcutTileStagger, introProgress)
+                            },
                         )
                     }
                 }
@@ -330,7 +359,7 @@ fun HomeScreen(
 
                 item(key = "quick_picks", contentType = "quick_picks") {
                     QuickPicksSection(
-                        modifier = Modifier.feedIntro(1, introProgress),
+                        modifier = Modifier.feedIntro(1f, introProgress),
                         quickPicks = picks,
                         mediaMetadata = mediaMetadata,
                         isPlaying = isPlaying,
@@ -403,7 +432,7 @@ fun HomeScreen(
 
                 // Title and shelf share one stagger slot so they arrive together — a heading that
                 // lands before the row it names reads as two separate things.
-                val introOrder = index + 2
+                val introOrder = (index + 2).toFloat()
 
                 item(key = "home_section_title_$sectionKey", contentType = "section_title") {
                     HomePageSectionTitle(
@@ -515,6 +544,9 @@ private const val FeedIntroStagger = 0.07f
 /** How much of the window one shelf's own rise occupies. */
 private const val FeedIntroSlice = 0.55f
 
+/** How far apart two shortcut tiles arrive, in stagger slots. */
+private const val ShortcutTileStagger = 0.34f
+
 /** How far a shelf travels on its way in. Small: this is a settle, not an entrance. */
 private val FeedIntroRise = 16.dp
 
@@ -523,6 +555,12 @@ private val FeedIntroRise = 16.dp
  * everything else; 1 would pin it. A third is enough for the eye to read the two planes apart.
  */
 private const val LargeTitleParallax = 0.35f
+
+/** How much of itself the large title gives up on the way out. */
+private const val LargeTitleShrink = 0.16f
+
+/** How far under full size a shelf starts. Two percent: felt, never seen. */
+private const val FeedIntroScale = 0.02f
 
 /**
  * One shelf's share of the feed's arrival: rise and fade, offset by its position on the page.
@@ -535,7 +573,7 @@ private const val LargeTitleParallax = 0.35f
  * order a shelf's window would end after the clock does, and it would sit at zero alpha forever.
  * Nothing below the seventh shelf is on screen during the intro anyway.
  */
-private fun Modifier.feedIntro(order: Int, progress: () -> Float): Modifier =
+internal fun Modifier.feedIntro(order: Float, progress: () -> Float): Modifier =
     this.graphicsLayer {
         val start = (order * FeedIntroStagger).coerceAtMost(1f - FeedIntroSlice)
         val raw = ((progress() - start) / FeedIntroSlice).coerceIn(0f, 1f)
@@ -543,4 +581,16 @@ private fun Modifier.feedIntro(order: Int, progress: () -> Float): Modifier =
 
         alpha = eased
         translationY = (1f - eased) * FeedIntroRise.toPx()
+
+        // A shelf grows the last two percent into place as it rises. On its own the rise is a
+        // sheet of content sliding up a track; with the scale it is an object coming to rest at
+        // its own distance, which is the difference between a transition that has been applied to
+        // the page and one the page appears to be doing.
+        //
+        // Two percent because the effect has to survive being read at a glance and never be
+        // legible as zooming. Anything past about four reads as a card being thrown at you.
+        val grown = 1f - FeedIntroScale * (1f - eased)
+        scaleX = grown
+        scaleY = grown
+        transformOrigin = TransformOrigin(0.5f, 0f)
     }

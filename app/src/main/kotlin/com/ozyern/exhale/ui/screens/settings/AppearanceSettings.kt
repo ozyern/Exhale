@@ -956,7 +956,7 @@ fun AppearanceSettings(
         )
     }
 
-    TopAppBar(
+    SettingsTopAppBar(
         title = { Text(stringResource(R.string.appearance)) },
         navigationIcon = {
             LiquidBackButton(

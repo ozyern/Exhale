@@ -105,7 +105,7 @@ fun IntegrationScreen(
         )
     }
 
-    TopAppBar(
+    SettingsTopAppBar(
         title = { Text(stringResource(R.string.integration)) },
         navigationIcon = {
             LiquidBackButton(

@@ -126,7 +126,7 @@ fun ChangelogScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
+            SettingsTopAppBar(
                 title = {
                     Text(
                         if (updateChannel == UpdateChannel.NIGHTLY)

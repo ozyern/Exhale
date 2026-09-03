@@ -444,7 +444,7 @@ fun MusicTogetherScreen(
         )
     }
 
-    TopAppBar(
+    SettingsTopAppBar(
         title = { Text(stringResource(R.string.music_together)) },
         navigationIcon = {
             AtIconButton(

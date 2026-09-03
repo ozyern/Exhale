@@ -471,7 +471,7 @@ fun PlayerSettings(
         )
     }
 
-    TopAppBar(
+    SettingsTopAppBar(
         title = { Text(stringResource(R.string.player_and_audio)) },
         navigationIcon = {
             LiquidBackButton(

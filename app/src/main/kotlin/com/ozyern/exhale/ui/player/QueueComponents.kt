@@ -10,15 +10,29 @@
 
 package com.ozyern.exhale.ui.player
 
-import androidx.annotation.DrawableRes
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,10 +40,10 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -65,7 +79,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
@@ -79,6 +92,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import androidx.media3.common.C
 import androidx.media3.common.Player
@@ -86,14 +100,12 @@ import androidx.media3.common.Timeline
 import coil3.compose.AsyncImage
 import com.ozyern.exhale.LocalPlayerConnection
 import com.ozyern.exhale.R
-import com.ozyern.exhale.constants.AquamorphicDampingRatio
-import com.ozyern.exhale.constants.AquamorphicStiffness
 import com.ozyern.exhale.extensions.metadata
 import com.ozyern.exhale.db.entities.FormatEntity
 import com.ozyern.exhale.playback.PlayerConnection
 import com.ozyern.exhale.models.MediaMetadata
 import com.ozyern.exhale.ui.component.ActionPromptDialog
-import com.ozyern.exhale.ui.component.liquid.LiquidSlider
+import com.ozyern.exhale.ui.component.DefaultDialog
 import com.ozyern.exhale.ui.component.BottomSheetPageState
 import com.ozyern.exhale.ui.component.BottomSheetState
 import com.ozyern.exhale.ui.component.MenuState
@@ -427,44 +439,45 @@ private fun clockTimeAfter(millis: Long): String =
 /**
  * The sleep timer.
  *
- * Two shapes, because "stop in twenty minutes" and "stop after three songs" are different
- * intentions and only one of them is a clock. Songs is the mode this gained and the one most people
- * actually want: nobody falls asleep on a schedule, and a clock timer does the one thing a music
- * player should never do, which is cut off mid-track.
+ * A dial and nine pills, and nothing else to do.
  *
- * Top to bottom: what kind of timer, how much of it, when that lands, then the two ways to change
- * it — presets for the answer that is nearly always right, a fine control for when it is not. The
- * ordering is the argument: the mode switch changes what the number *means*, so it has to be
- * settled before the number is worth reading.
+ * Three versions came before this. The first two opened on a mode switch and a slider, which made
+ * you set a number and then press Start -- three interactions and a confirmation to answer a
+ * question you already knew the answer to when you reached for the menu. The third cut that to one
+ * tap but paid for it with a scrolling column of rows: every option the same shape and the same
+ * size, so nothing was findable at a glance, and the list was taller than the phone.
  *
- * A timer already running takes over the bottom of the sheet with its own state and a way out,
- * rather than being something you discover by setting a second one.
+ * This one fits on screen at once. The choices are a grid, which is what a set of nine fixed values
+ * actually is -- you find "30 min" by where it sits, the way you find a key on a keypad, instead of
+ * reading down a list for it. Each pill carries the clock time it lands on, because you are not
+ * really choosing "45", you are choosing to stop at about a quarter to twelve, and the only version
+ * of this control that lets you decide that directly is one that has already done the arithmetic.
+ *
+ * The dial is the part the third version had no answer for. Remaining time on its own cannot tell
+ * you where you are: eleven minutes left is nearly over on a fifteen-minute timer and barely
+ * started on a two-hour one. The ring drains, so a glance at it is enough, and +15 sits under it
+ * because "I am still awake" is the one thing a running timer needs that costs a whole trip back
+ * through the menu otherwise.
  */
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun SleepTimerDialog(
     onDismiss: () -> Unit,
     onConfirmMinutes: (Int) -> Unit,
     onConfirmSongs: (Int) -> Unit,
     onCancelTimer: () -> Unit = {},
-    initialMinutes: Int = 30,
-    initialSongs: Int = 3,
 ) {
     val playerConnection = LocalPlayerConnection.current
     val timer = playerConnection?.service?.sleepTimer
 
-    var songsMode by rememberSaveable { mutableStateOf(false) }
-    var minutes by rememberSaveable { mutableIntStateOf(initialMinutes) }
-    var songs by rememberSaveable { mutableIntStateOf(initialSongs) }
-
-    // Both fields are read so the running banner follows either mode.
     val runningSongs = timer?.songsRemaining ?: 0
+    val totalSongs = timer?.totalSongs ?: 0
     val runningTrigger = timer?.triggerTime ?: -1L
-    val isRunning = runningTrigger != -1L || runningSongs > 0
+    val runningStart = timer?.startTime ?: -1L
+    val timedMode = runningTrigger != -1L
+    val isRunning = timedMode || runningSongs > 0
 
-    // Re-read every second, so a running timer's countdown is a countdown rather than a snapshot
-    // from whenever the sheet happened to open. Also what keeps "Stops at" honest for a song
-    // timer, whose estimate moves as the current track plays out.
+    // Re-read on a tick, so the times on these pills are the times they land on *now* and not the
+    // ones they landed on when the sheet opened. Also what turns the dial into a countdown.
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) {
         while (true) {
@@ -473,406 +486,353 @@ fun SleepTimerDialog(
         }
     }
 
-    val plannedMillis = remember(songsMode, minutes, songs, playerConnection, now) {
-        if (songsMode) {
-            playerConnection?.let { upcomingSongsMillis(it, songs) } ?: 0L
-        } else {
-            minutes * 60_000L
-        }
+    val leftMillis = remember(now, runningSongs, runningTrigger, playerConnection) {
+        if (isRunning && playerConnection != null) sleepTimerMillisLeft(playerConnection) else 0L
     }
 
-    ActionPromptDialog(
-        titleBar = {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Surface(
-                    shape = CircleShape,
-                    color = MaterialTheme.colorScheme.secondaryContainer
-                ) {
-                    Icon(
-                        painter = painterResource(R.drawable.bedtime),
-                        contentDescription = null,
-                        modifier = Modifier
-                            .padding(14.dp)
-                            .size(28.dp),
-                        tint = MaterialTheme.colorScheme.onSecondaryContainer
-                    )
-                }
+    // How much of the timer is still ahead. A song counter has no clock to measure against, so it
+    // measures itself in songs, which is the unit it was set in anyway.
+    val remainingFraction = when {
+        timedMode && runningStart != -1L && runningTrigger > runningStart ->
+            (runningTrigger - now).toFloat() / (runningTrigger - runningStart).toFloat()
+        runningSongs > 0 && totalSongs > 0 -> runningSongs.toFloat() / totalSongs.toFloat()
+        else -> 0f
+    }.coerceIn(0f, 1f)
 
-                Spacer(Modifier.height(12.dp))
-
-                Text(
-                    text = stringResource(R.string.sleep_timer),
-                    style = MaterialTheme.typography.headlineMediumEmphasized
-                )
-            }
-        },
-        onDismiss = onDismiss,
-        content = {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                SleepTimerModeSwitch(
-                    songsMode = songsMode,
-                    onModeChange = { songsMode = it },
-                )
-
-                Spacer(Modifier.height(22.dp))
-
-                // The number, at the size of the decision it is.
-                Row(verticalAlignment = Alignment.Bottom) {
-                    Text(
-                        text = if (songsMode) songs.toString() else minutes.toString(),
-                        style = MaterialTheme.typography.displayLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        text = if (songsMode) {
-                            unitOf(pluralStringResource(R.plurals.n_song, songs, songs), songs)
-                        } else {
-                            unitOf(pluralStringResource(R.plurals.minute, minutes, minutes), minutes)
-                        },
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(bottom = 10.dp),
-                    )
-                }
-
-                // The promise, in a form you can check against a clock.
-                //
-                // This line is the reason the dialog was rebuilt. A timer is a claim about the
-                // future and "45" is not a claim anyone can check; "Stops at 11:42 PM" is. It is
-                // shown for both modes, which is also what makes the two comparable — you can see
-                // that three songs is about eleven minutes without doing the arithmetic that made
-                // you reach for minutes in the first place.
-                Text(
-                    text = stringResource(R.string.sleep_timer_stops_at, clockTimeAfter(plannedMillis)),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
-                )
-
-                Spacer(Modifier.height(20.dp))
-
-                SleepTimerPresets(
-                    options = if (songsMode) SleepTimerSongPresets else SleepTimerMinutePresets,
-                    selected = if (songsMode) songs else minutes,
-                    onSelect = { if (songsMode) songs = it else minutes = it },
-                    label = { value ->
-                        if (songsMode && value == 1) {
-                            stringResource(R.string.sleep_timer_this_song)
-                        } else {
-                            value.toString()
-                        }
-                    },
-                )
-
-                Spacer(Modifier.height(16.dp))
-
-                if (songsMode) {
-                    // A stepper, not a slider. The useful range is one to a dozen, and a slider
-                    // across twelve values spends most of its width being hard to land on.
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(24.dp),
-                    ) {
-                        SleepTimerStepButton(
-                            icon = R.drawable.remove,
-                            enabled = songs > 1,
-                            onClick = { songs = (songs - 1).coerceAtLeast(1) },
-                        )
-                        SleepTimerStepButton(
-                            icon = R.drawable.add,
-                            enabled = songs < SleepTimerMaxSongs,
-                            onClick = { songs = (songs + 1).coerceAtMost(SleepTimerMaxSongs) },
-                        )
-                    }
+    DefaultDialog(onDismiss = onDismiss) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            SleepTimerDial(
+                running = isRunning,
+                remainingFraction = remainingFraction,
+                label = when {
+                    runningSongs > 0 -> runningSongs.toString()
+                    isRunning -> makeTimeString(leftMillis)
+                    else -> null
+                },
+                caption = if (runningSongs > 0) {
+                    pluralStringResource(R.plurals.n_song, runningSongs, runningSongs)
                 } else {
-                    LiquidSlider(
-                        value = minutes.toFloat(),
-                        onValueChange = { minutes = ((it / 5f).roundToInt() * 5).coerceIn(5, 120) },
-                        valueRange = 5f..120f,
-                        steps = (120 - 5) / 5 - 1,
-                        accentColor = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
+                    null
+                },
+            )
 
-                // A timer already running owns the bottom of the sheet. Finding out you had one
-                // only by accidentally setting a second is the failure this prevents.
-                if (isRunning && playerConnection != null) {
-                    Spacer(Modifier.height(18.dp))
+            Spacer(Modifier.height(14.dp))
 
-                    Surface(
-                        shape = RoundedCornerShape(20.dp),
-                        color = MaterialTheme.colorScheme.surfaceContainerHighest,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(
-                                start = 16.dp,
-                                end = 6.dp,
-                                top = 6.dp,
-                                bottom = 6.dp,
-                            ),
+            Text(
+                text = if (isRunning) {
+                    stringResource(R.string.sleep_timer_stops_at, clockTimeAfter(leftMillis))
+                } else {
+                    stringResource(R.string.sleep_timer)
+                },
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface,
+                textAlign = TextAlign.Center,
+            )
+
+            Spacer(Modifier.height(2.dp))
+
+            Text(
+                text = if (isRunning) {
+                    stringResource(R.string.sleep_timer_running_desc)
+                } else {
+                    stringResource(R.string.sleep_timer_idle_desc)
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+            )
+
+            if (isRunning) {
+                Spacer(Modifier.height(14.dp))
+
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    // Only offered on a clock timer. Adding minutes to a song counter would have
+                    // to silently change which timer you set, and a control that answers a
+                    // different question than the one you asked is worse than no control.
+                    if (timedMode) {
+                        FilledTonalButton(
+                            onClick = { timer?.extend(SleepTimerExtendMinutes) },
+                            contentPadding = PaddingValues(horizontal = 18.dp, vertical = 8.dp),
                         ) {
-                            val leftMillis = sleepTimerMillisLeft(playerConnection)
-
-                            Column(Modifier.weight(1f)) {
-                                Text(
-                                    text = if (runningSongs > 0) {
-                                        pluralStringResource(
-                                            R.plurals.n_songs_left,
-                                            runningSongs,
-                                            runningSongs,
-                                        )
-                                    } else {
-                                        makeTimeString(leftMillis)
-                                    },
-                                    style = MaterialTheme.typography.titleSmall,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    maxLines = 1,
-                                )
-                                Text(
-                                    text = stringResource(
-                                        R.string.sleep_timer_stops_at,
-                                        clockTimeAfter(leftMillis),
-                                    ),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1,
-                                )
-                            }
-
-                            TextButton(onClick = onCancelTimer) {
-                                Text(
-                                    text = stringResource(R.string.sleep_timer_stop),
-                                    color = MaterialTheme.colorScheme.error,
-                                )
-                            }
+                            Text(
+                                text = stringResource(
+                                    R.string.sleep_timer_extend,
+                                    SleepTimerExtendMinutes,
+                                ),
+                                maxLines = 1,
+                            )
                         }
+                    }
+
+                    TextButton(
+                        onClick = onCancelTimer,
+                        contentPadding = PaddingValues(horizontal = 18.dp, vertical = 8.dp),
+                    ) {
+                        Text(
+                            text = stringResource(R.string.sleep_timer_stop),
+                            color = MaterialTheme.colorScheme.error,
+                            maxLines = 1,
+                        )
                     }
                 }
             }
-        },
-        confirmButton = {
-            val cancelText = stringResource(android.R.string.cancel)
-            val startText = stringResource(R.string.sleep_timer_start)
 
-            ButtonGroup(
-                overflowIndicator = {
-                    ButtonGroupDefaults.OverflowIndicator(it)
-                }
+            Spacer(Modifier.height(20.dp))
+        }
+
+        SleepTimerSectionLabel(stringResource(R.string.sleep_timer_after_time))
+
+        SleepTimerMinuteOptions.chunked(SleepTimerColumns).forEach { row ->
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(SleepTimerGridGap),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = SleepTimerGridGap),
             ) {
-                clickableItem(
-                    onClick = onDismiss,
-                    label = cancelText
-                )
+                row.forEach { minutes ->
+                    SleepTimerChip(
+                        label = stringResource(R.string.sleep_timer_minutes_short, minutes),
+                        clock = remember(now, minutes) { clockTimeAfter(minutes * 60_000L) },
+                        onClick = { onConfirmMinutes(minutes) },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+        }
 
-                clickableItem(
-                    onClick = {
-                        if (songsMode) onConfirmSongs(songs) else onConfirmMinutes(minutes)
+        Spacer(Modifier.height(6.dp))
+
+        SleepTimerSectionLabel(stringResource(R.string.sleep_timer_after_songs))
+
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(SleepTimerGridGap),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            SleepTimerSongOptions.forEach { count ->
+                // An estimate needs a queue to estimate from. Without one the pill still works --
+                // it just does not make a promise it cannot keep.
+                val estimate = remember(now, count, playerConnection) {
+                    playerConnection?.let { upcomingSongsMillis(it, count) } ?: 0L
+                }
+                SleepTimerChip(
+                    label = if (count == 1) {
+                        stringResource(R.string.sleep_timer_this_song)
+                    } else {
+                        pluralStringResource(R.plurals.n_song, count, count)
                     },
-                    label = startText
+                    clock = if (estimate > 0L) clockTimeAfter(estimate) else null,
+                    onClick = { onConfirmSongs(count) },
+                    modifier = Modifier.weight(1f),
                 )
             }
         }
-    )
+    }
 }
 
 /**
- * The unit half of a formatted quantity — "minutes" out of "45 minutes".
+ * Six times, in one unit.
  *
- * The plurals carry the number because that is how every other caller wants them; here the number
- * is already set three times larger beside it, so repeating it would read as "45 45 minutes".
- * Falls back to the whole string if the number is not where it was expected, which is the case in
- * languages that put it elsewhere.
+ * "1 hr" next to "45 min" would be the tidier label and the worse grid: two units in a block you
+ * are meant to compare at a glance means doing a conversion on every glance. Minutes all the way
+ * up keeps the numbers on one scale.
  */
-private fun unitOf(formatted: String, value: Int): String =
-    formatted.removePrefix("$value").trim().ifEmpty { formatted }
+private val SleepTimerMinuteOptions = listOf(5, 15, 30, 45, 60, 90)
 
-private val SleepTimerMinutePresets = listOf(15, 30, 45, 60, 90)
-private val SleepTimerSongPresets = listOf(1, 2, 3, 5, 10)
-private const val SleepTimerMaxSongs = 50
+/** Three song counts. One is "this song", which is the most-used sleep timer there is. */
+private val SleepTimerSongOptions = listOf(1, 3, 5)
+
+private const val SleepTimerColumns = 3
+private const val SleepTimerExtendMinutes = 15
+private val SleepTimerGridGap = 8.dp
+private val SleepTimerDialSize = 132.dp
+private val SleepTimerDialStroke = 6.dp
 
 /**
- * Duration or Songs.
+ * The countdown ring.
  *
- * Hand-rolled rather than a pair of chips. Two chips are two independent toggles that happen to sit
- * next to each other; this is one switch with two positions, and the pill sliding between them is
- * what says that choosing one is unchoosing the other.
+ * Draining rather than filling: the arc is what is left, so an almost-empty dial means the music is
+ * almost over, which is the reading you want half asleep in the dark. Idle, it is a full faint
+ * circle around a moon -- the same object, waiting, rather than a different screen.
  */
 @Composable
-private fun SleepTimerModeSwitch(
-    songsMode: Boolean,
-    onModeChange: (Boolean) -> Unit,
+private fun SleepTimerDial(
+    running: Boolean,
+    remainingFraction: Float,
+    label: String?,
+    caption: String?,
 ) {
-    val bias by animateFloatAsState(
-        targetValue = if (songsMode) 1f else -1f,
-        animationSpec = spring(
-            dampingRatio = AquamorphicDampingRatio,
-            stiffness = AquamorphicStiffness,
-        ),
-        label = "sleepTimerMode",
+    val scheme = MaterialTheme.colorScheme
+    val sweep by animateFloatAsState(
+        targetValue = if (running) remainingFraction else 1f,
+        animationSpec = tween(durationMillis = 520, easing = FastOutSlowInEasing),
+        label = "sleepTimerSweep",
     )
+    val arcColor by animateColorAsState(
+        targetValue = if (running) scheme.primary else scheme.onSurface.copy(alpha = 0.12f),
+        animationSpec = tween(durationMillis = 320),
+        label = "sleepTimerArc",
+    )
+    val trackColor = scheme.onSurface.copy(alpha = 0.10f)
 
     Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(46.dp)
-            .clip(CircleShape)
-            .background(MaterialTheme.colorScheme.surfaceContainerHighest)
-            .padding(4.dp),
+        contentAlignment = Alignment.Center,
+        modifier = Modifier.size(SleepTimerDialSize),
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth(0.5f)
-                .fillMaxHeight()
-                .align(BiasAlignment(bias, 0f))
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.primary),
-        )
+        Canvas(Modifier.fillMaxSize()) {
+            val stroke = SleepTimerDialStroke.toPx()
+            val inset = stroke * 1.3f
+            val arcSize = Size(size.width - inset * 2f, size.height - inset * 2f)
+            val topLeft = Offset(inset, inset)
 
-        Row(Modifier.fillMaxSize()) {
-            SleepTimerModeLabel(
-                text = stringResource(R.string.sleep_timer_duration),
-                selected = !songsMode,
-                onClick = { onModeChange(false) },
-                modifier = Modifier.weight(1f),
+            drawArc(
+                color = trackColor,
+                startAngle = 0f,
+                sweepAngle = 360f,
+                useCenter = false,
+                topLeft = topLeft,
+                size = arcSize,
+                style = Stroke(width = stroke, cap = StrokeCap.Round),
             )
-            SleepTimerModeLabel(
-                text = stringResource(R.string.sleep_timer_songs),
-                selected = songsMode,
-                onClick = { onModeChange(true) },
-                modifier = Modifier.weight(1f),
-            )
+
+            if (sweep > 0f) {
+                // A wide, faint copy of the same arc under the real one. It is the light the ring
+                // would throw if it were lit, and it is what keeps a 6dp stroke from reading as a
+                // hairline drawn on top of the dialog.
+                drawArc(
+                    color = arcColor.copy(alpha = 0.16f),
+                    startAngle = -90f,
+                    sweepAngle = 360f * sweep,
+                    useCenter = false,
+                    topLeft = topLeft,
+                    size = arcSize,
+                    style = Stroke(width = stroke * 2.6f, cap = StrokeCap.Round),
+                )
+                drawArc(
+                    color = arcColor,
+                    startAngle = -90f,
+                    sweepAngle = 360f * sweep,
+                    useCenter = false,
+                    topLeft = topLeft,
+                    size = arcSize,
+                    style = Stroke(width = stroke, cap = StrokeCap.Round),
+                )
+            }
+        }
+
+        AnimatedContent(
+            targetState = label,
+            label = "sleepTimerDialFace",
+        ) { text ->
+            if (text == null) {
+                Icon(
+                    painter = painterResource(R.drawable.bedtime),
+                    contentDescription = null,
+                    modifier = Modifier.size(38.dp),
+                    tint = scheme.secondary,
+                )
+            } else {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        text = text,
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = scheme.onSurface,
+                        maxLines = 1,
+                    )
+                    if (caption != null) {
+                        Text(
+                            text = caption,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = scheme.onSurfaceVariant,
+                            maxLines = 1,
+                        )
+                    }
+                }
+            }
         }
     }
 }
 
 @Composable
-private fun SleepTimerModeLabel(
-    text: String,
-    selected: Boolean,
+private fun SleepTimerSectionLabel(text: String) {
+    Text(
+        text = text.uppercase(),
+        style = MaterialTheme.typography.labelSmall,
+        fontWeight = FontWeight.SemiBold,
+        letterSpacing = 0.08.em,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(start = 4.dp, bottom = 8.dp),
+    )
+}
+
+/**
+ * One choice: what it is, and when it lands.
+ *
+ * The clock time is the second line rather than a column of its own, because in a grid there is no
+ * column to read down -- the pill has to carry both halves itself or the arithmetic comes back.
+ */
+@Composable
+private fun SleepTimerChip(
+    label: String,
+    clock: String?,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val color by animateColorAsState(
-        if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-        label = "sleepTimerModeLabel",
+    val scheme = MaterialTheme.colorScheme
+    val shape = RoundedCornerShape(18.dp)
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) 0.94f else 1f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+        label = "sleepTimerChipScale",
     )
 
-    Box(
+    Surface(
+        shape = shape,
+        color = scheme.onSurface.copy(alpha = 0.06f),
         modifier = modifier
-            .fillMaxHeight()
-            .clip(CircleShape)
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .clip(shape)
+            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick),
     ) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = FontWeight.SemiBold,
-            color = color,
-            maxLines = 1,
-        )
-    }
-}
-
-/**
- * The one-tap row above the fine control.
- *
- * Equal-width cells rather than chips that size to their own text, so the five options form a
- * single ruler across the dialog — "15 30 45 60 90" reads as a scale, five differently-sized
- * capsules read as five unrelated buttons.
- */
-@Composable
-private fun SleepTimerPresets(
-    options: List<Int>,
-    selected: Int,
-    onSelect: (Int) -> Unit,
-    label: @Composable (Int) -> String,
-) {
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        options.forEach { value ->
-            val chosen = value == selected
-            val container by animateColorAsState(
-                if (chosen) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    MaterialTheme.colorScheme.surfaceContainerHighest
-                },
-                label = "sleepPresetBg",
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+            modifier = Modifier
+                .heightIn(min = 62.dp)
+                .padding(horizontal = 6.dp, vertical = 10.dp),
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = scheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center,
             )
-            val content by animateColorAsState(
-                if (chosen) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
-                label = "sleepPresetFg",
-            )
-
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .height(38.dp)
-                    .clip(CircleShape)
-                    .background(container)
-                    .clickable { onSelect(value) },
-                contentAlignment = Alignment.Center,
-            ) {
+            if (clock != null) {
+                Spacer(Modifier.height(2.dp))
                 Text(
-                    text = label(value),
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    color = content,
+                    text = clock,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = scheme.onSurfaceVariant,
                     maxLines = 1,
-                    softWrap = false,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(horizontal = 4.dp),
+                    textAlign = TextAlign.Center,
                 )
             }
         }
-    }
-}
-
-@Composable
-private fun SleepTimerStepButton(
-    @DrawableRes icon: Int,
-    enabled: Boolean,
-    onClick: () -> Unit,
-) {
-    Box(
-        modifier = Modifier
-            .size(52.dp)
-            .clip(CircleShape)
-            .background(
-                if (enabled) {
-                    MaterialTheme.colorScheme.surfaceContainerHighest
-                } else {
-                    MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.4f)
-                }
-            )
-            .clickable(enabled = enabled, onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(
-            painter = painterResource(icon),
-            contentDescription = null,
-            tint = if (enabled) {
-                MaterialTheme.colorScheme.onSurface
-            } else {
-                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-            },
-            modifier = Modifier.size(24.dp),
-        )
     }
 }
 

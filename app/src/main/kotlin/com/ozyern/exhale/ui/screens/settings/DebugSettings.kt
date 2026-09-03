@@ -130,7 +130,7 @@ fun DebugSettings(
 
     Scaffold(
         topBar = {
-            TopAppBar(
+            SettingsTopAppBar(
                 title = {
                     Column {
                         Text(

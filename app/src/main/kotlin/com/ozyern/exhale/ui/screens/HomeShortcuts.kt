@@ -74,6 +74,11 @@ fun HomeShortcutsGrid(
     items: List<LocalItem>,
     onItemClick: (LocalItem) -> Unit,
     modifier: Modifier = Modifier,
+    /**
+     * Per-tile arrival, by position in the grid. Supplied by Home so the six tiles can cascade
+     * instead of landing as one block; the grid itself has no opinion about it.
+     */
+    tileIntro: (Int) -> Modifier = { Modifier },
 ) {
     if (items.isEmpty()) return
 
@@ -86,16 +91,18 @@ fun HomeShortcutsGrid(
     ) {
         // Laid out by hand rather than with a grid: this sits inside a LazyColumn item, and a
         // lazy grid nested in a lazy list has no bounded height to measure against.
-        items.chunked(2).forEach { pair ->
+        items.chunked(2).forEachIndexed { rowIndex, pair ->
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(ShortcutGap),
             ) {
-                pair.forEach { item ->
+                pair.forEachIndexed { column, item ->
                     ShortcutTile(
                         item = item,
                         onClick = { onItemClick(item) },
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier
+                            .weight(1f)
+                            .then(tileIntro(rowIndex * 2 + column)),
                     )
                 }
                 // An odd count leaves a half-width hole rather than stretching the last tile to

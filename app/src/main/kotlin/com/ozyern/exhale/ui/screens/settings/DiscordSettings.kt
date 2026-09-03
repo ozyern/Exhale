@@ -785,7 +785,7 @@ if (smallImageType == "custom") {
     )
 }
 
-    TopAppBar(
+    SettingsTopAppBar(
         title = { Text(stringResource(R.string.discord_integration)) },
         navigationIcon = {
             LiquidBackButton(

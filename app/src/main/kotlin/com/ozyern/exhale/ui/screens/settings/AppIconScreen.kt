@@ -154,7 +154,7 @@ fun AppIconScreen(navController: NavController) {
         Spacer(Modifier.height(32.dp))
     }
 
-    TopAppBar(
+    SettingsTopAppBar(
         title = { Text(stringResource(R.string.app_icon)) },
         navigationIcon = {
             LiquidBackButton(

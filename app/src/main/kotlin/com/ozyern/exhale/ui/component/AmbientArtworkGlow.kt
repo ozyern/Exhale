@@ -9,6 +9,7 @@ package com.ozyern.exhale.ui.component
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.withInfiniteAnimationFrameMillis
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.material3.MaterialTheme
@@ -16,6 +17,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -33,6 +35,9 @@ import coil3.toBitmap
 import com.ozyern.exhale.ui.theme.PlayerColorExtractor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.sin
 
 /**
  * Where the blobs sit, as a fraction of height. Their own falloff is what ends the effect — past
@@ -40,6 +45,24 @@ import kotlinx.coroutines.withContext
  * coloured screen.
  */
 private const val GlowBandFraction = 0.42f
+
+/**
+ * How long one full circuit of the drift takes.
+ *
+ * Long. The light in a room is never quite still, and neither is this -- but a glow you can *see*
+ * moving is a screensaver, not a room. Half a minute a lap puts the motion below the threshold
+ * where the eye tracks it and leaves only the impression that the page is lit rather than painted.
+ */
+private const val GlowDriftPeriodMs = 34_000f
+
+/** How far a blob wanders from where it sits, as a fraction of the width and of the band. */
+private const val GlowDriftX = 0.055f
+private const val GlowDriftY = 0.10f
+
+/** How much a blob swells and shrinks over its circuit. */
+private const val GlowBreath = 0.09f
+
+private const val TwoPi = (2.0 * PI).toFloat()
 
 /** Palettes are keyed by song id and shared process-wide, so returning to Home is free. */
 private const val AmbientCacheLimit = 24
@@ -116,16 +139,19 @@ fun rememberArtworkAmbientColors(
  *  * **Three radial blobs, no blur.** A radial gradient's falloff is already softer than any blur
  *    kernel, so a RenderEffect here would cost a full-screen pass every frame and change nothing
  *    you can see. The player's backdrop makes the same trade for the same reason.
- *  * **Static.** The blobs deliberately do not drift. A slow wander looks lovely in isolation, but
- *    this sits on Home and Library — the screens the app opens on and returns to — and any
- *    animation here means repainting three full-screen gradients every frame for as long as the
- *    tab is visible, forever, to move something nobody is looking at. The colour changing from
- *    song to song is the part that reads as alive, and that costs one crossfade. The player's
- *    backdrop can afford to drift because you are looking at it and it is on screen for seconds
- *    at a time; this is on screen for the life of the app.
- *  * **Drawn in [drawBehind], reading the crossfade inside the draw lambda.** The one animation
- *    that does run — the fade between songs — invalidates the draw phase only; composition never
- *    runs, so the list scrolling above it is untouched.
+ *  * **Drifting, but only in the draw phase.** The blobs wander a lap every thirty-odd seconds.
+ *    This was static at first, on the argument that animating a full-screen effect on the tab the
+ *    app opens on is a cost paid forever to move something nobody is watching — and the second
+ *    half of that is right, which is what the speed is for: at this rate you cannot catch it
+ *    moving, you only ever notice the page is not where you left it. What made it affordable is
+ *    that every animated value is read inside the draw lambda, so a frame costs one layer
+ *    invalidation and repaints three gradients — no recomposition, no relayout, and nothing at all
+ *    for the list scrolling above it. The alternative reading of "static" was a page that is lit
+ *    by the record when you arrive and then frozen, which is the exact quality a printed screen
+ *    has and a room does not.
+ *  * **One clock for every copy.** The drift phase comes from the shared infinite-animation frame
+ *    clock, not a per-instance transition, because two copies of this are sometimes meant to be one
+ *    wash — see SettingsBarGround.
  *  * **Nothing playing, nothing drawn.** With no colours the layer returns before allocating a
  *    brush.
  *
@@ -146,7 +172,7 @@ fun AmbientArtworkGlow(
     // screen into a stain, so it is pulled well back.
     val peakAlpha = (if (isSystemInDarkTheme()) 0.42f else 0.18f) * intensity
 
-    // Crossfade between songs — swapping palettes instantly is a visible pop at this size.
+    // Crossfade between songs -- swapping palettes instantly is a visible pop at this size.
     val presence by animateFloatAsState(
         targetValue = if (colors.isEmpty()) 0f else 1f,
         animationSpec = tween(durationMillis = 900, easing = LinearEasing),
@@ -155,16 +181,46 @@ fun AmbientArtworkGlow(
 
     val blobs = remember(colors) { colors.take(3) }
 
+    // The drift clock.
+    //
+    // Driven off the shared infinite-animation frame clock rather than each instance's own
+    // `rememberInfiniteTransition`, because two copies of this glow are sometimes meant to be one
+    // continuous wash -- the settings app bar draws a screen-height copy inside itself so the
+    // colour runs unbroken into the page behind it. Two independent transitions start whenever
+    // their composable happens to enter, so they would sit permanently out of phase and put a
+    // visible seam along the bottom edge of the bar. One clock, read by everybody, cannot.
+    //
+    // Written to a plain state that only `drawBehind` reads, so a frame of drift invalidates the
+    // draw phase and nothing above it: no recomposition, no relayout, for a full-screen effect
+    // that is running the whole time the app is open.
+    val phase = remember { mutableFloatStateOf(0f) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            withInfiniteAnimationFrameMillis { millis ->
+                phase.floatValue = (millis % GlowDriftPeriodMs.toLong()) / GlowDriftPeriodMs
+            }
+        }
+    }
+
     Box(
         modifier = modifier.drawBehind {
             if (presence <= 0.01f || blobs.isEmpty()) return@drawBehind
 
             val band = size.height * GlowBandFraction
             val radius = size.width * 0.85f
+            val turn = phase.floatValue * TwoPi
 
             blobs.forEachIndexed { index, color ->
                 val cx = size.width * (0.24f + 0.26f * index)
                 val cy = band * (0.18f + 0.14f * index)
+
+                // Each blob is given its own offset and its own slightly different rate, so the
+                // three of them never line up into one shape sliding about. The x and y rates are
+                // coprime-ish for the same reason: a circle would read as a circle.
+                val angle = turn + index * 2.09f
+                val dx = sin(angle) * size.width * GlowDriftX
+                val dy = cos(angle * 0.73f) * band * GlowDriftY
+                val breath = 1f + GlowBreath * sin(angle * 0.51f)
 
                 drawRect(
                     brush = Brush.radialGradient(
@@ -173,8 +229,8 @@ fun AmbientArtworkGlow(
                             color.copy(alpha = peakAlpha * 0.30f * presence),
                             Color.Transparent,
                         ),
-                        center = Offset(cx, cy),
-                        radius = radius,
+                        center = Offset(cx + dx, cy + dy),
+                        radius = radius * breath,
                     ),
                 )
             }

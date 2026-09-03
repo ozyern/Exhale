@@ -71,7 +71,7 @@ fun CustomizeBackground(
 
     Scaffold(
         topBar = {
-            TopAppBar(
+            SettingsTopAppBar(
                 title = { Text(stringResource(R.string.customize_background_title)) },
                 navigationIcon = {
                     LiquidBackButton(

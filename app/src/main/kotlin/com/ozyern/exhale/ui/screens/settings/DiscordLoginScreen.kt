@@ -201,7 +201,7 @@ fun DiscordLoginScreen(navController: NavController) {
         }
     )
 
-    TopAppBar(
+    SettingsTopAppBar(
         title = { Text(stringResource(R.string.action_login)) },
         navigationIcon = {
             LiquidBackButton(

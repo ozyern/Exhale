@@ -402,7 +402,7 @@ fun StorageSettings(
         }
     }
 
-    TopAppBar(
+    SettingsTopAppBar(
         title = { Text(stringResource(R.string.storage)) },
         navigationIcon = {
             LiquidBackButton(

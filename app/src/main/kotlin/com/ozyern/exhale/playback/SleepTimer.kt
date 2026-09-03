@@ -41,6 +41,20 @@ class SleepTimer(
         private set
 
     /**
+     * When the running duration timer was set, or -1 if none is running.
+     *
+     * Kept only so the UI can draw how far through the timer is. Remaining time alone cannot say
+     * that: eleven minutes left is nearly over on a fifteen-minute timer and barely started on a
+     * two-hour one, and a ring that cannot tell those apart is decoration.
+     */
+    var startTime by mutableLongStateOf(-1L)
+        private set
+
+    /** How many songs the running song counter was set to, so the same ring works in that mode. */
+    var totalSongs by mutableIntStateOf(0)
+        private set
+
+    /**
      * How many more songs will finish before playback pauses. 0 when the song counter is off.
      *
      * The song playing right now counts as one, so 1 means "stop at the end of this song".
@@ -53,13 +67,38 @@ class SleepTimer(
 
     /** Pause in [minute] minutes, wherever in a song that lands. */
     fun start(minute: Int) {
+        startAt(System.currentTimeMillis(), minute.minutes.inWholeMilliseconds)
+    }
+
+    /**
+     * Push the finish line back by [minutes], keeping the timer running.
+     *
+     * The one action a running sleep timer actually needs. Everything else you would want from it
+     * — how long is left, stopping it — you can already see; "I am still awake" is the one thing
+     * that otherwise costs you a trip back through the menu to set the whole thing again.
+     *
+     * Extending stretches the ring rather than restarting it, so the progress you have already
+     * made stays honest.
+     */
+    fun extend(minutes: Int) {
+        val now = System.currentTimeMillis()
+        val left = if (triggerTime != -1L) (triggerTime - now).coerceAtLeast(0L) else 0L
+        val began = if (startTime != -1L) startTime else now
+        startAt(began, (now - began) + left + minutes.minutes.inWholeMilliseconds)
+    }
+
+    private fun startAt(began: Long, total: Long) {
         cancelJob()
         songsRemaining = 0
-        triggerTime = System.currentTimeMillis() + minute.minutes.inWholeMilliseconds
+        totalSongs = 0
+        startTime = began
+        triggerTime = began + total
+        val wait = (triggerTime - System.currentTimeMillis()).coerceAtLeast(0L)
         sleepTimerJob = scope.launch {
-            delay(minute.minutes)
+            delay(wait)
             player.pause()
             triggerTime = -1L
+            startTime = -1L
         }
     }
 
@@ -67,13 +106,17 @@ class SleepTimer(
     fun startAfterSongs(count: Int) {
         cancelJob()
         triggerTime = -1L
+        startTime = -1L
         songsRemaining = count.coerceAtLeast(1)
+        totalSongs = songsRemaining
     }
 
     fun clear() {
         cancelJob()
         songsRemaining = 0
+        totalSongs = 0
         triggerTime = -1L
+        startTime = -1L
     }
 
     private fun cancelJob() {
@@ -110,6 +153,7 @@ class SleepTimer(
 
         songsRemaining -= 1
         if (songsRemaining == 0) {
+            totalSongs = 0
             player.pause()
         }
     }

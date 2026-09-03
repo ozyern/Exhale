@@ -54,6 +54,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.scale
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.TopAppBarScrollBehavior
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -61,6 +67,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.isSpecified
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -87,12 +94,14 @@ import com.ozyern.exhale.ui.component.settingsIconPuck
  *  1. The page is painted with the solid, distinct grouped background — pure black on dark, a
  *     near-white grey on light — so the inset group cards read as plates floating on a ground
  *     rather than as tinted patches of the same sheet.
- *  2. `colorScheme.surface` is re-pointed at that same colour for the subtree. Every settings
- *     sub-screen draws a plain M3 `TopAppBar`, whose container defaults to `surface`; without
- *     this the bar would sit a visible step off the page it heads. Re-pointing the token also
- *     kills the tonal-elevation tint M3 paints on scrolled bars — the flat, single-colour chrome
- *     is the whole point. Only `surface` moves; `onSurface`, the accent and every container
- *     token are untouched, so contrast and the brand tint are unaffected.
+ *  2. `colorScheme.surface` is re-pointed at that same colour for the subtree, so any Material
+ *     component that reaches for `surface` lands on the page rather than a step off it, and the
+ *     tonal-elevation tint M3 paints on scrolled surfaces goes away — the flat, single-colour
+ *     chrome is the whole point. Only `surface` moves; `onSurface`, the accent and every
+ *     container token are untouched, so contrast and the brand tint are unaffected.
+ *
+ * App bars do not use that colour any more: a flat fill covers the wash this page lays down, and
+ * a bar has to be opaque, so they take [SettingsBarGround] instead. See [SettingsTopAppBar].
  */
 @Composable
 fun SettingsPage(content: @Composable BoxScope.() -> Unit) {
@@ -748,5 +757,88 @@ fun SettingsRow(
                 color = SettingsDimensions.dividerColor(),
             )
         }
+    }
+}
+
+/**
+ * The ground an opaque settings app bar sits on.
+ *
+ * [SettingsPage] lays the album-art wash down behind the whole screen, but a settings app bar has
+ * to be opaque -- rows slide under it as the list scrolls, and a translucent bar there shows them.
+ * So the bar covers the wash with a flat plate, and on any screen where something is playing the
+ * result is a page that takes its colour from the artwork with a rectangle of dead grey across the
+ * top of it. On the root Settings screen that rectangle is a large title's worth of bar, which is
+ * most of what you see when you open the page.
+ *
+ * This paints the same two layers the page does, so the bar is made of the page rather than laid
+ * on top of it, and it still hides everything behind it.
+ *
+ * The wash is drawn at the height of the **screen**, not of the bar, and clipped. That is the
+ * whole trick: [AmbientArtworkGlow] positions its blobs as fractions of the height it is given, so
+ * a copy fitted to a 150dp bar would compress the entire gradient into the bar and meet the page's
+ * own copy at a visible seam. Given the screen's height it is the same gradient, continuing.
+ */
+@Composable
+fun SettingsBarGround(modifier: Modifier = Modifier) {
+    val pageBackground = SettingsDimensions.screenBackgroundColor()
+    val mediaMetadata by LocalPlayerConnection.current?.mediaMetadata?.collectAsState()
+        ?: remember { mutableStateOf<MediaMetadata?>(null) }
+    val ambientColors by rememberArtworkAmbientColors(
+        songId = mediaMetadata?.id,
+        thumbnailUrl = mediaMetadata?.thumbnailUrl,
+    )
+    val screenHeight = LocalConfiguration.current.screenHeightDp.dp
+
+    Box(
+        modifier = modifier
+            .clipToBounds()
+            .background(pageBackground),
+    ) {
+        AmbientArtworkGlow(
+            colors = ambientColors,
+            // Matched to SettingsPage. Two different intensities would put a step across the
+            // bar's bottom edge, which is the seam this exists to remove.
+            intensity = 0.66f,
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .fillMaxWidth()
+                .height(screenHeight),
+        )
+    }
+}
+
+/**
+ * The app bar every settings sub-page opens with.
+ *
+ * A thin wrapper over Material's [TopAppBar] whose only job is to put [SettingsBarGround] behind
+ * it instead of a flat fill. The bars were each reaching for the default container colour, which
+ * inside [SettingsPage] is the page's ground colour and nothing else -- so every sub-page had the
+ * same dead strip across its top as the root screen did.
+ *
+ * The bar stays opaque. Settings content scrolls underneath it, and a translucent bar here would
+ * show rows sliding behind the back button.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SettingsTopAppBar(
+    title: @Composable () -> Unit,
+    modifier: Modifier = Modifier,
+    navigationIcon: @Composable () -> Unit = {},
+    actions: @Composable RowScope.() -> Unit = {},
+    scrollBehavior: TopAppBarScrollBehavior? = null,
+) {
+    Box(modifier) {
+        SettingsBarGround(modifier = Modifier.matchParentSize())
+
+        TopAppBar(
+            title = title,
+            navigationIcon = navigationIcon,
+            actions = actions,
+            scrollBehavior = scrollBehavior,
+            colors = TopAppBarDefaults.topAppBarColors(
+                containerColor = Color.Transparent,
+                scrolledContainerColor = Color.Transparent,
+            ),
+        )
     }
 }
