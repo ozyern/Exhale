@@ -471,4 +471,36 @@
     <string name="your_artists">your artist</string>
     <string name="more_label">more</string>
     <string name="player_fullscreen">Player fullscreen</string>
+    <string name="display">Display</string>
+    <string name="ui_scale">Interface scale</string>
+    <string name="ui_scale_desc">Make everything in the app larger or smaller</string>
+    <string name="ui_scale_default">Default</string>
+    <string name="ui_scale_apply">Apply size</string>
+    <string name="ui_scale_apply_note">Exhale restarts to change size. Playback keeps going.</string>
+    <string name="ui_scale_use_default">Use default size</string>
+    <string name="library_recently_added">Recently Added</string>
+    <string name="library_edit">Edit</string>
+    <string name="library_done">Done</string>
+    <string name="library_empty_title">Nothing here yet</string>
+    <string name="library_empty_subtitle">Songs, albums and playlists you add will show up here.</string>
+    <string name="app_icon">App icon</string>
+    <string name="app_icon_desc">Choose the mark Exhale wears</string>
+    <string name="app_icon_default">Default</string>
+    <string name="app_icon_default_desc">The black mark on gold</string>
+    <string name="app_icon_gold">Gold</string>
+    <string name="app_icon_gold_desc">The gold mark, lit on black</string>
+    <string name="app_icon_applies_to">Also changes the logo in the app bar and on the launch screen.</string>
+    <string name="app_icon_note">The icon will disappear and come back on your home screen while it changes. Shortcuts you pinned may need adding again.</string>
+    <string name="like">Like</string>
+    <string name="always_on_display">Always On Display</string>
+    <string name="sleep_timer_duration">Duration</string>
+    <string name="sleep_timer_songs">Songs</string>
+    <string name="sleep_timer_this_song">This song</string>
+    <string name="sleep_timer_stop">Turn off timer</string>
+    <string name="sleep_timer_start">Start</string>
+    <string name="sleep_timer_stops_at">Stops at %1$s</string>
+    <plurals name="n_songs_left">
+        <item quantity="one">1 song left</item>
+        <item quantity="other">%d songs left</item>
+    </plurals>
 </resources>

@@ -57,10 +57,22 @@ import com.ozyern.exhale.ui.component.liquid.LiquidToggle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.ListItem
 import androidx.compose.runtime.LaunchedEffect
+import androidx.annotation.DrawableRes
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.unit.sp
+import com.ozyern.exhale.constants.AquamorphicDampingRatio
+import com.ozyern.exhale.constants.AquamorphicStiffness
+import com.ozyern.exhale.ui.component.liquid.LiquidSlider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -80,6 +92,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import com.ozyern.exhale.ui.player.SleepTimerDialog
+import com.ozyern.exhale.ui.player.sleepTimerMillisLeft
+import com.ozyern.exhale.utils.makeTimeString
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -121,8 +137,6 @@ import com.ozyern.exhale.playback.ExoDownloadService
 import com.ozyern.exhale.ui.component.BottomSheetState
 import com.ozyern.exhale.ui.component.ListDialog
 import com.ozyern.exhale.ui.component.MenuSurfaceSection
-import com.ozyern.exhale.ui.component.NewAction
-import com.ozyern.exhale.ui.component.NewActionGrid
 import com.ozyern.exhale.ui.component.TextFieldDialog
 import com.ozyern.exhale.utils.rememberPreference
 import kotlinx.coroutines.Dispatchers
@@ -271,6 +285,31 @@ fun ColumnScope.PlayerMenu(
         }
     }
 
+    // Sleep timer.
+    //
+    // It lives here rather than in Player.kt because the collapsed queue bars that used to be its
+    // only way in do not all have one — the Apple Music player, which is the default, has no such
+    // bar at all — so on a stock install the feature was unreachable. Every player design can open
+    // this menu.
+    var showSleepTimerDialog by rememberSaveable { mutableStateOf(false) }
+    if (showSleepTimerDialog) {
+        SleepTimerDialog(
+            onDismiss = { showSleepTimerDialog = false },
+            onConfirmMinutes = {
+                showSleepTimerDialog = false
+                playerConnection.service.sleepTimer.start(it)
+            },
+            onConfirmSongs = {
+                showSleepTimerDialog = false
+                playerConnection.service.sleepTimer.startAfterSongs(it)
+            },
+            onCancelTimer = {
+                showSleepTimerDialog = false
+                playerConnection.service.sleepTimer.clear()
+            },
+        )
+    }
+
     var showPitchTempoDialog by rememberSaveable { mutableStateOf(false) }
     if (showPitchTempoDialog) {
         TempoPitchDialog(onDismiss = { showPitchTempoDialog = false })
@@ -312,131 +351,270 @@ fun ColumnScope.PlayerMenu(
             bottom = 8.dp + WindowInsets.systemBars.asPaddingValues().calculateBottomPadding(),
         ),
     ) {
-        // ── Cabecera "Now Playing" ────────────────────────────────────────────
+        // ── The song this is all about ───────────────────────────────────────
+        //
+        // No card behind it. The sheet is already a card, and a card inside a card is two edges
+        // saying the same thing -- which was the shape of the whole menu before this: a header
+        // card, a volume card, a grid of tiles, then three more cards, six containers deep before
+        // you reached a single verb.
         item {
-            Surface(
-                shape = RoundedCornerShape(28.dp),
-                color = MaterialTheme.colorScheme.surfaceContainerLow,
-                modifier = Modifier.fillMaxWidth(),
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 4.dp, end = 4.dp, bottom = 4.dp),
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(14.dp),
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-                ) {
-                    val thumb = mediaMetadata.thumbnailUrl
-                    if (thumb.isNullOrBlank()) {
-                        Box(
-                            modifier = Modifier
-                                .size(56.dp)
-                                .clip(RoundedCornerShape(16.dp))
-                                .background(MaterialTheme.colorScheme.surfaceContainerHighest),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Icon(
-                                painter = painterResource(R.drawable.music_note),
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(22.dp),
-                            )
-                        }
-                    } else {
-                        AsyncImage(
-                            model = thumb,
+                val thumb = mediaMetadata.thumbnailUrl
+                if (thumb.isNullOrBlank()) {
+                    Box(
+                        modifier = Modifier
+                            .size(64.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(MaterialTheme.colorScheme.surfaceContainerHighest),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.music_note),
                             contentDescription = null,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.size(56.dp).clip(RoundedCornerShape(16.dp)),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(24.dp),
                         )
                     }
+                } else {
+                    AsyncImage(
+                        model = thumb,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.size(64.dp).clip(RoundedCornerShape(14.dp)),
+                    )
+                }
 
-                    Column(modifier = Modifier.weight(1f)) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = nowPlayingTitle,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.basicMarquee(),
+                    )
+                    if (nowPlayingSubtitle.isNotBlank()) {
                         Text(
-                            text = stringResource(R.string.now_playing),
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.primary,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        Text(
-                            text = nowPlayingTitle,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold,
+                            text = nowPlayingSubtitle,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.basicMarquee(),
                         )
-                        if (nowPlayingSubtitle.isNotBlank()) {
-                            Text(
-                                text = nowPlayingSubtitle,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.basicMarquee(),
-                            )
-                        }
                     }
                 }
             }
         }
 
-        // ── Volumen (solo fuera de cola) ─────────────────────────────────────
+        item { Spacer(modifier = Modifier.height(18.dp)) }
+
+        // ── The five verbs ───────────────────────────────────────────────────
+        //
+        // These are what the menu is opened for, so they are the only things in it you do not have
+        // to read to use: five round targets in a row, each a shape and a colour before it is a
+        // word. They were previously six equal squares in a 3x2 grid that also held "Music
+        // together" and "Always On Display" -- two destinations given the same weight as liking
+        // the song playing, which is the sort of flattening that makes a menu feel long.
+        //
+        // Everything that is a *place* rather than an *action* moved down into the list.
+        item {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                val liked = librarySong?.song?.liked == true
+
+                PlayerQuickAction(
+                    icon = if (liked) R.drawable.favorite else R.drawable.favorite_border,
+                    label = stringResource(R.string.like),
+                    // The only one that colours itself. Liking is the one action here with a
+                    // lasting state, and the heart is the one glyph that reads at a glance.
+                    active = liked,
+                    activeColor = MaterialTheme.colorScheme.error,
+                    onClick = { playerConnection.toggleLike() },
+                    modifier = Modifier.weight(1f),
+                )
+
+                PlayerQuickAction(
+                    icon = R.drawable.playlist_add,
+                    label = stringResource(R.string.add_to_playlist),
+                    onClick = { showChoosePlaylistDialog = true },
+                    modifier = Modifier.weight(1f),
+                )
+
+                val downloadState = download?.state
+                PlayerQuickAction(
+                    icon = when (downloadState) {
+                        Download.STATE_COMPLETED -> R.drawable.offline
+                        else -> R.drawable.download
+                    },
+                    label = stringResource(
+                        when (downloadState) {
+                            Download.STATE_COMPLETED -> R.string.remove_download
+                            Download.STATE_QUEUED, Download.STATE_DOWNLOADING -> R.string.downloading
+                            else -> R.string.action_download
+                        }
+                    ),
+                    active = downloadState == Download.STATE_COMPLETED,
+                    // In flight, the ring replaces the glyph: a download that is happening should
+                    // not look identical to one you could start.
+                    busy = downloadState == Download.STATE_QUEUED || downloadState == Download.STATE_DOWNLOADING,
+                    onClick = {
+                        if (downloadState == null) {
+                            database.transaction { insert(mediaMetadata) }
+                            val downloadRequest = DownloadRequest
+                                .Builder(mediaMetadata.id, mediaMetadata.id.toUri())
+                                .setCustomCacheKey(mediaMetadata.id)
+                                .setData(mediaMetadata.title.toByteArray())
+                                .build()
+                            DownloadService.sendAddDownload(
+                                context,
+                                ExoDownloadService::class.java,
+                                downloadRequest,
+                                false,
+                            )
+                        } else {
+                            DownloadService.sendRemoveDownload(
+                                context,
+                                ExoDownloadService::class.java,
+                                mediaMetadata.id,
+                                false,
+                            )
+                        }
+                    },
+                    modifier = Modifier.weight(1f),
+                )
+
+                PlayerQuickAction(
+                    icon = R.drawable.radio,
+                    label = stringResource(R.string.start_radio),
+                    onClick = {
+                        Toast.makeText(context, context.getString(R.string.starting_radio), Toast.LENGTH_SHORT).show()
+                        playerConnection.startRadioSeamlessly()
+                        onDismiss()
+                    },
+                    modifier = Modifier.weight(1f),
+                )
+
+                PlayerQuickAction(
+                    icon = R.drawable.link,
+                    label = stringResource(R.string.copy_link),
+                    onClick = {
+                        val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                        val clip = android.content.ClipData.newPlainText(
+                            context.getString(R.string.copy_link),
+                            "https://music.youtube.com/watch?v=${mediaMetadata.id}",
+                        )
+                        clipboard.setPrimaryClip(clip)
+                        Toast.makeText(context, R.string.link_copied, Toast.LENGTH_SHORT).show()
+                        onDismiss()
+                    },
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
+
+        // ── Volume ───────────────────────────────────────────────────────────
         if (isQueueTrigger != true) {
             item {
-                Spacer(modifier = Modifier.height(12.dp))
-                PlayerVolumeCard(
+                Spacer(modifier = Modifier.height(18.dp))
+                PlayerVolumeRow(
                     volume = playerVolume.value,
                     onVolumeChange = { playerConnection.service.playerVolume.value = it },
                 )
             }
         }
 
-        item { Spacer(modifier = Modifier.height(16.dp)) }
+        item { Spacer(modifier = Modifier.height(18.dp)) }
 
-        // ── Acciones rápidas ─────────────────────────────────────────────────
+        // ── Everywhere else this song goes, and everything else you can set ──
+        //
+        // One card, not four. These were previously three or four separate MenuSurfaceSections
+        // stacked with 12dp between them, which drew a hard break between "view artist" and
+        // "equalizer" as though the two were different kinds of thing to a person scanning for a
+        // row. They are not: they are all rows. Dividers inset to the label carry the grouping
+        // that the gaps were doing, at a fraction of the vertical cost.
         item {
-            NewActionGrid(
-                actions = listOf(
-                    NewAction(
-                        icon = {
-                            Icon(
-                                painter = painterResource(R.drawable.radio),
-                                contentDescription = null,
-                                modifier = Modifier.size(28.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            MenuSurfaceSection {
+                Column {
+                    var needsDivider = false
+
+                    @Composable
+                    fun Divider() {
+                        if (needsDivider) {
+                            HorizontalDivider(
+                                modifier = Modifier.padding(start = 56.dp),
+                                color = MaterialTheme.colorScheme.outlineVariant,
                             )
-                        },
-                        text = stringResource(R.string.start_radio),
-                        onClick = {
-                            Toast.makeText(context, context.getString(R.string.starting_radio), Toast.LENGTH_SHORT).show()
-                            playerConnection.startRadioSeamlessly()
-                            onDismiss()
                         }
-                    ),
-                    NewAction(
-                        icon = {
-                            Icon(
-                                painter = painterResource(R.drawable.playlist_add),
-                                contentDescription = null,
-                                modifier = Modifier.size(28.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                        needsDivider = true
+                    }
+
+                    if (splitArtists.isNotEmpty()) {
+                        Divider()
+                        PlayerMenuRow(
+                            icon = R.drawable.artist,
+                            title = stringResource(R.string.view_artist),
+                            onClick = {
+                                if (splitArtists.size == 1 && splitArtists[0].originalArtist != null) {
+                                    onDismiss()
+                                    playerBottomSheetState.snapTo(playerBottomSheetState.collapsedBound)
+                                    navController.navigate("artist/${splitArtists[0].originalArtist!!.id}")
+                                } else {
+                                    showSelectArtistDialog = true
+                                }
+                            },
+                        )
+                    }
+
+                    if (mediaMetadata.album != null) {
+                        Divider()
+                        PlayerMenuRow(
+                            icon = R.drawable.album,
+                            title = stringResource(R.string.view_album),
+                            onClick = {
+                                onDismiss()
+                                playerBottomSheetState.snapTo(playerBottomSheetState.collapsedBound)
+                                navController.navigate("album/${mediaMetadata.album.id}")
+                            },
+                        )
+                    }
+
+                    // Sleep timer. Carries its own state in the supporting line, because a timer
+                    // you have already set is the single thing on this list you are most likely to
+                    // have opened the menu to check.
+                    Divider()
+                    val sleepTimer = playerConnection.service.sleepTimer
+                    val sleepTimerActive = remember(sleepTimer.triggerTime, sleepTimer.songsRemaining) {
+                        sleepTimer.isActive
+                    }
+                    val songsLeft = sleepTimer.songsRemaining
+
+                    PlayerMenuRow(
+                        icon = R.drawable.bedtime,
+                        title = stringResource(R.string.sleep_timer),
+                        subtitle = if (!sleepTimerActive) {
+                            null
+                        } else if (songsLeft > 0) {
+                            pluralStringResource(R.plurals.n_songs_left, songsLeft, songsLeft)
+                        } else {
+                            makeTimeString(sleepTimerMillisLeft(playerConnection))
                         },
-                        text = stringResource(R.string.add_to_playlist),
-                        onClick = { showChoosePlaylistDialog = true }
-                    ),
-                    NewAction(
-                        icon = {
-                            Icon(
-                                painter = painterResource(
-                                    if (isInSpeedDial) R.drawable.bookmark_filled else R.drawable.bookmark
-                                ),
-                                contentDescription = null,
-                                modifier = Modifier.size(28.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        },
-                        text = stringResource(
+                        highlighted = sleepTimerActive,
+                        onClick = { showSleepTimerDialog = true },
+                    )
+
+                    Divider()
+                    PlayerMenuRow(
+                        icon = if (isInSpeedDial) R.drawable.bookmark_filled else R.drawable.bookmark,
+                        title = stringResource(
                             if (isInSpeedDial) R.string.remove_from_speed_dial
                             else R.string.pin_to_speed_dial
                         ),
@@ -448,250 +626,237 @@ fun ColumnScope.PlayerMenu(
                             }
                             onSpeedDialSongIdsChange(updatedIds.joinToString(","))
                             onDismiss()
-                        }
-                    ),
-                    NewAction(
-                        icon = {
-                            Icon(
-                                painter = painterResource(R.drawable.link),
-                                contentDescription = null,
-                                modifier = Modifier.size(28.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
                         },
-                        text = stringResource(R.string.copy_link),
-                        onClick = {
-                            val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                            val clip = android.content.ClipData.newPlainText(
-                                context.getString(R.string.copy_link),
-                                "https://music.youtube.com/watch?v=${mediaMetadata.id}",
-                            )
-                            clipboard.setPrimaryClip(clip)
-                            android.widget.Toast.makeText(context, R.string.link_copied, android.widget.Toast.LENGTH_SHORT).show()
-                            onDismiss()
-                        }
-                    ),
-                    NewAction(
-                        icon = {
-                            Icon(
-                                painter = painterResource(R.drawable.fire),
-                                contentDescription = null,
-                                modifier = Modifier.size(28.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        },
-                        text = stringResource(R.string.music_together),
-                        onClick = {
-                            onDismiss()
-                            playerBottomSheetState.snapTo(playerBottomSheetState.collapsedBound)
-                            navController.navigate("settings/music_together")
-                        }
-                    ),
-                    // ── Always On Display ─────────────────────────────────────
-                    NewAction(
-                        icon = {
-                            Icon(
-                                // Cambia el drawable si "dark_mode" no existe en tu proyecto
-                                // Alternativas: R.drawable.bedtime, R.drawable.phone_android
-                                painter = painterResource(R.drawable.dark_mode),
-                                contentDescription = null,
-                                modifier = Modifier.size(28.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        },
-                        text = "Always On Display",
+                    )
+
+                    if (isQueueTrigger != true) {
+                        Divider()
+                        PlayerMenuRow(
+                            icon = R.drawable.equalizer,
+                            title = stringResource(R.string.equalizer),
+                            onClick = { showEqualizerDialog = true },
+                        )
+
+                        Divider()
+                        val playbackParameters by playerConnection.playbackParameters.collectAsState()
+                        PlayerMenuRow(
+                            icon = R.drawable.speed,
+                            title = stringResource(R.string.tempo_and_pitch),
+                            subtitle = "x${formatMultiplier(playbackParameters.speed)} • x${formatMultiplier(playbackParameters.pitch)}",
+                            onClick = { showPitchTempoDialog = true },
+                        )
+                    }
+
+                    Divider()
+                    PlayerMenuRow(
+                        icon = R.drawable.dark_mode,
+                        title = stringResource(R.string.always_on_display),
                         onClick = {
                             onDismiss()
                             playerBottomSheetState.collapseSoft()
                             navController.navigate("always_on_display")
-                        }
-                    ),
-                ),
-                modifier = Modifier.padding(vertical = 4.dp)
-            )
-        }
-
-        item { Spacer(modifier = Modifier.height(12.dp)) }
-
-        // ── Artista / Álbum ──────────────────────────────────────────────────
-        if (splitArtists.isNotEmpty() || mediaMetadata.album != null) {
-            item {
-                MenuSurfaceSection(modifier = Modifier.padding(vertical = 6.dp)) {
-                    Column {
-                        if (splitArtists.isNotEmpty()) {
-                            ListItem(
-                                headlineContent = { Text(text = stringResource(R.string.view_artist)) },
-                                leadingContent = {
-                                    Icon(painter = painterResource(R.drawable.artist), contentDescription = null)
-                                },
-                                modifier = Modifier.clickable {
-                                    if (splitArtists.size == 1 && splitArtists[0].originalArtist != null) {
-                                        onDismiss()
-                                        playerBottomSheetState.snapTo(playerBottomSheetState.collapsedBound)
-                                        navController.navigate("artist/${splitArtists[0].originalArtist!!.id}")
-                                    } else {
-                                        showSelectArtistDialog = true
-                                    }
-                                },
-                                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                            )
-                        }
-
-                        if (splitArtists.isNotEmpty() && mediaMetadata.album != null) {
-                            HorizontalDivider(
-                                modifier = Modifier.padding(start = 56.dp),
-                                color = MaterialTheme.colorScheme.outlineVariant,
-                            )
-                        }
-
-                        if (mediaMetadata.album != null) {
-                            ListItem(
-                                headlineContent = { Text(text = stringResource(R.string.view_album)) },
-                                leadingContent = {
-                                    Icon(painter = painterResource(R.drawable.album), contentDescription = null)
-                                },
-                                modifier = Modifier.clickable {
-                                    onDismiss()
-                                    playerBottomSheetState.snapTo(playerBottomSheetState.collapsedBound)
-                                    navController.navigate("album/${mediaMetadata.album.id}")
-                                },
-                                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                            )
-                        }
-                    }
-                }
-            }
-            item { Spacer(modifier = Modifier.height(12.dp)) }
-        }
-
-        // ── Descarga ─────────────────────────────────────────────────────────
-        item {
-            MenuSurfaceSection(modifier = Modifier.padding(vertical = 6.dp)) {
-                when (download?.state) {
-                    Download.STATE_COMPLETED -> {
-                        ListItem(
-                            headlineContent = {
-                                Text(text = stringResource(R.string.remove_download), color = MaterialTheme.colorScheme.error)
-                            },
-                            leadingContent = {
-                                Icon(painter = painterResource(R.drawable.offline), contentDescription = null, tint = MaterialTheme.colorScheme.error)
-                            },
-                            modifier = Modifier.clickable {
-                                DownloadService.sendRemoveDownload(context, ExoDownloadService::class.java, mediaMetadata.id, false)
-                            },
-                            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                        )
-                    }
-                    Download.STATE_QUEUED, Download.STATE_DOWNLOADING -> {
-                        ListItem(
-                            headlineContent = { Text(text = stringResource(R.string.downloading)) },
-                            leadingContent = { CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp) },
-                            modifier = Modifier.clickable {
-                                DownloadService.sendRemoveDownload(context, ExoDownloadService::class.java, mediaMetadata.id, false)
-                            },
-                            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                        )
-                    }
-                    else -> {
-                        ListItem(
-                            headlineContent = { Text(text = stringResource(R.string.action_download)) },
-                            leadingContent = {
-                                Icon(painter = painterResource(R.drawable.download), contentDescription = null)
-                            },
-                            modifier = Modifier.clickable {
-                                database.transaction { insert(mediaMetadata) }
-                                val downloadRequest = DownloadRequest
-                                    .Builder(mediaMetadata.id, mediaMetadata.id.toUri())
-                                    .setCustomCacheKey(mediaMetadata.id)
-                                    .setData(mediaMetadata.title.toByteArray())
-                                    .build()
-                                DownloadService.sendAddDownload(context, ExoDownloadService::class.java, downloadRequest, false)
-                            },
-                            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                        )
-                    }
-                }
-
-                if (externalDownloaderEnabled) {
-                    HorizontalDivider(modifier = Modifier.padding(start = 56.dp), color = MaterialTheme.colorScheme.outlineVariant)
-                    ListItem(
-                        headlineContent = { Text(text = stringResource(R.string.open_with_downloader)) },
-                        leadingContent = { Icon(painter = painterResource(R.drawable.download), contentDescription = null) },
-                        modifier = Modifier.clickable {
-                            onDismiss()
-                            val url = "https://music.youtube.com/watch?v=${mediaMetadata.id}"
-                            if (externalDownloaderPackage.isBlank()) {
-                                Toast.makeText(context, context.getString(R.string.external_downloader_not_configured), Toast.LENGTH_LONG).show()
-                                return@clickable
-                            }
-                            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
-                                setPackage(externalDownloaderPackage)
-                                data = android.net.Uri.parse(url)
-                                addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                            }
-                            try {
-                                context.startActivity(intent)
-                            } catch (e: android.content.ActivityNotFoundException) {
-                                Toast.makeText(context, context.getString(R.string.external_downloader_not_installed), Toast.LENGTH_SHORT).show()
-                            }
                         },
-                        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                     )
-                }
-            }
-        }
 
-        // ── Detalles / Ecualizador / Tempo ───────────────────────────────────
-        item {
-            MenuSurfaceSection(modifier = Modifier.padding(vertical = 6.dp)) {
-                Column {
-                    ListItem(
-                        headlineContent = { Text(text = stringResource(R.string.details)) },
-                        leadingContent = { Icon(painter = painterResource(R.drawable.info), contentDescription = null) },
-                        modifier = Modifier.clickable {
+                    Divider()
+                    PlayerMenuRow(
+                        icon = R.drawable.fire,
+                        title = stringResource(R.string.music_together),
+                        onClick = {
+                            onDismiss()
+                            playerBottomSheetState.snapTo(playerBottomSheetState.collapsedBound)
+                            navController.navigate("settings/music_together")
+                        },
+                    )
+
+                    if (externalDownloaderEnabled) {
+                        Divider()
+                        PlayerMenuRow(
+                            icon = R.drawable.download,
+                            title = stringResource(R.string.open_with_downloader),
+                            onClick = {
+                                onDismiss()
+                                val url = "https://music.youtube.com/watch?v=${mediaMetadata.id}"
+                                if (externalDownloaderPackage.isBlank()) {
+                                    Toast.makeText(
+                                        context,
+                                        context.getString(R.string.external_downloader_not_configured),
+                                        Toast.LENGTH_LONG,
+                                    ).show()
+                                    return@PlayerMenuRow
+                                }
+                                val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
+                                    setPackage(externalDownloaderPackage)
+                                    data = android.net.Uri.parse(url)
+                                    addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                                }
+                                try {
+                                    context.startActivity(intent)
+                                } catch (e: android.content.ActivityNotFoundException) {
+                                    Toast.makeText(
+                                        context,
+                                        context.getString(R.string.external_downloader_not_installed),
+                                        Toast.LENGTH_SHORT,
+                                    ).show()
+                                }
+                            },
+                        )
+                    }
+
+                    Divider()
+                    PlayerMenuRow(
+                        icon = R.drawable.info,
+                        title = stringResource(R.string.details),
+                        onClick = {
                             onShowDetailsDialog()
                             onDismiss()
                         },
-                        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                     )
-
-                    if (isQueueTrigger != true) {
-                        HorizontalDivider(modifier = Modifier.padding(start = 56.dp), color = MaterialTheme.colorScheme.outlineVariant)
-
-                        ListItem(
-                            headlineContent = { Text(text = stringResource(R.string.equalizer)) },
-                            leadingContent = { Icon(painter = painterResource(R.drawable.equalizer), contentDescription = null) },
-                            modifier = Modifier.clickable { showEqualizerDialog = true },
-                            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                        )
-
-                        HorizontalDivider(modifier = Modifier.padding(start = 56.dp), color = MaterialTheme.colorScheme.outlineVariant)
-
-                        ListItem(
-                            headlineContent = { Text(text = stringResource(R.string.tempo_and_pitch)) },
-                            leadingContent = { Icon(painter = painterResource(R.drawable.speed), contentDescription = null) },
-                            supportingContent = {
-                                val playbackParameters by playerConnection.playbackParameters.collectAsState()
-                                Text(
-                                    text = "x${formatMultiplier(playbackParameters.speed)} • x${formatMultiplier(playbackParameters.pitch)}",
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                            },
-                            modifier = Modifier.clickable { showPitchTempoDialog = true },
-                            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                        )
-                    }
                 }
             }
         }
     }
 }
 
-// ── El resto del archivo permanece igual que el original ─────────────────────
-
+/**
+ * One of the five round verbs at the top of the menu.
+ *
+ * A circle with a word under it rather than a labelled tile, because at this size the glyph is the
+ * control and the label is the caption. [active] is for actions with a lasting state -- liked,
+ * downloaded -- which are the only ones that should look different from the rest when you open the
+ * sheet; everything else is a thing you are about to do, and a row of five differently-coloured
+ * "about to do" buttons is a row with no emphasis at all.
+ */
 @Composable
-private fun PlayerVolumeCard(
+private fun PlayerQuickAction(
+    @DrawableRes icon: Int,
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    active: Boolean = false,
+    activeColor: Color = Color.Unspecified,
+    busy: Boolean = false,
+) {
+    val accent = if (activeColor == Color.Unspecified) MaterialTheme.colorScheme.primary else activeColor
+    val container by animateColorAsState(
+        if (active) accent.copy(alpha = 0.16f) else MaterialTheme.colorScheme.surfaceContainerHighest,
+        label = "quickActionBg",
+    )
+    val content by animateColorAsState(
+        if (active) accent else MaterialTheme.colorScheme.onSurface,
+        label = "quickActionFg",
+    )
+
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) 0.90f else 1f,
+        animationSpec = spring(
+            dampingRatio = AquamorphicDampingRatio,
+            stiffness = AquamorphicStiffness,
+        ),
+        label = "quickActionScale",
+    )
+
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = modifier,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(56.dp)
+                .graphicsLayer { scaleX = scale; scaleY = scale }
+                .clip(CircleShape)
+                .background(container)
+                .clickable(
+                    interactionSource = interactionSource,
+                    indication = null,
+                    onClick = onClick,
+                ),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (busy) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(22.dp),
+                    strokeWidth = 2.dp,
+                    color = content,
+                )
+            } else {
+                Icon(
+                    painter = painterResource(icon),
+                    contentDescription = label,
+                    tint = content,
+                    modifier = Modifier.size(24.dp),
+                )
+            }
+        }
+
+        Spacer(Modifier.height(6.dp))
+
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            lineHeight = 13.sp,
+        )
+    }
+}
+
+/**
+ * One row of the menu's single list.
+ *
+ * A chevron on every row that leads somewhere and none on the rows that do something in place, so
+ * the list says which of its entries close the sheet before you tap them.
+ */
+@Composable
+private fun PlayerMenuRow(
+    @DrawableRes icon: Int,
+    title: String,
+    onClick: () -> Unit,
+    subtitle: String? = null,
+    highlighted: Boolean = false,
+) {
+    ListItem(
+        headlineContent = { Text(text = title) },
+        supportingContent = subtitle?.let {
+            {
+                Text(
+                    text = it,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    color = if (highlighted) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                )
+            }
+        },
+        leadingContent = {
+            Icon(
+                painter = painterResource(icon),
+                contentDescription = null,
+                tint = if (highlighted) MaterialTheme.colorScheme.primary else LocalContentColor.current,
+            )
+        },
+        modifier = Modifier.clickable(onClick = onClick),
+        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+    )
+}
+
+/**
+ * Volume, as a line rather than a card.
+ *
+ * It used to be a 28dp-rounded Surface with its own title row and percentage readout, roughly the
+ * same visual weight as the song header above it -- a lot of sheet spent on a control most people
+ * never touch here because the hardware keys are right there. It keeps its full width and its
+ * number, and gives back the box.
+ */
+@Composable
+private fun PlayerVolumeRow(
     volume: Float,
     onVolumeChange: (Float) -> Unit,
     modifier: Modifier = Modifier,
@@ -699,66 +864,48 @@ private fun PlayerVolumeCard(
     val safeVolume = volume.coerceIn(0f, 1f)
     var previousVolume by remember { mutableFloatStateOf(0.5f) }
     val isMuted = safeVolume == 0f
-    val onMuteToggle = {
-        if (isMuted) {
-            val targetVolume = if (previousVolume > 0f) previousVolume else 0.5f
-            onVolumeChange(targetVolume)
-        } else {
-            if (safeVolume > 0f) previousVolume = safeVolume
-            onVolumeChange(0f)
-        }
-    }
 
-    Surface(
-        shape = RoundedCornerShape(28.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-        modifier = modifier.fillMaxWidth(),
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 4.dp),
     ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 14.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(text = stringResource(R.string.volume), style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
-                Text(
-                    text = "${(safeVolume * 100).roundToInt()}%",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-            }
-
-            Surface(
-                shape = RoundedCornerShape(18.dp),
-                color = MaterialTheme.colorScheme.surfaceContainerHighest,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
-                ) {
-                    IconButton(onClick = onMuteToggle, modifier = Modifier.size(24.dp)) {
-                        Icon(
-                            painter = painterResource(if (isMuted) R.drawable.volume_off else R.drawable.volume_up),
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(18.dp),
-                        )
+        Icon(
+            painter = painterResource(
+                if (isMuted) R.drawable.volume_off else R.drawable.volume_up
+            ),
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier
+                .size(22.dp)
+                .clickable {
+                    if (isMuted) {
+                        onVolumeChange(if (previousVolume > 0f) previousVolume else 0.5f)
+                    } else {
+                        previousVolume = safeVolume
+                        onVolumeChange(0f)
                     }
-                    VolumeSliderL(
-                        value = safeVolume,
-                        onValueChange = { newVolume ->
-                            if (newVolume > 0f) previousVolume = newVolume
-                            onVolumeChange(newVolume)
-                        },
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-            }
-        }
+                },
+        )
+
+        LiquidSlider(
+            value = safeVolume,
+            onValueChange = onVolumeChange,
+            valueRange = 0f..1f,
+            accentColor = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.weight(1f),
+        )
+
+        Text(
+            text = "${(safeVolume * 100).roundToInt()}%",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            modifier = Modifier.width(40.dp),
+            textAlign = TextAlign.End,
+        )
     }
 }
 

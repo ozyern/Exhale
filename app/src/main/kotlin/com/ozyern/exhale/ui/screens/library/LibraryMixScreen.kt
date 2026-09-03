@@ -2,7 +2,6 @@
  * Exhale Project Original (2026)
  * ozyern (github.com/ozyern)
  * Licensed Under GPL-3.0 | see git history for contributors
- * New UI by ArchiveTune (github.com/ArchiveTuneApp/ArchiveTune)
  */
 
 package com.ozyern.exhale.ui.screens.library
@@ -11,65 +10,56 @@ import androidx.annotation.DrawableRes
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.core.graphics.ColorUtils
+import androidx.compose.ui.unit.em
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
@@ -82,52 +72,74 @@ import com.ozyern.exhale.constants.LibraryFilter
 import com.ozyern.exhale.constants.MixSortDescendingKey
 import com.ozyern.exhale.constants.MixSortType
 import com.ozyern.exhale.constants.MixSortTypeKey
-import com.ozyern.exhale.constants.PlaylistSortType
-import com.ozyern.exhale.constants.PlaylistSortTypeKey
 import com.ozyern.exhale.constants.PlaylistTagsFilterKey
 import com.ozyern.exhale.constants.ShowCachedPlaylistKey
 import com.ozyern.exhale.constants.ShowDownloadedPlaylistKey
 import com.ozyern.exhale.constants.ShowLikedPlaylistKey
 import com.ozyern.exhale.constants.ShowSpotifyPlaylistsKey
 import com.ozyern.exhale.constants.ShowTopPlaylistKey
-import com.ozyern.exhale.constants.YtmSyncKey
+import com.ozyern.exhale.db.entities.Album
 import com.ozyern.exhale.db.entities.Playlist
-import com.ozyern.exhale.extensions.move
-import com.ozyern.exhale.extensions.toMediaItem
-import com.ozyern.exhale.playback.queues.ListQueue
-import com.ozyern.exhale.playback.queues.LocalAlbumRadio
 import com.ozyern.exhale.spotify.SpotifyLibraryViewModel
-import com.ozyern.exhale.spotify.SpotifyMapper
-import com.ozyern.exhale.spotify.models.SpotifyPlaylist
 import com.ozyern.exhale.ui.component.ExpressivePullToRefreshBox
-import com.ozyern.exhale.ui.component.GridPosition
-import com.ozyern.exhale.ui.component.LibraryAlbumSpotlightCard
-import com.ozyern.exhale.ui.component.LibraryArtistSpotlightCard
-import com.ozyern.exhale.ui.component.LibraryHeroFavoriteTile
-import com.ozyern.exhale.ui.component.LibraryPinnedCollectionTile
-import com.ozyern.exhale.ui.component.LibraryPlaylistListItem
 import com.ozyern.exhale.ui.component.LocalMenuState
+import com.ozyern.exhale.ui.component.PlaylistThumbnail
 import com.ozyern.exhale.ui.component.SortHeader
 import com.ozyern.exhale.ui.menu.AlbumMenu
-import com.ozyern.exhale.ui.menu.ArtistMenu
+import com.ozyern.exhale.ui.menu.PlaylistMenu
 import com.ozyern.exhale.utils.rememberEnumPreference
 import com.ozyern.exhale.utils.rememberPreference
 import com.ozyern.exhale.viewmodels.LibraryMixViewModel
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.firstOrNull
-import kotlinx.coroutines.launch
-import sh.calvin.reorderable.ReorderableItem
-import sh.calvin.reorderable.rememberReorderableLazyListState
+import androidx.compose.runtime.rememberCoroutineScope
 import java.text.Collator
+import java.time.LocalDateTime
 import java.util.Locale
-import kotlin.collections.emptyList
+
+/*
+ * ─────────────────────────────────────────────────────────────────────────────────────────────
+ * The Library home, rebuilt on Apple Music's shape.
+ *
+ * What was here: a display title, a row of five filter chips on a glass plate, a sort card, a
+ * hero tile plus a 2-up grid of pinned collections, the full vertical list of every playlist you
+ * own, and then three horizontal carousels — Spotify, Albums, Artists — each with a "View all"
+ * pill. Six different ways of presenting a collection, stacked, on one screen. The page had no
+ * answer to "where do I tap to get to my albums", because it had three.
+ *
+ * What Apple does, and what this is now:
+ *
+ *  1. A large title, and nothing beside it.
+ *  2. A plain inset list — Playlists, Artists, Albums, Songs — one row per destination, icon,
+ *     label, chevron. Not chips. A chip row is a *filter*: it says these five things are facets
+ *     of one view and you may hold one at a time. These are five separate places, and a list of
+ *     rows with disclosure arrows is the oldest, plainest way of saying so.
+ *  3. The pinned collections in that same list, one group down: Liked, Downloaded, Cached, Top.
+ *     Apple puts "Downloaded" in exactly this position for exactly this reason — it is a place
+ *     you go, not a card you look at, and giving it a hero tile made the page's largest, most
+ *     colourful object one that nobody needed to see twice.
+ *  4. "Recently Added": a two-column grid of artwork, newest first, mixing albums and playlists.
+ *     This is the whole rest of the page. It replaces all three carousels, and it is strictly
+ *     more: a sideways row shows two-and-a-bit items and hides the rest behind a gesture nobody
+ *     performs, while the grid shows six above the fold and keeps going as you scroll.
+ *
+ * The individual playlist rows are gone from this screen because they are the Playlists tab,
+ * which already lists them — with drag-to-reorder, which this screen was maintaining a second
+ * copy of. One list, one place.
+ * ─────────────────────────────────────────────────────────────────────────────────────────────
+ */
+
+/** Apple's library gutter. Wider than the app's usual 16dp, and the reason the page reads calm. */
+private val LibraryGutter = 20.dp
+
+/** Leading inset of the hairline between list rows — aligned to the label, not the screen edge. */
+private val RowDividerInset = LibraryGutter + 30.dp + 14.dp
+
+private val CategoryIconSize = 26.dp
+private val GridGutter = 16.dp
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun LibraryMixScreen(
     navController: NavController,
-    filterContent: @Composable () -> Unit,
     onTabSelected: (LibraryFilter) -> Unit,
     viewModel: LibraryMixViewModel = hiltViewModel(),
     spotifyLibraryViewModel: SpotifyLibraryViewModel = hiltViewModel(),
@@ -135,8 +147,6 @@ fun LibraryMixScreen(
     val menuState = LocalMenuState.current
     val haptic = LocalHapticFeedback.current
     val playerConnection = LocalPlayerConnection.current ?: return
-    val isPlaying by playerConnection.isPlaying.collectAsState()
-    val mediaMetadata by playerConnection.mediaMetadata.collectAsState()
     val coroutineScope = rememberCoroutineScope()
     val database = LocalDatabase.current
 
@@ -145,8 +155,6 @@ fun LibraryMixScreen(
         MixSortType.CREATE_DATE,
     )
     val (sortDescending, onSortDescendingChange) = rememberPreference(MixSortDescendingKey, true)
-    val (playlistSortType) = rememberEnumPreference(PlaylistSortTypeKey, PlaylistSortType.CUSTOM)
-    val (ytmSync) = rememberPreference(YtmSyncKey, true)
     val (selectedTagsFilter) = rememberPreference(PlaylistTagsFilterKey, "")
     val selectedTagIds = remember(selectedTagsFilter) {
         selectedTagsFilter.split(",").filter { it.isNotBlank() }.toSet()
@@ -158,10 +166,7 @@ fun LibraryMixScreen(
     val (showSpotifyPlaylists) = rememberPreference(ShowSpotifyPlaylistsKey, false)
     val spotifyPlaylists by spotifyLibraryViewModel.playlists.collectAsStateWithLifecycle()
 
-    val likedSongsCount by database.likedSongsCount().collectAsState(initial = 0)
-
     val albums by viewModel.albums.collectAsState()
-    val artists by viewModel.artists.collectAsState()
     val playlists by viewModel.playlists.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
 
@@ -176,139 +181,94 @@ fun LibraryMixScreen(
     val cachedTitle = stringResource(R.string.cached_playlist)
     val topTitle = stringResource(R.string.my_top) + " $topSize"
 
-    val collator = remember {
-        Collator.getInstance(Locale.getDefault()).apply {
-            strength = Collator.PRIMARY
-        }
-    }
-
     val visiblePlaylists = remember(playlists, selectedTagIds, filteredPlaylistIds) {
-        if (selectedTagIds.isEmpty()) {
-            playlists
-        } else {
-            playlists.filter { it.id in filteredPlaylistIds }
-        }
+        if (selectedTagIds.isEmpty()) playlists else playlists.filter { it.id in filteredPlaylistIds }
     }
 
-    val sortedAlbums = remember(albums, sortType, sortDescending, collator) {
+    // ── Recently Added ──────────────────────────────────────────────────────────────────────
+    //
+    // Albums and playlists in one sequence, which is the point of the section: what you added
+    // last, whatever kind of thing it was. Sorting them into separate shelves — which is what the
+    // old carousels did — asks you to remember the *type* of the thing you are looking for before
+    // you can look for it.
+    val collator = remember {
+        Collator.getInstance(Locale.getDefault()).apply { strength = Collator.PRIMARY }
+    }
+    val songsLabel = stringResource(R.string.filter_songs)
+
+    val recentlyAdded = remember(albums, visiblePlaylists, sortType, sortDescending, collator) {
+        val entries = buildList {
+            albums.forEach { album ->
+                add(
+                    RecentEntry(
+                        key = "album_${album.id}",
+                        title = album.album.title,
+                        subtitle = album.artists.joinToString { it.name },
+                        thumbnails = listOfNotNull(album.album.thumbnailUrl),
+                        createdAt = album.album.bookmarkedAt,
+                        updatedAt = album.album.lastUpdateTime,
+                        album = album,
+                        playlist = null,
+                    )
+                )
+            }
+            visiblePlaylists.forEach { playlist ->
+                add(
+                    RecentEntry(
+                        key = "playlist_${playlist.id}",
+                        title = playlist.playlist.name,
+                        subtitle = "${playlist.songCount} $songsLabel",
+                        thumbnails = playlist.thumbnails,
+                        createdAt = playlist.playlist.bookmarkedAt ?: playlist.playlist.createdAt,
+                        updatedAt = playlist.playlist.lastUpdateTime,
+                        album = null,
+                        playlist = playlist,
+                    )
+                )
+            }
+        }
+
         val sorted = when (sortType) {
-            MixSortType.CREATE_DATE -> albums.sortedBy { it.album.bookmarkedAt }
-            MixSortType.NAME -> albums.sortedWith(compareBy(collator) { it.album.title })
-            MixSortType.LAST_UPDATED -> albums.sortedBy { it.album.lastUpdateTime }
+            // `LocalDateTime?` does not sort itself. A null bookmark date is an item with no known
+            // add time, and it belongs at the *old* end whichever way the list is facing —
+            // sortedBy would silently float them all to the top of a newest-first list.
+            MixSortType.CREATE_DATE -> entries.sortedWith(
+                compareBy(nullsFirst<LocalDateTime>()) { it.createdAt }
+            )
+
+            MixSortType.LAST_UPDATED -> entries.sortedWith(
+                compareBy(nullsFirst<LocalDateTime>()) { it.updatedAt }
+            )
+
+            MixSortType.NAME -> entries.sortedWith(compareBy(collator) { it.title })
         }
         if (sortDescending) sorted.asReversed() else sorted
     }
 
-    val sortedArtists = remember(artists, sortType, sortDescending, collator) {
-        val sorted = when (sortType) {
-            MixSortType.CREATE_DATE -> artists.sortedBy { it.artist.bookmarkedAt }
-            MixSortType.NAME -> artists.sortedWith(compareBy(collator) { it.artist.name })
-            MixSortType.LAST_UPDATED -> artists.sortedBy { it.artist.lastUpdateTime }
-        }
-        if (sortDescending) sorted.asReversed() else sorted
-    }
+    val recentRows = remember(recentlyAdded) { recentlyAdded.chunked(2) }
 
-    val shortcuts = buildList {
-        if (showLiked) {
-            add(
-                LibraryShortcutEntry(
-                    title = likedTitle,
-                    iconRes = R.drawable.favorite,
-                    route = "auto_playlist/liked",
-                    accentColor = MaterialTheme.colorScheme.error,
-                )
-            )
-        }
-        if (showDownloaded) {
-            add(
-                LibraryShortcutEntry(
-                    title = downloadedTitle,
-                    iconRes = R.drawable.offline,
-                    route = "auto_playlist/downloaded",
-                    accentColor = MaterialTheme.colorScheme.primary,
-                )
-            )
-        }
-        if (showCached) {
-            add(
-                LibraryShortcutEntry(
-                    title = cachedTitle,
-                    iconRes = R.drawable.cached,
-                    route = "cache_playlist/cached",
-                    accentColor = MaterialTheme.colorScheme.tertiary,
-                )
-            )
-        }
-        if (showTop) {
-            add(
-                LibraryShortcutEntry(
-                    title = topTitle,
-                    iconRes = R.drawable.trending_up,
-                    route = "top_playlist/$topSize",
-                    accentColor = MaterialTheme.colorScheme.secondary,
-                )
-            )
-        }
+    // ── Pinned collections ──────────────────────────────────────────────────────────────────
+    //
+    // Same list idiom as the destinations, one gap down. Keeping their individual accent colours
+    // is the one deviation from Apple, which tints every icon in its library list the same red —
+    // these four are not navigation, they are four specific auto-playlists, and colour is the
+    // fastest way to tell them apart at a glance.
+    val pinned = buildList {
+        if (showLiked) add(
+            PinnedEntry(likedTitle, R.drawable.favorite, "auto_playlist/liked", MaterialTheme.colorScheme.error)
+        )
+        if (showDownloaded) add(
+            PinnedEntry(downloadedTitle, R.drawable.offline, "auto_playlist/downloaded", MaterialTheme.colorScheme.primary)
+        )
+        if (showCached) add(
+            PinnedEntry(cachedTitle, R.drawable.cached, "cache_playlist/cached", MaterialTheme.colorScheme.tertiary)
+        )
+        if (showTop) add(
+            PinnedEntry(topTitle, R.drawable.trending_up, "top_playlist/$topSize", MaterialTheme.colorScheme.secondary)
+        )
     }
 
     val lazyListState = rememberLazyListState()
-    val customPlaylistMode = playlistSortType == PlaylistSortType.CUSTOM
-    val canEnterReorderMode = customPlaylistMode && selectedTagIds.isEmpty()
-    var reorderEnabled by rememberSaveable { mutableStateOf(false) }
-    val canReorderPlaylists = canEnterReorderMode && reorderEnabled
-    val playlistSectionLeadingItems = if (shortcuts.isNotEmpty()) 3 else 2
-    val mutableVisiblePlaylists = remember { mutableStateListOf<Playlist>() }
-    var dragInfo by remember { mutableStateOf<Pair<Int, Int>?>(null) }
-    val reorderableState = rememberReorderableLazyListState(
-        lazyListState = lazyListState,
-        scrollThresholdPadding = LocalPlayerAwareWindowInsets.current.asPaddingValues(),
-    ) { from, to ->
-        if (!canReorderPlaylists) return@rememberReorderableLazyListState
-        if (from.index < playlistSectionLeadingItems || to.index < playlistSectionLeadingItems) {
-            return@rememberReorderableLazyListState
-        }
-
-        val fromIndex = from.index - playlistSectionLeadingItems
-        val toIndex = to.index - playlistSectionLeadingItems
-        if (fromIndex !in mutableVisiblePlaylists.indices || toIndex !in mutableVisiblePlaylists.indices) {
-            return@rememberReorderableLazyListState
-        }
-
-        val currentDragInfo = dragInfo
-        dragInfo = if (currentDragInfo == null) fromIndex to toIndex else currentDragInfo.first to toIndex
-        mutableVisiblePlaylists.move(fromIndex, toIndex)
-    }
-
-    LaunchedEffect(visiblePlaylists, canReorderPlaylists, reorderableState.isAnyItemDragging, dragInfo) {
-        if (!canReorderPlaylists) {
-            mutableVisiblePlaylists.clear()
-            mutableVisiblePlaylists.addAll(visiblePlaylists)
-            return@LaunchedEffect
-        }
-
-        if (!reorderableState.isAnyItemDragging && dragInfo == null) {
-            mutableVisiblePlaylists.clear()
-            mutableVisiblePlaylists.addAll(visiblePlaylists)
-        }
-    }
-
-    LaunchedEffect(reorderableState.isAnyItemDragging, canReorderPlaylists) {
-        if (!canReorderPlaylists || reorderableState.isAnyItemDragging) return@LaunchedEffect
-
-        dragInfo ?: return@LaunchedEffect
-        val playlistsToReorder = mutableVisiblePlaylists.toList()
-        database.transaction {
-            playlistsToReorder.forEachIndexed { index, playlist ->
-                setPlaylistCustomOrder(playlist.id, index)
-            }
-        }
-        dragInfo = null
-    }
-
-    LaunchedEffect(canEnterReorderMode) {
-        if (!canEnterReorderMode) reorderEnabled = false
-    }
-
 
     ExpressivePullToRefreshBox(
         isRefreshing = isRefreshing,
@@ -317,20 +277,76 @@ fun LibraryMixScreen(
     ) {
         LazyColumn(
             state = lazyListState,
-            verticalArrangement = Arrangement.spacedBy(24.dp),
             contentPadding = LocalPlayerAwareWindowInsets.current.asPaddingValues(),
             modifier = Modifier.fillMaxSize(),
         ) {
-            item(key = "filter") {
-                filterContent()
+            item(key = "large_title", contentType = "large_title") {
+                LibraryLargeTitle()
             }
 
-            item(key = "controls") {
-                LibraryControlCard(
-                    canEnterReorderMode = canEnterReorderMode,
-                    reorderEnabled = reorderEnabled,
-                    onToggleReorder = { reorderEnabled = !reorderEnabled },
+            // ── Destinations ────────────────────────────────────────────────────────────────
+            item(key = "categories", contentType = "categories") {
+                Column(modifier = Modifier.pageGutter()) {
+                    val destinations = buildList {
+                        add(LibraryFilter.PLAYLISTS to (R.string.filter_playlists to R.drawable.queue_music))
+                        add(LibraryFilter.ARTISTS to (R.string.filter_artists to R.drawable.person))
+                        add(LibraryFilter.ALBUMS to (R.string.filter_albums to R.drawable.album))
+                        add(LibraryFilter.SONGS to (R.string.filter_songs to R.drawable.music_note))
+                        if (showSpotifyPlaylists && spotifyPlaylists.isNotEmpty()) {
+                            add(LibraryFilter.SPOTIFY to (R.string.spotify to R.drawable.spotify_icon))
+                        }
+                    }
+
+                    destinations.forEachIndexed { index, (filter, labelAndIcon) ->
+                        val (label, icon) = labelAndIcon
+                        LibraryCategoryRow(
+                            title = stringResource(label),
+                            icon = icon,
+                            accent = MaterialTheme.colorScheme.primary,
+                            showDivider = index != destinations.lastIndex,
+                            onClick = { onTabSelected(filter) },
+                        )
+                    }
+                }
+            }
+
+            if (pinned.isNotEmpty()) {
+                item(key = "pinned", contentType = "pinned") {
+                    Column(modifier = Modifier.pageGutter().padding(top = 28.dp)) {
+                        pinned.forEachIndexed { index, entry ->
+                            LibraryCategoryRow(
+                                title = entry.title,
+                                icon = entry.iconRes,
+                                accent = entry.accentColor,
+                                showDivider = index != pinned.lastIndex,
+                                onClick = { navController.navigate(entry.route) },
+                            )
+                        }
+                    }
+                }
+            }
+
+            // ── Recently Added ──────────────────────────────────────────────────────────────
+            item(key = "recent_header", contentType = "recent_header") {
+                Row(
+                    verticalAlignment = Alignment.Bottom,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .pageGutter()
+                        .padding(top = 34.dp, bottom = 14.dp),
                 ) {
+                    Text(
+                        text = stringResource(R.string.library_recently_added),
+                        style = MaterialTheme.typography.titleLarge.copy(letterSpacing = (-0.02).em),
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    // Sorting lives beside the thing it sorts. It used to be a full-width card
+                    // near the top of the page, above content it did not obviously govern.
                     SortHeader(
                         sortType = sortType,
                         sortDescending = sortDescending,
@@ -347,287 +363,75 @@ fun LibraryMixScreen(
                 }
             }
 
-
-
-            // Modificada para devolver un String en lugar de un Int
-            fun String.extractId(): String = this.substringAfterLast('/')
-
-            if (shortcuts.isNotEmpty()) {
-                item(key = "shortcuts") {
-                    LibraryShortcutGrid(
-                        entries = shortcuts,
-                        onClick = navController::navigate,
-                        onPlayPlaylist = { entry ->
-                            playerConnection?.let { connection ->
-                                coroutineScope.launch(Dispatchers.IO) {
-                                    // playlistId ahora será un String (ej: "15" o el UUID de la playlist)
-                                    val playlistId = entry.route.extractId()
-                                    database.playlistSongs(playlistId).first()
-                                        .let { playlistSongs ->
-                                            if (playlistSongs.isNotEmpty()) {
-                                                connection.playQueue(
-                                                    ListQueue(
-                                                        title = entry.title,
-                                                        items = playlistSongs.map { it.song.toMediaItem() }
-                                                    )
-                                                )
-                                            }
-                                        }
-                                }
-                            }
-                        },
-                        onShufflePlaylist = { entry ->
-                            playerConnection?.let { connection ->
-                                coroutineScope.launch(Dispatchers.IO) {
-                                    // playlistId ahora será un String
-                                    val playlistId = entry.route.extractId()
-                                    database.playlistSongs(playlistId).first()
-                                        .let { playlistSongs ->
-                                            if (playlistSongs.isNotEmpty()) {
-                                                connection.playQueue(
-                                                    ListQueue(
-                                                        title = entry.title,
-                                                        items = playlistSongs.shuffled()
-                                                            .map { it.song.toMediaItem() }
-                                                    )
-                                                )
-                                            }
-                                        }
-                                }
-                            }
-                        },
-                        modifier = Modifier.padding(horizontal = 24.dp),
-                    )
-                }
-            }
-
-            if (canReorderPlaylists) {
-                itemsIndexed(
-                    items = mutableVisiblePlaylists,
-                    key = { _, item -> item.id },
-                ) { _, item ->
-                    ReorderableItem(
-                        state = reorderableState,
-                        key = item.id,
-                    ) {
-                        LibraryPlaylistListItem(
-                            navController = navController,
-                            menuState = menuState,
-                            coroutineScope = coroutineScope,
-                            playlist = item,
-                            showDragHandle = true,
-                            dragHandleModifier = Modifier.draggableHandle(),
-                            modifier = Modifier
-                                .padding(horizontal = 16.dp)
-                                .animateItem(),
-                        )
-                    }
+            if (recentRows.isEmpty()) {
+                item(key = "recent_empty", contentType = "recent_empty") {
+                    LibraryEmptyState(modifier = Modifier.pageGutter())
                 }
             } else {
                 items(
-                    items = visiblePlaylists,
-                    key = { it.id },
-                ) { item ->
-                    LibraryPlaylistListItem(
-                        navController = navController,
-                        menuState = menuState,
-                        coroutineScope = coroutineScope,
-                        playlist = item,
+                    items = recentRows,
+                    key = { row -> "recent_row_${row.first().key}" },
+                    contentType = { "recent_row" },
+                ) { row ->
+                    // BoxWithConstraints rather than a screen-width constant: `maxWidth` is
+                    // resolved against the *current* density, so the tiles stay square and the
+                    // gutters stay true under the interface-scale setting and on a tablet.
+                    BoxWithConstraints(
                         modifier = Modifier
-                            .padding(horizontal = 16.dp)
-                            .animateItem(),
-                    )
-                }
-            }
-
-            if (showSpotifyPlaylists && spotifyPlaylists.isNotEmpty()) {
-                item(key = "spotify_playlists_header") {
-                    LibrarySectionHeader(
-                        title = stringResource(R.string.spotify_playlists),
-                        onSeeAll = { onTabSelected(LibraryFilter.SPOTIFY) },
-                    )
-                }
-
-                item(key = "spotify_playlists_row") {
-                    LazyRow(
-                        contentPadding = PaddingValues(horizontal = 24.dp),
-                        horizontalArrangement = Arrangement.spacedBy(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth(),
+                            .fillMaxWidth()
+                            .pageGutter()
+                            .padding(bottom = 22.dp),
                     ) {
-                        items(
-                            items = spotifyPlaylists.take(8),
-                            key = { playlist -> "spotify_playlist_${playlist.id}" },
-                            contentType = { "spotify_playlist" },
-                        ) { playlist ->
-                            SpotifyPlaylistCompactCard(
-                                playlist = playlist,
-                                onClick = {
-                                    navController.navigate("spotify_playlist/${playlist.id}")
-                                },
-                            )
-                        }
-                    }
-                }
-            }
+                        val tileWidth = (maxWidth - GridGutter) / 2
 
-            if (sortedAlbums.isNotEmpty()) {
-                item(key = "albums_header") {
-                    LibrarySectionHeader(
-                        title = stringResource(R.string.your_albums),
-                        onSeeAll = { onTabSelected(LibraryFilter.ALBUMS) },
-                    )
-                }
+                        Row(horizontalArrangement = Arrangement.spacedBy(GridGutter)) {
+                            row.forEach { entry ->
+                                RecentlyAddedTile(
+                                    entry = entry,
+                                    width = tileWidth,
+                                    onClick = {
+                                        when {
+                                            entry.album != null ->
+                                                navController.navigate("album/${entry.album.id}")
 
-                item(key = "albums_row") {
-                    LazyRow(
-                        contentPadding = PaddingValues(horizontal = 24.dp),
-                        horizontalArrangement = Arrangement.spacedBy(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        items(
-                            items = sortedAlbums,
-                            key = { it.id },
-                            contentType = { "album" },
-                        ) { album ->
-                            LibraryAlbumSpotlightCard(
-                                album = album,
-                                isActive = album.id == mediaMetadata?.album?.id,
-                                isPlaying = isPlaying,
-                                onPlay = {
-                                    coroutineScope.launch {
-                                        database.albumWithSongs(album.id).firstOrNull()
-                                            ?.let { albumWithSongs ->
-                                                playerConnection.playQueue(
-                                                    LocalAlbumRadio(
-                                                        albumWithSongs
-                                                    )
-                                                )
+                                            entry.playlist != null -> {
+                                                val playlist = entry.playlist
+                                                if (
+                                                    !playlist.playlist.isEditable &&
+                                                    playlist.songCount == 0 &&
+                                                    playlist.playlist.remoteSongCount != 0
+                                                ) {
+                                                    navController.navigate("online_playlist/${playlist.playlist.browseId}")
+                                                } else {
+                                                    navController.navigate("local_playlist/${playlist.id}")
+                                                }
                                             }
-                                    }
-                                },
-                                modifier = Modifier
-                                    .combinedClickable(
-                                        onClick = { navController.navigate("album/${album.id}") },
-                                        onLongClick = {
-                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                            menuState.show {
-                                                AlbumMenu(
-                                                    originalAlbum = album,
+                                        }
+                                    },
+                                    onLongClick = {
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        menuState.show {
+                                            when {
+                                                entry.album != null -> AlbumMenu(
+                                                    originalAlbum = entry.album,
                                                     navController = navController,
                                                     onDismiss = menuState::dismiss,
                                                 )
+
+                                                entry.playlist != null -> PlaylistMenu(
+                                                    playlist = entry.playlist,
+                                                    coroutineScope = coroutineScope,
+                                                    onDismiss = menuState::dismiss,
+                                                )
                                             }
-                                        },
-                                    )
-                                    .animateItem(),
-                            )
-                        }
-                    }
-                }
-            }
-
-            if (sortedArtists.isNotEmpty()) {
-                item(key = "artists_header") {
-                    LibrarySectionHeader(
-                        title = stringResource(R.string.your_artists),
-                        onSeeAll = { onTabSelected(LibraryFilter.ARTISTS) },
-                    )
-                }
-
-                item(key = "artists_row") {
-                    LazyRow(
-                        contentPadding = PaddingValues(horizontal = 24.dp),
-                        horizontalArrangement = Arrangement.spacedBy(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        items(
-                            items = sortedArtists.take(10),
-                            key = { it.id },
-                        ) { artist ->
-                            Column(
-                                modifier = Modifier
-                                    .width(92.dp)
-                                    .clip(RoundedCornerShape(16.dp))
-                                    .clickable {
-                                        navController.navigate("artist/${artist.id}")
-                                    }
-                                    .padding(vertical = 4.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                            ) {
-                                AsyncImage(
-                                    model = artist.artist.thumbnailUrl,
-                                    contentDescription = null,
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier
-                                        .size(80.dp)
-                                        .clip(CircleShape)
-                                        // A hairline rim so a dark portrait does not dissolve
-                                        // into a dark page — the same trick the artist page
-                                        // uses on its hero.
-                                        .border(
-                                            1.dp,
-                                            Brush.verticalGradient(
-                                                listOf(
-                                                    Color.White.copy(alpha = 0.22f),
-                                                    Color.White.copy(alpha = 0.05f),
-                                                ),
-                                            ),
-                                            CircleShape,
-                                        ),
-                                )
-                                Spacer(modifier = Modifier.height(10.dp))
-                                Text(
-                                    text = artist.artist.name,
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontWeight = FontWeight.SemiBold,
-                                    maxLines = 2,
-                                    minLines = 2,
-                                    overflow = TextOverflow.Ellipsis,
-                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                                    color = MaterialTheme.colorScheme.onBackground,
+                                        }
+                                    },
                                 )
                             }
-                        }
-
-                        item {
-                            Column(
-                                modifier = Modifier
-                                    .width(92.dp)
-                                    .clip(RoundedCornerShape(16.dp))
-                                    .clickable { onTabSelected(LibraryFilter.ARTISTS) }
-                                    .padding(vertical = 4.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(80.dp)
-                                        .clip(CircleShape)
-                                        .background(
-                                            MaterialTheme.colorScheme.primary.copy(alpha = 0.14f),
-                                        ),
-                                    contentAlignment = Alignment.Center,
-                                ) {
-                                    Icon(
-                                        painter = painterResource(R.drawable.chevron_right),
-                                        contentDescription = stringResource(R.string.more_label),
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(26.dp),
-                                    )
-                                }
-                                Spacer(modifier = Modifier.height(10.dp))
-                                Text(
-                                    text = stringResource(R.string.more_label),
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontWeight = FontWeight.SemiBold,
-                                    maxLines = 2,
-                                    minLines = 2,
-                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                                    color = MaterialTheme.colorScheme.primary,
-                                )
-                            }
+                            // An odd final row leaves the second column empty rather than
+                            // stretching one tile to full width, which would read as a
+                            // different kind of object.
+                            if (row.size == 1) Spacer(Modifier.width(tileWidth))
                         }
                     }
                 }
@@ -637,230 +441,266 @@ fun LibraryMixScreen(
 }
 
 /**
- * The one section heading used by every carousel on the Library page.
+ * Horizontal insets for everything on the page: the display cutout, then Apple's gutter.
  *
- * There used to be three hand-rolled copies of this Row — Spotify, Albums, Artists — each a
- * `titleMedium` label beside a bare 24dp chevron. A naked chevron is not a control: it reads as
- * decoration, it has a 24dp touch target, and nothing about it says where it goes. This is one
- * heading at real heading weight with an explicit labelled affordance, and changing it changes
- * every section at once.
+ * One modifier rather than a `padding(horizontal = …)` per call site, because the whole design
+ * rests on a single unbroken left edge — title, row labels, section header and grid all landing
+ * on the same vertical line. That only survives if there is one number.
  */
 @Composable
-private fun LibrarySectionHeader(
-    title: String,
-    onSeeAll: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Row(
+private fun Modifier.pageGutter(): Modifier =
+    this
+        .windowInsetsPadding(WindowInsets.systemBars.only(WindowInsetsSides.Horizontal))
+        .padding(horizontal = LibraryGutter)
+
+/**
+ * The large title, matching Home's.
+ *
+ * Inside the scroll content rather than in the app bar, so it rolls away under the chrome as you
+ * move down — the entire point of the pattern.
+ */
+@Composable
+private fun LibraryLargeTitle(modifier: Modifier = Modifier) {
+    Text(
+        text = stringResource(R.string.filter_library),
+        // Tracked in hard, same as Home. At display size the default letter fitting leaves
+        // visible gaps — the difference between a word that has been set and one that was typed.
+        style = MaterialTheme.typography.displaySmall.copy(letterSpacing = (-0.03).em),
+        fontWeight = FontWeight.Bold,
+        color = MaterialTheme.colorScheme.onSurface,
         modifier = modifier
             .fillMaxWidth()
-            .padding(start = 24.dp, end = 16.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onBackground,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f, fill = false),
-        )
-        Spacer(Modifier.width(12.dp))
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-                .clip(RoundedCornerShape(percent = 50))
-                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
-                .clickable(onClick = onSeeAll)
-                .padding(start = 14.dp, end = 10.dp, top = 6.dp, bottom = 6.dp),
-        ) {
-            Text(
-                text = stringResource(R.string.view_all),
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.primary,
-            )
-            Icon(
-                painter = painterResource(R.drawable.chevron_right),
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(16.dp),
-            )
-        }
-    }
+            .pageGutter()
+            .padding(top = 10.dp, bottom = 18.dp),
+    )
 }
 
+/**
+ * One row of the library list: icon, label, chevron, hairline.
+ *
+ * The divider is inset to the label rather than run full-bleed, and that inset is doing more work
+ * than it looks. A full-width rule cuts the list into separate bands; one that starts under the
+ * text leaves the icon column visually continuous, so the rows read as a single object with
+ * internal seams. It is the most recognisable detail of an iOS grouped list, and the cheapest.
+ */
 @Composable
-private fun SpotifyPlaylistCompactCard(
-    playlist: SpotifyPlaylist,
+private fun LibraryCategoryRow(
+    title: String,
+    @DrawableRes icon: Int,
+    accent: Color,
+    showDivider: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val thumbnailUrl = remember(playlist) { SpotifyMapper.getPlaylistThumbnail(playlist) }
-    val cardBgColor = MaterialTheme.colorScheme.surfaceContainer
-
-    Column(
-        modifier = modifier
-            .width(130.dp)
-            .clip(RoundedCornerShape(32.dp))
-            .background(cardBgColor)
-            .clickable(onClick = onClick)
-            .padding(12.dp),
-    ) {
-        Box(
+    Column(modifier = modifier.fillMaxWidth()) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
-                .size(106.dp)
-                .clip(RoundedCornerShape(24.dp)),
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .combinedClickable(onClick = onClick)
+                .padding(vertical = 13.dp),
         ) {
-            AsyncImage(
-                model = thumbnailUrl,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize(),
-            )
             Box(
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(6.dp)
-                    .size(28.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primary),
-                contentAlignment = Alignment.Center,
+                modifier = Modifier.width(30.dp),
+                contentAlignment = Alignment.CenterStart,
             ) {
                 Icon(
-                    painter = painterResource(R.drawable.spotify_icon),
-                    contentDescription = stringResource(R.string.spotify_account),
-                    tint = MaterialTheme.colorScheme.onPrimary,
-                    modifier = Modifier.size(14.dp),
+                    painter = painterResource(icon),
+                    contentDescription = null,
+                    tint = accent,
+                    modifier = Modifier.size(CategoryIconSize),
                 )
             }
+
+            Spacer(Modifier.width(14.dp))
+
+            Text(
+                text = title,
+                // 20sp semibold: the size Apple sets this list at, and noticeably larger than a
+                // Material list row. These are the four most-used destinations in the app; they
+                // should not be whispering.
+                style = MaterialTheme.typography.titleLarge.copy(letterSpacing = (-0.015).em),
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+
+            Icon(
+                painter = painterResource(R.drawable.chevron_right),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                modifier = Modifier.size(20.dp),
+            )
         }
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = playlist.name,
-            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            color = MaterialTheme.colorScheme.onBackground,
-        )
-        Text(
-            text = "${playlist.tracks?.total ?: 0} ${stringResource(R.string.tracks_label)}",
-            style = MaterialTheme.typography.bodySmall,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
-        )
+
+        if (showDivider) {
+            HorizontalDivider(
+                thickness = 0.5.dp,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f),
+                modifier = Modifier.padding(start = RowDividerInset - LibraryGutter),
+            )
+        }
     }
 }
 
+/**
+ * One artwork tile in the Recently Added grid.
+ *
+ * Artwork square and near-flush with the column, title and subtitle left-aligned underneath, no
+ * card behind it. Apple's grid is artwork on the page — a container around each item competes
+ * with the covers, which are the only thing on this screen anyone is actually scanning.
+ */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun LibraryControlCard(
-    canEnterReorderMode: Boolean,
-    reorderEnabled: Boolean,
-    onToggleReorder: () -> Unit,
-    controls: @Composable RowScope.() -> Unit,
+private fun RecentlyAddedTile(
+    entry: RecentEntry,
+    width: Dp,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    // A translucent hairline capsule rather than a filled `surfaceContainerHigh` Card. The Card
-    // read as an opaque grey brick sitting on top of the page mesh gradient, which is the one
-    // thing that backdrop exists not to have happen.
-    val shape = RoundedCornerShape(22.dp)
-    Box(
-        modifier = Modifier
-            .padding(horizontal = 16.dp)
-            .clip(shape)
-            .background(MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.55f))
-            .border(
-                0.8.dp,
-                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
-                shape,
-            ),
+    val shape = RoundedCornerShape(10.dp)
+
+    Column(
+        modifier = modifier
+            .width(width)
+            .clip(RoundedCornerShape(14.dp))
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick),
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 10.dp, vertical = 10.dp),
+                .aspectRatio(1f)
+                .clip(shape)
+                // A hairline rim so a dark cover on a dark page still has an edge. Without it a
+                // black album sleeve simply dissolves and the grid gets a hole in it.
+                .border(
+                    width = 0.5.dp,
+                    brush = Brush.verticalGradient(
+                        listOf(
+                            Color.White.copy(alpha = 0.18f),
+                            Color.White.copy(alpha = 0.04f),
+                        ),
+                    ),
+                    shape = shape,
+                ),
         ) {
-            Row(
-                modifier = Modifier.weight(1f),
-                content = controls,
-            )
-            if (canEnterReorderMode) {
-                IconButton(
-                    onClick = onToggleReorder,
-                    modifier = Modifier.size(36.dp),
+            when {
+                entry.playlist != null -> PlaylistThumbnail(
+                    thumbnails = entry.thumbnails,
+                    size = width,
+                    placeHolder = {
+                        Icon(
+                            painter = painterResource(R.drawable.queue_music),
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(width / 3),
+                        )
+                    },
+                    shape = shape,
+                )
+
+                entry.thumbnails.isNotEmpty() -> AsyncImage(
+                    model = entry.thumbnails.first(),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                )
+
+                else -> Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+                    contentAlignment = Alignment.Center,
                 ) {
                     Icon(
-                        painter = painterResource(if (reorderEnabled) R.drawable.lock_open else R.drawable.lock),
+                        painter = painterResource(R.drawable.album),
                         contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(width / 3),
                     )
                 }
             }
         }
-    }
-}
 
-@Composable
-private fun LibraryShortcutGrid(
-    entries: List<LibraryShortcutEntry>,
-    onClick: (String) -> Unit,
-    onPlayPlaylist: (LibraryShortcutEntry) -> Unit,
-    onShufflePlaylist: (LibraryShortcutEntry) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Column(
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-        modifier = modifier,
-    ) {
-        if (entries.isNotEmpty()) {
-            val heroEntry = entries.first()
+        Spacer(Modifier.height(8.dp))
 
-            LibraryHeroFavoriteTile(
-                title = heroEntry.title,
-                iconRes = heroEntry.iconRes, badgeText = "Most played",
+        Text(
+            text = entry.title,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
 
-                accentColor = heroEntry.accentColor,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable(onClick = { onClick(heroEntry.route) }),
+        if (entry.subtitle.isNotBlank()) {
+            Text(
+                text = entry.subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
-
-            val remainingEntries = entries.drop(1)
-            remainingEntries.chunked(2).forEach { rowEntries ->
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    rowEntries.forEachIndexed { index, entry ->
-                        val position = when {
-                            rowEntries.size == 1 -> GridPosition.SINGLE
-                            index == 0 -> GridPosition.LEFT
-                            else -> GridPosition.RIGHT
-                        }
-
-                        LibraryPinnedCollectionTile(
-                            title = entry.title,
-                            iconRes = entry.iconRes,
-                            gridPosition = position,
-                            accentColor = entry.accentColor,
-                            modifier = Modifier
-                                .weight(1f)
-                                .clickable(onClick = { onClick(entry.route) }),
-                        )
-                    }
-                    if (rowEntries.size == 1) {
-                        Spacer(Modifier.weight(1f))
-                    }
-                }
-            }
         }
     }
 }
 
-private data class LibraryShortcutEntry(
+@Composable
+private fun LibraryEmptyState(modifier: Modifier = Modifier) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 48.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .size(64.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.library_music),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(30.dp),
+            )
+        }
+        Spacer(Modifier.height(16.dp))
+        Text(
+            text = stringResource(R.string.library_empty_title),
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Spacer(Modifier.height(6.dp))
+        Text(
+            text = stringResource(R.string.library_empty_subtitle),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
+    }
+}
+
+/** One item in the Recently Added grid. Exactly one of [album]/[playlist] is non-null. */
+private data class RecentEntry(
+    val key: String,
+    val title: String,
+    val subtitle: String,
+    val thumbnails: List<String>,
+    val createdAt: LocalDateTime?,
+    val updatedAt: LocalDateTime?,
+    val album: Album?,
+    val playlist: Playlist?,
+)
+
+private data class PinnedEntry(
     val title: String,
     @DrawableRes val iconRes: Int,
     val route: String,

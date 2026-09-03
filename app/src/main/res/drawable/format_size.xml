@@ -1,0 +1,15 @@
+<!--
+  Material Symbols "format_size" on the 960 viewport the rest of the icon set uses.
+
+  Two glyphs at two sizes is the one mark that reads as "size" without reading as "text" — which
+  matters here, because the setting it labels scales the whole interface, not the type.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="960"
+    android:viewportHeight="960">
+  <path
+      android:fillColor="@android:color/white"
+      android:pathData="M240,800L240,320L80,320L80,200L520,200L520,320L360,320L360,800L240,800ZM600,800L600,520L500,520L500,400L820,400L820,520L720,520L720,800L600,800Z"/>
+</vector>

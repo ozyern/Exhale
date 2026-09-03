@@ -35,6 +35,19 @@ val ExhaleCanvasKey = booleanPreferencesKey("ExhaleCanvas")
 
 // Fuente del canvas: AUTO, APPLE_MUSIC, OPENTUNE, TIDAL
 val CanvasSourceKey = stringPreferencesKey("canvasSource")
+/**
+ * App-wide interface scale, as a multiplier on the device's density. 1f is the system size.
+ *
+ * This scales `density`, not `fontScale`. The two are different settings on Android for a reason:
+ * Display Size scales densityDpi so every dp AND sp grows together and the layout keeps its
+ * proportions, while Font Size scales only sp and grows the type inside a layout that stays put.
+ * Scaling both here would compound with the user's own accessibility font setting and give
+ * someone at 130% text a 169% app.
+ */
+val UiScaleKey = floatPreferencesKey("uiScale")
+
+/** Which launcher icon is selected. Values are [com.ozyern.exhale.utils.AppIconPack] names. */
+val AppIconPackKey = stringPreferencesKey("appIconPack")
 val ThumbnailCornerRadiusKey = floatPreferencesKey("thumbnailCornerRadius")
 val CropThumbnailToSquareKey = booleanPreferencesKey("cropThumbnailToSquare")
 val SeekExtraSeconds = booleanPreferencesKey("seekExtraSeconds")

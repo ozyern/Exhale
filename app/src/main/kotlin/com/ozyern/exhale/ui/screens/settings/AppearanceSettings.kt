@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.windowInsetsPadding
@@ -46,6 +47,24 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.Image
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextAlign
+import com.ozyern.exhale.utils.rememberAppIconPack
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Density
 import androidx.navigation.NavController
 import com.ozyern.exhale.LocalPlayerAwareWindowInsets
 import com.ozyern.exhale.R
@@ -68,6 +87,8 @@ import com.ozyern.exhale.constants.PlayerBackgroundStyle
 import com.ozyern.exhale.constants.PlayerBackgroundStyleKey
 import com.ozyern.exhale.constants.PureBlackKey
 import com.ozyern.exhale.constants.RandomThemeOnStartupKey
+import com.ozyern.exhale.constants.UiScaleKey
+import com.ozyern.exhale.utils.UiScaleDefault
 import com.ozyern.exhale.constants.UseSystemFontKey
 import com.ozyern.exhale.constants.PlayerButtonsStyle
 import com.ozyern.exhale.constants.PlayerButtonsStyleKey
@@ -184,6 +205,11 @@ fun AppearanceSettings(
     )
     val (lyricsClick, onLyricsClickChange) = rememberPreference(LyricsClickKey, defaultValue = true)
     val (lyricsScroll, onLyricsScrollChange) = rememberPreference(LyricsScrollKey, defaultValue = true)
+    val (uiScale) = rememberPreference(UiScaleKey, defaultValue = UiScaleDefault)
+
+    // Named on the row so the setting reads as answered rather than as a door. Comes from the
+    // system rather than the preference — see AppIconPack.current for why the two can disagree.
+    val activeIconPack = rememberAppIconPack()
     val (lyricsTextSize, onLyricsTextSizeChange) = rememberPreference(LyricsTextSizeKey, defaultValue = 26f)
     val (lyricsLineSpacing, onLyricsLineSpacingChange) = rememberPreference(LyricsLineSpacingKey, defaultValue = 1.3f)
     val (useLyricsV2, onUseLyricsV2Change) = rememberPreference(UseLyricsV2Key, defaultValue = true)
@@ -391,6 +417,38 @@ fun AppearanceSettings(
             icon = { Icon(painterResource(R.drawable.text_fields), null) },
             checked = useSystemFont,
             onCheckedChange = onUseSystemFontChange,
+        )
+
+        PreferenceGroupTitle(
+            title = stringResource(R.string.display),
+        )
+
+        // Interface scale.
+        //
+        // Android already ships two size dials, and this is neither of them: Font Size grows type
+        // inside a layout that stays put, and Display Size is buried three levels into system
+        // settings and moves every app at once. Plenty of people want this app bigger — reading a
+        // track list at arm's length, or on a tablet where a phone-tuned layout leaves half the
+        // screen empty — and plenty want it smaller to fit more on screen. That is an app setting.
+        //
+        // It gets a page rather than a dialog because what it changes is the whole app, and a
+        // dialog can only show you a corner of it. See UiScaleScreen.
+        PreferenceEntry(
+            title = { Text(stringResource(R.string.ui_scale)) },
+            description = stringResource(R.string.ui_scale_desc) + " • " + uiScaleLabel(uiScale),
+            icon = { Icon(painterResource(R.drawable.format_size), null) },
+            onClick = { navController.navigate("settings/appearance/ui_scale") }
+        )
+
+        // App icon.
+        //
+        // A page, not a dialog: the thing being chosen is a picture, and two thumbnails squeezed
+        // side by side under a warning is not enough surface to choose from. See AppIconScreen.
+        PreferenceEntry(
+            title = { Text(stringResource(R.string.app_icon)) },
+            description = stringResource(R.string.app_icon_desc) + " • " + stringResource(activeIconPack.labelRes),
+            icon = { Icon(painterResource(R.drawable.palette), null) },
+            onClick = { navController.navigate("settings/appearance/app_icon") }
         )
 
         PreferenceGroupTitle(
@@ -965,6 +1023,7 @@ private fun sliderStyleLabel(sliderStyle: SliderStyle): String {
         SliderStyle.Simple -> stringResource(R.string.slider_style_simple)
     }
 }
+
 
 enum class DarkMode {
     ON,

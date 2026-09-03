@@ -9,6 +9,11 @@
 package com.ozyern.exhale.ui.screens
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -43,6 +48,19 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.Icon
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
+import coil3.compose.AsyncImage
 import androidx.compose.ui.unit.em
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.navigation.NavController
@@ -189,6 +207,33 @@ fun HomeScreen(
         thumbnailUrl = ambientSource?.second,
     )
 
+    // Has anything actually arrived to look at?
+    val feedIsEmpty = quickPicks.isNullOrEmpty() &&
+            keepListening.isNullOrEmpty() &&
+            homePage?.sections.isNullOrEmpty()
+
+    // One clock for the whole feed's arrival.
+    //
+    // Every shelf reads this same Animatable and offsets itself by its position, which is what
+    // makes the page arrive as a page — a stagger built from per-item animations all starting when
+    // their own item happens to compose instead reads as things popping in at random, because in a
+    // LazyColumn that is exactly what it is.
+    //
+    // It is read inside `graphicsLayer` lambdas only, so the whole sequence runs in the draw phase:
+    // no recomposition, no relayout, on a screen that is simultaneously doing its first network
+    // parse. And anything composed after it finishes (everything you scroll to) evaluates straight
+    // to 1 and renders at rest, so the intro never replays on scroll.
+    val feedIntro = remember { Animatable(0f) }
+    LaunchedEffect(feedIsEmpty) {
+        if (!feedIsEmpty && feedIntro.value == 0f) {
+            feedIntro.animateTo(
+                targetValue = 1f,
+                animationSpec = tween(FeedIntroDurationMs, easing = LinearOutSlowInEasing),
+            )
+        }
+    }
+    val introProgress: () -> Float = { feedIntro.value }
+
     Box(
         modifier = Modifier.fillMaxSize()
     ) {
@@ -215,7 +260,38 @@ fun HomeScreen(
                 // bar, which is the whole point of the pattern — it scrolls away under the bar as
                 // you move down, leaving the compact chrome behind.
                 item(key = "home_large_title", contentType = "large_title") {
-                    HomeLargeTitle()
+                    HomeLargeTitle(
+                        // Apple's large title does not simply scroll off — it drifts slower than
+                        // the list under it and dissolves as it goes, which is what makes the
+                        // compact bar feel like the same title rather than a replacement for it.
+                        //
+                        // Read in the draw phase, so a scroll frame costs a layer invalidation
+                        // and nothing else.
+                        modifier = Modifier.graphicsLayer {
+                            val height = size.height.coerceAtLeast(1f)
+                            val scrolled = if (lazylistState.firstVisibleItemIndex == 0) {
+                                lazylistState.firstVisibleItemScrollOffset.toFloat()
+                            } else {
+                                height
+                            }
+                            alpha = 1f - (scrolled / height).coerceIn(0f, 1f)
+                            translationY = scrolled * LargeTitleParallax
+                        },
+                    )
+                }
+
+                // Cold start with nothing cached used to be a black page with a title on it for
+                // as long as the first request took. Three placeholder shelves say the same thing
+                // a spinner would — something is coming — while also showing its shape, so the
+                // real content lands into a layout the eye has already accepted.
+                if (feedIsEmpty && isLoading) {
+                    items(
+                        count = 3,
+                        key = { "home_skeleton_$it" },
+                        contentType = { "shimmer" },
+                    ) {
+                        HomeLoadingShimmer(modifier = Modifier.animateItem())
+                    }
                 }
 
                 keepListening?.takeIf { it.isNotEmpty() }?.let { items ->
@@ -223,7 +299,9 @@ fun HomeScreen(
                         HomeShortcutsGrid(
                             items = items.take(6),
                             onItemClick = onShortcutClick,
-                            modifier = Modifier.animateItem(),
+                            modifier = Modifier
+                                .animateItem()
+                                .feedIntro(0, introProgress),
                         )
                     }
                 }
@@ -252,6 +330,7 @@ fun HomeScreen(
 
                 item(key = "quick_picks", contentType = "quick_picks") {
                     QuickPicksSection(
+                        modifier = Modifier.feedIntro(1, introProgress),
                         quickPicks = picks,
                         mediaMetadata = mediaMetadata,
                         isPlaying = isPlaying,
@@ -322,16 +401,23 @@ fun HomeScreen(
             homePage?.sections?.forEachIndexed { index, section ->
                 val sectionKey = sectionKeys.getOrElse(index) { "section_$index" }
 
+                // Title and shelf share one stagger slot so they arrive together — a heading that
+                // lands before the row it names reads as two separate things.
+                val introOrder = index + 2
+
                 item(key = "home_section_title_$sectionKey", contentType = "section_title") {
                     HomePageSectionTitle(
                         section = section,
                         navController = navController,
-                        modifier = Modifier.animateItem()
+                        modifier = Modifier
+                            .animateItem()
+                            .feedIntro(introOrder, introProgress)
                     )
                 }
 
                 item(key = "home_section_content_$sectionKey", contentType = "home_section") {
                     HomePageSectionContent(
+                        modifier = Modifier.feedIntro(introOrder, introProgress),
                         section = section,
                         mediaMetadata = mediaMetadata,
                         isPlaying = isPlaying,
@@ -372,9 +458,16 @@ fun HomeScreen(
  *
  * Horizontal insets are applied the same way [com.ozyern.exhale.ui.component.NavigationTitle] does
  * them, so the title's left edge lands exactly on the section headers below it.
+ *
+ * No account button here. It briefly had one, on the reasoning that Apple Music puts the avatar
+ * level with the large title — but this app already has one in the app bar directly above, so the
+ * result was two account circles stacked twenty pixels apart. The app bar's is the original and
+ * the one that is present on every tab; this is a title, and titles do not carry controls.
  */
 @Composable
-private fun HomeLargeTitle(modifier: Modifier = Modifier) {
+private fun HomeLargeTitle(
+    modifier: Modifier = Modifier,
+) {
     val weekday = remember {
         DateTimeFormatter.ofPattern("EEEE", Locale.getDefault()).format(LocalDate.now())
     }
@@ -386,8 +479,8 @@ private fun HomeLargeTitle(modifier: Modifier = Modifier) {
             .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 2.dp),
     ) {
         // The eyebrow steps back: semibold at label size, not bold at title size. It was
-        // competing with the line under it, and an eyebrow that competes with its own headline is
-        // just a two-line heading.
+        // competing with the line under it, and an eyebrow that competes with its own headline
+        // is just a two-line heading.
         Text(
             text = weekday,
             style = MaterialTheme.typography.labelLarge,
@@ -396,12 +489,58 @@ private fun HomeLargeTitle(modifier: Modifier = Modifier) {
         )
         Text(
             text = stringResource(R.string.home),
-            // Tracked in hard. At 36sp the default fitting leaves visible gaps between letters —
-            // the difference between a word that has been *set* and one that has been typed. This
-            // is the largest type in the app, so it is where loose tracking shows most.
+            // Tracked in hard. At 36sp the default fitting leaves visible gaps between letters
+            // — the difference between a word that has been *set* and one that has been typed.
+            // This is the largest type in the app, so it is where loose tracking shows most.
             style = MaterialTheme.typography.displaySmall.copy(letterSpacing = (-0.03).em),
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface,
         )
     }
 }
+
+/* ------------------------------------------------------------------------------------------- */
+/* The feed's arrival                                                                           */
+/* ------------------------------------------------------------------------------------------- */
+
+/**
+ * How long the whole page takes to arrive. Long enough that the stagger is legible as one motion,
+ * short enough that it is over before anyone could want to scroll.
+ */
+private const val FeedIntroDurationMs = 620
+
+/** A shelf's head start over the one below it, as a fraction of [FeedIntroDurationMs]. */
+private const val FeedIntroStagger = 0.07f
+
+/** How much of the window one shelf's own rise occupies. */
+private const val FeedIntroSlice = 0.55f
+
+/** How far a shelf travels on its way in. Small: this is a settle, not an entrance. */
+private val FeedIntroRise = 16.dp
+
+/**
+ * How much slower the large title drifts than the list it is in. 0 would scroll it away with
+ * everything else; 1 would pin it. A third is enough for the eye to read the two planes apart.
+ */
+private const val LargeTitleParallax = 0.35f
+
+/**
+ * One shelf's share of the feed's arrival: rise and fade, offset by its position on the page.
+ *
+ * Everything is read inside `graphicsLayer`, so a frame of this animation costs a layer
+ * invalidation and neither a recomposition nor a relayout — which matters because it runs during
+ * the exact window Home is also parsing its first response.
+ *
+ * Late shelves share the last slot rather than being given ever-later starts: past a certain
+ * order a shelf's window would end after the clock does, and it would sit at zero alpha forever.
+ * Nothing below the seventh shelf is on screen during the intro anyway.
+ */
+private fun Modifier.feedIntro(order: Int, progress: () -> Float): Modifier =
+    this.graphicsLayer {
+        val start = (order * FeedIntroStagger).coerceAtMost(1f - FeedIntroSlice)
+        val raw = ((progress() - start) / FeedIntroSlice).coerceIn(0f, 1f)
+        val eased = FastOutSlowInEasing.transform(raw)
+
+        alpha = eased
+        translationY = (1f - eased) * FeedIntroRise.toPx()
+    }

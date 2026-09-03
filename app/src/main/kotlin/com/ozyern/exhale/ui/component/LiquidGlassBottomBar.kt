@@ -77,6 +77,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInParent
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
@@ -99,6 +100,7 @@ import com.kyant.backdrop.shadow.Shadow
 import com.ozyern.exhale.LocalPlayerConnection
 import com.ozyern.exhale.R
 import com.ozyern.exhale.constants.AquamorphicDampingRatio
+import com.ozyern.exhale.constants.FloatingToolbarHorizontalPadding
 import com.ozyern.exhale.constants.AquamorphicStiffness
 import com.ozyern.exhale.extensions.togglePlayPause
 import com.ozyern.exhale.ui.component.liquid.LocalAppBackdrop
@@ -238,7 +240,7 @@ fun LiquidGlassBottomBar(
                         onItemClick = onItemClickHaptic,
                         modifier = Modifier
                             .weight(1f, fill = false)
-                            .widthIn(max = 420.dp)
+                            .widthIn(max = LiquidTabBarMaxWidth)
                             // Grows out of, and collapses back into, its left edge — which is
                             // exactly where the home circle sits in the collapsed state, so the
                             // strip reads as folding down into that circle rather than as a
@@ -565,6 +567,26 @@ private fun LiquidTabBar(
     val lastIndex = (tabs.size - 1).coerceAtLeast(0)
     val selectedIndex = tabs.indexOfFirst { isSelected(it) }.coerceIn(0, lastIndex)
 
+    // Labels go when there is no longer room to read them.
+    //
+    // The dock is as wide as the screen, but how many dp that is depends on the interface scale
+    // (Settings -> Appearance -> Display): at 130% a 411dp phone reports 316dp, which leaves the
+    // tab pill about 200dp -- 50dp a tab, an icon and roughly six characters. "Mood & Genres"
+    // ellipsised to "Mood &..." is worse than no label at all, because a truncated word is
+    // something the eye tries to read twice. Below the threshold the row is icons, which is a
+    // complete design rather than a broken one.
+    //
+    // Derived from the configuration rather than from measurement so it is right on the first
+    // frame; a row that renders labels and then drops them is the flicker this is avoiding.
+    val configuration = LocalConfiguration.current
+    val showLabels = remember(configuration.screenWidthDp, tabs.size) {
+        val pillWidth = minOf(
+            configuration.screenWidthDp.dp - DockSideChrome,
+            LiquidTabBarMaxWidth,
+        )
+        (pillWidth - 8.dp) / tabs.size.coerceAtLeast(1) >= LabelledTabMinWidth
+    }
+
     // Inset of the capsule inside the pill, and therefore what the tab pitch is measured from.
     // 64dp of bar minus 4dp top and bottom is the capsule's 56dp.
     val inset = 4.dp
@@ -770,6 +792,7 @@ private fun LiquidTabBar(
                         // to be painted here instead.
                         tint = if (!glassy && index == selectedIndex) accent else restColor,
                         filled = !glassy && index == selectedIndex,
+                        showLabel = showLabels,
                         scaleProvider = { 1f },
                         onClick = { onItemClick(screen, index == selectedIndex) },
                     )
@@ -795,6 +818,10 @@ private fun LiquidTabBar(
                         screen = screen,
                         tint = accent,
                         filled = true,
+                        // Must match the visible row exactly: this is the layer the lens reads, so
+                        // a twin carrying labels the row has dropped would magnify text that is
+                        // not there.
+                        showLabel = showLabels,
                         // Magnified with the press, so squeezing the capsule appears to draw the
                         // icon towards the surface of the glass.
                         scaleProvider = { lerp(1f, 1.16f, dampedDragAnimation.pressProgress) },
@@ -893,6 +920,24 @@ private fun LiquidTabBar(
 }
 
 /**
+ * How wide the tab pill is allowed to get. On a tablet the dock would otherwise stretch to the
+ * full width of the screen and put an inch of glass between two tabs.
+ */
+private val LiquidTabBarMaxWidth = 420.dp
+
+/**
+ * Everything in the dock row that is not the tab pill: the row's padding on both sides, the gap,
+ * and the search circle. Subtracted from the screen to work out what the pill actually gets.
+ */
+private val DockSideChrome = FloatingToolbarHorizontalPadding * 2 + 10.dp + 64.dp
+
+/**
+ * The narrowest a tab can be and still carry a readable word under its icon. Below this the row
+ * goes icon-only -- see the note in LiquidTabBar.
+ */
+private val LabelledTabMinWidth = 68.dp
+
+/**
  * One tab. Equal width by construction — [RowScope.weight] rather than each tab measuring to its
  * own label — because the capsule is a single fixed-pitch slot sliding across the row, and a row
  * whose slots are "Home"-wide and "Mood & Genres"-wide cannot be indexed by multiplication.
@@ -906,6 +951,7 @@ private fun RowScope.LiquidTabItem(
     screen: Screens,
     tint: Color,
     filled: Boolean,
+    showLabel: Boolean,
     scaleProvider: () -> Float,
     onClick: (() -> Unit)?,
 ) {
@@ -940,16 +986,18 @@ private fun RowScope.LiquidTabItem(
             tint = tint,
             modifier = Modifier.size(24.dp),
         )
-        Text(
-            text = stringResource(screen.titleId),
-            color = tint,
-            style = MaterialTheme.typography.labelSmall,
-            fontSize = 10.sp,
-            fontWeight = if (filled) FontWeight.SemiBold else FontWeight.Medium,
-            maxLines = 1,
-            softWrap = false,
-            overflow = TextOverflow.Ellipsis,
-        )
+        if (showLabel) {
+            Text(
+                text = stringResource(screen.titleId),
+                color = tint,
+                style = MaterialTheme.typography.labelSmall,
+                fontSize = 10.sp,
+                fontWeight = if (filled) FontWeight.SemiBold else FontWeight.Medium,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
     }
 }
 

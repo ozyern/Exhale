@@ -111,7 +111,21 @@ fun ExhaleTheme(
         val glass = remember(animatedColorScheme, darkTheme) {
             glassTokensOf(animatedColorScheme, darkTheme)
         }
-        CompositionLocalProvider(LocalGlass provides glass, content = content)
+        // NOTE: interface scale is NOT applied here.
+        //
+        // It used to be: this block overrode `LocalDensity` with a scaled copy. That moves every
+        // dp and sp, which looks right until you use the app — `LocalConfiguration` keeps
+        // reporting the *system* screen size, so the dozens of layouts sized from
+        // `screenWidthDp`/`screenHeightDp` overshoot by the scale factor, and dialogs and popups
+        // open new windows that re-provide density from their own resources and ignore the
+        // setting entirely.
+        //
+        // It now lives in `MainActivity.attachBaseContext` as a Configuration override, which is
+        // where both of those values actually come from. See `utils/UiScale.kt`.
+        CompositionLocalProvider(
+            LocalGlass provides glass,
+            content = content,
+        )
     }
 }
 

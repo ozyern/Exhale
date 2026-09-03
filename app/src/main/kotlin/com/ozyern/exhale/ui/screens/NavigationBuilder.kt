@@ -71,6 +71,7 @@ import com.ozyern.exhale.ui.screens.search.OnlineSearchResult
 import com.ozyern.exhale.ui.screens.search.SearchScreen
 import com.ozyern.exhale.ui.screens.settings.AboutScreen
 import com.ozyern.exhale.ui.screens.settings.AccountSettings
+import com.ozyern.exhale.ui.screens.settings.AppIconScreen
 import com.ozyern.exhale.ui.screens.settings.AppearanceSettings
 import com.ozyern.exhale.ui.screens.settings.CustomizeBackground
 import com.ozyern.exhale.ui.screens.settings.BackupAndRestore
@@ -90,6 +91,7 @@ import com.ozyern.exhale.ui.screens.settings.PrivacySettings
 import com.ozyern.exhale.ui.screens.settings.SettingsScreen
 import com.ozyern.exhale.ui.screens.settings.StorageSettings
 import com.ozyern.exhale.ui.screens.settings.ThemeCreatorScreen
+import com.ozyern.exhale.ui.screens.settings.UiScaleScreen
 import com.ozyern.exhale.ui.screens.settings.UpdateScreen
 import com.ozyern.exhale.ui.screens.musicrecognition.MusicRecognitionRoute
 import com.ozyern.exhale.ui.screens.musicrecognition.MusicRecognitionScreen
@@ -352,6 +354,12 @@ fun NavGraphBuilder.navigationBuilder(
     }
     settingsComposable("settings/appearance") {
         AppearanceSettings(navController, scrollBehavior)
+    }
+    settingsComposable("settings/appearance/ui_scale") {
+        UiScaleScreen(navController)
+    }
+    settingsComposable("settings/appearance/app_icon") {
+        AppIconScreen(navController)
     }
     settingsComposable("settings/appearance/palette_picker") {
         PalettePickerScreen(navController)

@@ -41,6 +41,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.lerp
 import com.ozyern.exhale.R
+import com.ozyern.exhale.utils.rememberAppIconPack
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -113,8 +114,8 @@ private const val IRIS_MS = 500
 /** Fraction of the shorter viewport edge the square splash artwork occupies. */
 private const val SPLASH_ARTWORK_FRACTION = 0.56f
 
-// Brand palette, sampled from the artwork itself rather than guessed. splash_logo.png is a black
-// glyph wearing a gold rim light: 72% of the mark is near-black body, its rim averages #DEB41A,
+// Brand palette, sampled from the artwork itself rather than guessed. The default mark
+// (splash_logo.png) is a black glyph wearing a gold rim light: 72% of the mark is near-black body, its rim averages #DEB41A,
 // and it ranges from a #000100 shadow to a #FFF07F highlight. It is a GOLD logo with a dark core.
 //
 // That split is why the bloom matters more than it looks. On the black canvas the body is
@@ -123,6 +124,9 @@ private const val SPLASH_ARTWORK_FRACTION = 0.56f
 //
 // (The bloom was once crimson-magenta, #B01E45 over #3A0A1E, a palette belonging to no part of
 // this artwork. A gold mark floating in a pink glow is the mismatch; these are its own colours.)
+//
+// The Gold pack's mark (splash_logo_gold.png) is the same glyph rendered in that same gold rather
+// than wearing it as a rim, so the palette holds for both and the bloom needs no per-pack case.
 private val SplashBase = Color.Black
 private val BloomDeep = Color(0xFFE0A020)   // warm amber core, the mark's mid-gold pushed brighter
 private val BloomDark = Color(0xFF33200A)   // deep brown-amber mid-tone, the mark's own shadow
@@ -141,6 +145,10 @@ fun BootSplash(
     }
 
     val context = LocalContext.current
+    // Whichever mark the user picked in Settings -> Appearance -> App icon. Read from
+    // PackageManager, so it is right on the first frame — a splash that opened on the wrong logo
+    // and corrected itself would be worse than not following the setting at all.
+    val markRes = rememberAppIconPack().splashLogoRes
     var logo by remember { mutableStateOf<ImageBitmap?>(null) }
     var decodeFailed by remember { mutableStateOf(false) }
 
@@ -153,13 +161,13 @@ fun BootSplash(
 
     // Frame one: the bloom is already breathing in while the artwork is still being decoded on a
     // background thread. The user never sees an empty black hold.
-    LaunchedEffect(Unit) {
+    LaunchedEffect(markRes) {
         launch {
             bloom.animateTo(1f, tween(durationMillis = 380, easing = LinearOutSlowInEasing))
         }
         val decoded = withContext(Dispatchers.IO) {
             runCatching {
-                BitmapFactory.decodeResource(context.resources, R.drawable.splash_logo)
+                BitmapFactory.decodeResource(context.resources, markRes)
                     ?.asImageBitmap()
             }.getOrNull()
         }
@@ -282,7 +290,7 @@ fun BootSplash(
                 // Belt and braces: if the background decode ever fails, fall back to the
                 // synchronous resource path rather than booting into a logo-less splash.
                 Image(
-                    painter = androidx.compose.ui.res.painterResource(R.drawable.splash_logo),
+                    painter = androidx.compose.ui.res.painterResource(markRes),
                     contentDescription = null,
                     contentScale = ContentScale.Fit,
                     modifier = markModifier,

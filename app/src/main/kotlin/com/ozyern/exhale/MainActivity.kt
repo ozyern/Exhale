@@ -12,6 +12,7 @@ import android.annotation.SuppressLint
 import android.Manifest
 import android.graphics.Color as AndroidColor
 import android.content.ComponentName
+import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
 import android.content.pm.PackageManager
@@ -297,10 +298,13 @@ import com.ozyern.exhale.utils.UpdateNotificationManager
 import com.ozyern.exhale.utils.Updater
 import com.ozyern.exhale.utils.dataStore
 import com.ozyern.exhale.utils.get
+import com.ozyern.exhale.utils.readUiScaleBlocking
+import com.ozyern.exhale.utils.rememberAppIconPack
 import com.ozyern.exhale.utils.rememberEnumPreference
 import com.ozyern.exhale.utils.rememberPreference
 import com.ozyern.exhale.utils.reportException
 import com.ozyern.exhale.utils.setAppLocale
+import com.ozyern.exhale.utils.withUiScale
 import com.ozyern.exhale.viewmodels.HomeViewModel
 import java.net.URLDecoder
 import java.net.URLEncoder
@@ -316,6 +320,23 @@ import com.ozyern.exhale.constants.PlayerFullscreenKey
 @Suppress("DEPRECATION", "ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+    /**
+     * Apply the user's interface scale before anything is inflated.
+     *
+     * This is the whole of Settings -> Appearance -> Display -> Interface scale. It is done here,
+     * on the Activity's base context, rather than as a `LocalDensity` override in the theme,
+     * because density is only half of what a size change means: `LocalConfiguration` and every
+     * dialog and popup window read their size from resources, not from a CompositionLocal. See
+     * [withUiScale] for what went wrong when this lived in the theme.
+     *
+     * The activity declares no `configChanges`, so it is recreated on every configuration change
+     * and this runs again against a fresh base configuration -- which is what keeps the scaled
+     * screen dimensions honest after a rotation.
+     */
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(newBase.withUiScale(readUiScaleBlocking(newBase)))
+    }
+
     @Inject
     lateinit var database: MusicDatabase
 
@@ -781,6 +802,9 @@ class MainActivity : ComponentActivity() {
                     }
                     val homeViewModel: HomeViewModel = hiltViewModel()
                     val accountImageUrl by homeViewModel.accountImageUrl.collectAsState()
+
+                    // The mark the app wears in its own chrome. See AppIconPack.
+                    val appIconPack = rememberAppIconPack()
                     val allLocalItems by homeViewModel.allLocalItems.collectAsState()
                     val allYtItems by homeViewModel.allYtItems.collectAsState()
                     val navBackStackEntry by navController.currentBackStackEntryAsState()
@@ -1465,16 +1489,23 @@ class MainActivity : ComponentActivity() {
                                                     ) {
                                                         // Brand logo replaces the app-name title.
                                                         //
-                                                        // Source: assets/icon.png (mirrored into
-                                                        // res/drawable-nodpi/logo.png). It is a
-                                                        // full-bleed square artwork, so Crop + a
-                                                        // CircleShape clip masks it to a PERFECT
+                                                        // Which mark is the user's, not ours: the
+                                                        // app icon pack they picked in Settings
+                                                        // supplies it, so choosing the dark icon
+                                                        // changes the disc here too. Leaving this
+                                                        // hard-coded meant picking the dark mark
+                                                        // and then being met by the gold one two
+                                                        // taps later, which reads as the setting
+                                                        // not having worked.
+                                                        //
+                                                        // The art is a full-bleed square, so Crop +
+                                                        // a CircleShape clip masks it to a PERFECT
                                                         // circle at any density — never a rounded
                                                         // square, never letterboxed. The hairline
                                                         // ring keeps the mark's dark backdrop from
                                                         // dissolving into a dark app bar.
                                                         Image(
-                                                            painter = painterResource(R.drawable.logo),
+                                                            painter = painterResource(appIconPack.logoRes),
                                                             contentDescription = stringResource(R.string.app_name),
                                                             contentScale = ContentScale.Crop,
                                                             alignment = Alignment.Center,

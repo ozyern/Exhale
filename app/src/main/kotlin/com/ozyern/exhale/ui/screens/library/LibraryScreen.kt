@@ -8,23 +8,35 @@
 
 package com.ozyern.exhale.ui.screens.library
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.navigation.NavController
 import com.ozyern.exhale.LocalDatabase
 import com.ozyern.exhale.LocalPlayerConnection
@@ -36,15 +48,22 @@ import com.ozyern.exhale.constants.PlaylistTagsFilterKey
 import com.ozyern.exhale.constants.ShowTagsInLibraryKey
 import com.ozyern.exhale.models.MediaMetadata
 import com.ozyern.exhale.ui.component.AmbientArtworkGlow
-import com.ozyern.exhale.ui.component.ChipsRow
+import com.ozyern.exhale.ui.component.LiquidGlassIconButton
 import com.ozyern.exhale.ui.component.TagsFilterChips
-import com.ozyern.exhale.ui.component.liquidGlassSurface
 import com.ozyern.exhale.ui.component.rememberArtworkAmbientColors
 import com.ozyern.exhale.utils.rememberEnumPreference
 import com.ozyern.exhale.utils.rememberPreference
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.mutableStateOf
 
+/**
+ * The Library tab: one of six views, chosen by [ChipSortTypeKey].
+ *
+ * The chip row that used to sit at the top of every one of them is gone. It was doing two
+ * incompatible jobs — naming where you were, and offering the five places you could go — and it
+ * did the second one badly, because a selected chip and an unselected chip differ by a fill
+ * colour. [LibraryMixScreen] now lists the destinations as rows, and each destination gets a real
+ * sub-page header instead: a back button and its own title, which is what every other pushed
+ * screen in the app looks like.
+ */
 @Composable
 fun LibraryScreen(navController: NavController) {
     var filterType by rememberEnumPreference(ChipSortTypeKey, LibraryFilter.LIBRARY)
@@ -57,61 +76,28 @@ fun LibraryScreen(navController: NavController) {
         selectedTagsFilter.split(",").filter { it.isNotBlank() }.toSet()
     }
 
+    val backToLibrary = { filterType = LibraryFilter.LIBRARY }
+
+    // A sub-view is a pushed page, so the system back gesture should pop it rather than leaving
+    // the tab. Previously the only way back was to find and re-tap the lit chip.
+    BackHandler(enabled = filterType != LibraryFilter.LIBRARY) { backToLibrary() }
+
+    val subPageTitle = when (filterType) {
+        LibraryFilter.PLAYLISTS -> R.string.filter_playlists
+        LibraryFilter.SPOTIFY -> R.string.spotify
+        else -> R.string.filter_library
+    }
+
+    // Passed to the sub-screens that take a header slot (Playlists, Spotify). Songs, Albums and
+    // Artists render their own.
     val filterContent = @Composable {
         Column {
-            // The page opened straight onto a row of filter chips with nothing above it, so
-            // there was no moment where the screen said what it was. A display-weight title
-            // gives the carousels below something to hang off and matches the heading scale
-            // the rest of the app moved to.
-            Text(
-                text = stringResource(R.string.filter_library),
-                style = MaterialTheme.typography.displaySmall,
-                fontWeight = FontWeight.Black,
-                color = MaterialTheme.colorScheme.onBackground,
-                modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 8.dp, bottom = 14.dp),
+            LibrarySubPageHeader(
+                title = stringResource(subPageTitle),
+                onBack = backToLibrary,
             )
-            // The filter row sits on a glass plate rather than loose on the page.
-            //
-            // Chips on a bare surface are five separate objects with nothing holding them
-            // together, and against the colour wash behind them they had no ground of their own to
-            // sit on. One plate makes the row a single control — which is what it is — and gives
-            // the wash something to be seen *through*, which is the entire point of the material.
-            Row(
-                modifier = Modifier
-                    .padding(horizontal = 16.dp)
-                    .liquidGlassSurface(RoundedCornerShape(22.dp))
-                    .padding(vertical = 6.dp),
-            ) {
-                ChipsRow(
-                    chips =
-                    listOf(
-                        LibraryFilter.PLAYLISTS to stringResource(R.string.filter_playlists),
-                        LibraryFilter.SONGS to stringResource(R.string.filter_songs),
-                        LibraryFilter.ALBUMS to stringResource(R.string.filter_albums),
-                        LibraryFilter.ARTISTS to stringResource(R.string.filter_artists),
-                        LibraryFilter.SPOTIFY to stringResource(R.string.spotify)
-                    ),
-                    currentValue = filterType,
-                    onValueUpdate = {
-                        filterType =
-                            if (filterType == it) {
-                                LibraryFilter.LIBRARY
-                            } else {
-                                it
-                            }
-                    },
-                    icons = mapOf(
-                        LibraryFilter.PLAYLISTS to R.drawable.queue_music,
-                        LibraryFilter.SONGS to R.drawable.music_note,
-                        LibraryFilter.ALBUMS to R.drawable.album,
-                        LibraryFilter.ARTISTS to R.drawable.person,
-                        LibraryFilter.SPOTIFY to R.drawable.spotify_icon
-                    ),
-                    modifier = Modifier.weight(1f),
-                )
-            }
 
-            if (showTagsInLibrary) {
+            if (showTagsInLibrary && filterType == LibraryFilter.PLAYLISTS) {
                 TagsFilterChips(
                     database = database,
                     selectedTags = selectedTagIds,
@@ -132,11 +118,6 @@ fun LibraryScreen(navController: NavController) {
     // Library takes the same ambient wash as Home and the player: the colour of whatever is
     // playing, bleeding down from the top.
     //
-    // This replaces a three-blob mesh built from the *theme's* primary/secondary/tertiary. That
-    // version was fixed — the same wash under every song, on a page where nothing else moved
-    // either — and it was the only surface in the app painting its own background instead of
-    // reacting to the record. Sharing the component means Library cannot drift from Home again,
-    // and the glass on top of it finally has something worth revealing.
     // Not `?: return` as Home does: Library is reachable before the playback service has bound,
     // and a blank tab is a worse failure than a wash that has not arrived yet.
     val mediaMetadata by LocalPlayerConnection.current?.mediaMetadata?.collectAsState()
@@ -158,30 +139,55 @@ fun LibraryScreen(navController: NavController) {
 
         when (filterType) {
             LibraryFilter.LIBRARY -> LibraryMixScreen(
-                navController,
-                filterContent,
-                onTabSelected = { filterType = it }
+                navController = navController,
+                onTabSelected = { filterType = it },
             )
             LibraryFilter.PLAYLISTS -> LibraryPlaylistsScreen(navController, filterContent)
-            LibraryFilter.SONGS -> LibrarySongsScreen(
-                navController,
-                { filterType = LibraryFilter.LIBRARY }
+            LibraryFilter.SONGS -> LibrarySongsScreen(navController, backToLibrary)
+            LibraryFilter.ALBUMS -> LibraryAlbumsScreen(navController, backToLibrary)
+            LibraryFilter.ARTISTS -> LibraryArtistsScreen(navController, backToLibrary)
+            LibraryFilter.SPOTIFY -> LibrarySpotifyPlaylistsScreen(
+                navController = navController,
+                filterContent = filterContent,
             )
-            LibraryFilter.ALBUMS -> LibraryAlbumsScreen(
-                navController,
-                { filterType = LibraryFilter.LIBRARY }
-            )
-            LibraryFilter.ARTISTS -> LibraryArtistsScreen(
-                navController,
-                { filterType = LibraryFilter.LIBRARY }
-            )
-
-            LibraryFilter.SPOTIFY -> {
-                LibrarySpotifyPlaylistsScreen(
-                    navController = navController,
-                    filterContent = filterContent
-                )
-            }
         }
+    }
+}
+
+/**
+ * The header a library sub-view opens with: a round glass back button, then the view's name.
+ *
+ * The title is set one step below the Library page's own — a pushed page is subordinate to the
+ * page that pushed it, and matching them at display size makes the stack read flat.
+ */
+@Composable
+private fun LibrarySubPageHeader(
+    title: String,
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = modifier
+            .fillMaxWidth()
+            .windowInsetsPadding(WindowInsets.systemBars.only(WindowInsetsSides.Horizontal))
+            .padding(start = 12.dp, end = 20.dp, top = 6.dp, bottom = 12.dp),
+    ) {
+        LiquidGlassIconButton(
+            onClick = onBack,
+            icon = R.drawable.arrow_back,
+            contentDescription = stringResource(R.string.back),
+        )
+
+        Spacer(Modifier.width(6.dp))
+
+        Text(
+            text = title,
+            style = MaterialTheme.typography.headlineMedium.copy(letterSpacing = (-0.025).em),
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }

@@ -169,10 +169,9 @@ fun Queue(
     var dismissJob: Job? by remember { mutableStateOf(null) }
 
     var showSleepTimerDialog by remember { mutableStateOf(false) }
-    var sleepTimerValue by remember { mutableStateOf(30f) }
     val sleepTimerEnabled = remember(
         playerConnection.service.sleepTimer.triggerTime,
-        playerConnection.service.sleepTimer.pauseWhenSongEnd
+        playerConnection.service.sleepTimer.songsRemaining
     ) {
         playerConnection.service.sleepTimer.isActive
     }
@@ -186,11 +185,7 @@ fun Queue(
     LaunchedEffect(sleepTimerEnabled) {
         if (sleepTimerEnabled) {
             while (isActive) {
-                sleepTimerTimeLeft = if (playerConnection.service.sleepTimer.pauseWhenSongEnd) {
-                    playerConnection.player.duration - playerConnection.player.currentPosition
-                } else {
-                    playerConnection.service.sleepTimer.triggerTime - System.currentTimeMillis()
-                }
+                sleepTimerTimeLeft = sleepTimerMillisLeft(playerConnection)
                 delay(1000L)
             }
         }
@@ -417,15 +412,18 @@ fun Queue(
             if (showSleepTimerDialog) {
                 SleepTimerDialog(
                     onDismiss = { showSleepTimerDialog = false },
-                    onConfirm = { minutes ->
+                    onConfirmMinutes = { minutes ->
                         showSleepTimerDialog = false
                         playerConnection.service.sleepTimer.start(minutes)
                     },
-                    onEndOfSong = {
+                    onConfirmSongs = { songs ->
                         showSleepTimerDialog = false
-                        playerConnection.service.sleepTimer.start(-1)
+                        playerConnection.service.sleepTimer.startAfterSongs(songs)
                     },
-                    initialValue = sleepTimerValue
+                    onCancelTimer = {
+                        showSleepTimerDialog = false
+                        playerConnection.service.sleepTimer.clear()
+                    },
                 )
             }
         },
