@@ -3841,24 +3841,41 @@ html:has(.release) {
 /* Portrait, and anything narrow enough that the two words would meet in the
    middle: the split becomes a stack in the lower third, still hard against
    the left margin the rest of the page uses. */
-/* Narrow enough that the number and the two words would meet in the middle:
-   the split becomes a stack, one word above the number and one below. */
-@media (max-width: 900px), (orientation: portrait) and (max-width: 1024px) {
-  .rh-type {
-    flex-direction: column;
-    align-items: flex-start;
-    /* Above the number and below it, rather than both words in a pile at the
-       bottom: the point of the arrangement is that the number sits inside the
-       title, and turning the page ninety degrees should not lose that. */
-    justify-content: space-between;
-    padding-top: clamp(88px, 17vh, 190px);
-    padding-bottom: clamp(74px, 15vh, 170px);
-    font-size: clamp(32px, 8.5vw, 62px);
-  }
+/* Upright.
+   Keyed off `data-tall`, which the page sets from the hero box's own aspect
+   ratio and also hands to the canvas — one decision, so the digits and the two
+   words can never disagree about which way up the screen is.
 
-  .rh-word:last-of-type {
-    color: var(--grey);
-  }
+   The number is set one digit per line here and takes most of the screen, so
+   the words stop being a line either side of it and become two marks *on* it,
+   at opposite corners. Giving them a lane of their own would mean shrinking
+   the object to make room, and an object that has been made room for is
+   furniture. */
+.rh[data-tall='true'] .rh-type {
+  display: block;
+  padding: 0;
+  font-size: clamp(26px, 7.6vw, 46px);
+}
+
+/* Held off the corners themselves: type in a corner reads as a watermark, type
+   a third of the way down reads as a title. */
+.rh[data-tall='true'] .rh-word {
+  position: absolute;
+}
+
+.rh[data-tall='true'] .rh-word:first-of-type {
+  left: clamp(16px, 5vw, 30px);
+  top: 27%;
+}
+
+.rh[data-tall='true'] .rh-word:last-of-type {
+  right: clamp(16px, 5vw, 30px);
+  top: 65%;
+}
+
+.rh[data-tall='true'] .rh-replay {
+  right: clamp(14px, 4vw, 22px);
+  bottom: clamp(14px, 4vw, 22px);
 }
 
 @media (prefers-reduced-motion: reduce) {

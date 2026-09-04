@@ -38,6 +38,29 @@ import BreathField from '../components/BreathField.jsx'
  */
 function SplitTitle({ onReplay }) {
   const [key, setKey] = useState(0)
+  const [tall, setTall] = useState(false)
+  const box = useRef(null)
+
+  // One decision, read off the box itself rather than off the viewport.
+  //
+  // The canvas needs it to know whether to set the digits in a row or one per
+  // line, and the stylesheet needs it to know whether the two words sit either
+  // side of the number or at opposite corners of it. A media query would be a
+  // second opinion, and a short landscape window is exactly where the two
+  // would disagree — the words stacked over a number that is still in a row.
+  useEffect(() => {
+    const node = box.current
+    if (!node) return
+    const read = () => {
+      const rect = node.getBoundingClientRect()
+      setTall(rect.height / Math.max(1, rect.width) > 1.12)
+    }
+    read()
+    if (!('ResizeObserver' in window)) return
+    const ro = new ResizeObserver(read)
+    ro.observe(node)
+    return () => ro.disconnect()
+  }, [])
 
   const replay = () => {
     setKey((n) => n + 1)
@@ -45,8 +68,8 @@ function SplitTitle({ onReplay }) {
   }
 
   return (
-    <div className="rh">
-      <BreathField text={String(RELEASE.code)} replayKey={key} />
+    <div className="rh" ref={box} data-tall={tall}>
+      <BreathField text={String(RELEASE.code)} tall={tall} replayKey={key} />
 
       {/* The build number in the middle is drawn on the canvas, which is
           aria-hidden — so the heading carries it as text. A screen reader gets

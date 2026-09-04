@@ -86,6 +86,19 @@ thing look cheap:
   pure-black rule. Stars on pure black read as dots on a page rather than as
   light at a distance.
 
+It is set two ways. A three-digit number is about three units wide by one tall
+and a phone held upright is one by two, so scaled to fit, the landscape figure
+is a thin bright band across the middle of a large black rectangle — which is
+the single thing that makes an effect like this look like a placeholder. In
+portrait the digits are set one per line instead and the figure takes the whole
+height, and the two words stop being a line either side of it and become two
+marks *on* it, at opposite corners.
+
+Which way up it is gets decided once, in `SplitTitle`, off the hero box's own
+aspect ratio: the same answer goes to the canvas as a prop and to the
+stylesheet as `data-tall`. A media query would be a second opinion, and a short
+landscape window is exactly where the two would disagree.
+
 It breathes on the app's own numbers — four seconds in, six seconds out, off
 the pacer hidden behind seven taps on the mark in About — tightening on the
 inhale and loosening on the exhale, so the number is never quite finished
