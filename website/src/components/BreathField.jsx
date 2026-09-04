@@ -17,13 +17,18 @@ import { prefersReducedMotion } from '../hooks.js'
  * Four things do the work, and leaving any of them out is what makes this kind
  * of thing look cheap:
  *
- *   · **Filaments, not a filled stencil.** The one that matters most. A
- *     distance transform over the mask says how deep inside the stroke each
- *     point is, and density, size and brightness all follow it — so every
- *     stroke of every digit is a bright chain down its middle thinning to
- *     nothing at its edges. Fill a letterform evenly with dots and you get
- *     dots in the shape of a letter; run them along the spine and you get an
- *     arm of something, which is what a sky looks like.
+ *   · **Chains, not a filled stencil.** The one that matters most, and the
+ *     reason is the subject. The obvious reference for this sort of thing is a
+ *     spiral galaxy resolving into a 6, and that works because a 6 *is* a
+ *     spiral — the glyph and the natural form are the same shape. 203 gets no
+ *     such help, so the flow has to be built. A distance transform says how
+ *     deep inside the stroke each pixel is; sampling concentrates hard on the
+ *     ridge, so every stroke is a chain rather than a filled region, and each
+ *     star's bloom is stretched along the local stroke direction so
+ *     neighbours merge into a continuous ribbon of light instead of staying a
+ *     row of separate dots. Fill a letterform evenly and you get dots in the
+ *     shape of a letter; run them down the spine and blur them along it and
+ *     you get an arm of something.
  *   · **Magnitude.** A cube law, so most points are a pixel and a few are the
  *     size of a fingernail. An even scatter of mid-size dots is confetti.
  *   · **Two passes per star.** A sharp core and, under it, a bloom several
@@ -41,13 +46,16 @@ import { prefersReducedMotion } from '../hooks.js'
  */
 
 /** How many stars the number is made of, in landscape. */
-const COUNT = 1900
+const COUNT = 1750
 
 /** Large faint smears under it, on the same points. */
-const NEBULA = 260
+const NEBULA = 240
 
 /** Points forced to maximum magnitude, spread along the spines. */
-const HOTSPOTS = 24
+const HOTSPOTS = 26
+
+/** And a few far beyond that: the handful of things you see before anything else. */
+const GIANTS = 7
 
 /**
  * Stars that are not part of the number.
@@ -77,8 +85,8 @@ const BREATH = INHALE + EXHALE
  * taller than it is wide, which is the shape the screen actually is.
  */
 const MASK = {
-  wide: { w: 1200, h: 460, step: 2, track: 26 },
-  tall: { w: 520, h: 1320, step: 2, track: 0 },
+  wide: { w: 1200, h: 460, step: 1, track: 26 },
+  tall: { w: 520, h: 1320, step: 1, track: 0 },
 }
 
 /**
@@ -262,19 +270,33 @@ function glyphPoints(text, tall) {
   let maxX = 0
   let minY = MH
   let maxY = 0
-  for (let y = 0; y < MH; y += STEP) {
-    for (let x = 0; x < MW; x += STEP) {
+  for (let y = 1; y < MH - 1; y += STEP) {
+    for (let x = 1; x < MW - 1; x += STEP) {
       const i = y * MW + x
       if (dist[i] === 0) continue
 
       // 0 at the very edge of a stroke, 1 down its middle.
       const depth = Math.min(1, dist[i] / deepest)
-      // Thinned hard toward the rim. Roughly a tenth of the edge survives,
-      // which is what keeps the outline of the number readable while the light
-      // itself lives in the middle.
-      if (Math.random() > 0.09 + 0.91 * depth ** 1.5) continue
+      // Concentrated hard on the ridge. A fourth power leaves the rim almost
+      // empty and piles nearly everything onto the middle of the stroke, which
+      // is the difference between a chain of light and a filled shape. The few
+      // percent that do survive out at the edge are what keeps the number's
+      // outline from looking cut with a knife.
+      if (Math.random() > 0.025 + 0.975 * depth ** 3.6) continue
 
-      hits.push([x + gauss() * 2.4, y + gauss() * 2.4, depth])
+      // Which way the stroke runs, here.
+      //
+      // The distance field climbs fastest straight across a stroke, so its
+      // gradient is the normal and the perpendicular is the tangent. Each
+      // star's bloom is stretched along it, which is what lets neighbours run
+      // together into a ribbon instead of staying a row of dots.
+      const gx = dist[i + 1] - dist[i - 1]
+      const gy = dist[i + MW] - dist[i - MW]
+      const len = Math.hypot(gx, gy) || 1
+      const tx = -gy / len
+      const ty = gx / len
+
+      hits.push([x + gauss() * 1.5, y + gauss() * 1.5, depth, tx, ty])
       if (x < minX) minX = x
       if (x > maxX) maxX = x
       if (y < minY) minY = y
@@ -334,18 +356,22 @@ export default function BreathField({ text = '203', tall = false, replayKey = 0 
     let nebula = []
     let dust = []
     let ratio = 1
+    // Characters across a line. One in portrait, all of them in landscape --
+    // it is what says how wide a single stroke is relative to the figure.
+    let perLine = 1
 
     /** Everything that depends on which way up the screen is. */
     const build = (stacked) => {
       const glyph = glyphPoints(text, stacked)
       const hits = glyph.hits
       ratio = glyph.ratio
+      perLine = stacked ? 1 : [...text].length
 
       // Stacked, the figure is taller and narrower, so it needs fewer points
       // to read at the same density — and it is usually on a phone.
-      const count = Math.min(hits.length, stacked ? 1350 : COUNT)
+      const count = Math.min(hits.length, stacked ? 1700 : COUNT)
 
-      motes = hits.slice(0, count).map(([x, y, depth]) => {
+      motes = hits.slice(0, count).map(([x, y, depth, tx, ty]) => {
         // Cube law. Most points are a pixel; one in fifty is a real star. Then
         // weighted by depth, so the big ones sit on the spine and the rim gets
         // pinpricks.
@@ -366,10 +392,12 @@ export default function BreathField({ text = '203', tall = false, replayKey = 0 
           // The rim wanders further than the spine, so the number frays at its
           // edges on the exhale instead of coming apart down the middle.
           wander: (0.3 + Math.random() ** 2 * 1.9) * (1.5 - depth),
+          tx,
+          ty,
           core: cores[tint],
           halo: halos[tint],
-          size: (0.55 + mag * 9) * (0.62 + clump * 0.95),
-          glow: (0.24 + mag * 0.95) * (0.55 + clump * 0.68) * (0.5 + depth * 0.72),
+          size: (0.5 + mag * 8) * (0.62 + clump * 0.95),
+          glow: (0.26 + mag * 1.05) * (0.55 + clump * 0.68) * (0.5 + depth * 0.72),
           hot: false,
           px: 0,
           py: 0,
@@ -390,10 +418,26 @@ export default function BreathField({ text = '203', tall = false, replayKey = 0 
         if (chosen.some((c) => Math.hypot(c.x - m.x, c.y - m.y) < 0.075)) continue
         m.hot = true
         m.mag = 0.88 + Math.random() * 0.12
-        m.size = 5 + Math.random() * 3
-        m.glow = 0.92
+        m.size = 4.5 + Math.random() * 2.5
+        m.glow = 0.95
         m.wander *= 0.35
         chosen.push(m)
+      }
+
+      // And a handful beyond even those. The eye finds the brightest thing in
+      // a frame first and everything else second; without something to be
+      // found first, a field of near-equal stars is a texture. Kept well
+      // apart, and kept still, because they are the anchors.
+      for (let n = 0; n < GIANTS * 20 && n < 900; n += 1) {
+        const m = chosen[Math.floor(Math.random() * chosen.length)]
+        if (!m || m.giant) continue
+        const giants = chosen.filter((c) => c.giant)
+        if (giants.length >= GIANTS) break
+        if (giants.some((g) => Math.hypot(g.x - m.x, g.y - m.y) < 0.2)) continue
+        m.giant = true
+        m.size = 8 + Math.random() * 4
+        m.glow = 1
+        m.wander *= 0.25
       }
 
       // The band the stars sit in. Placed only where the stroke is thickest,
@@ -405,8 +449,8 @@ export default function BreathField({ text = '203', tall = false, replayKey = 0 
         return {
           x: hit[0],
           y: hit[1],
-          size: 34 + Math.random() ** 2 * 96,
-          glow: 0.028 + Math.random() ** 2 * 0.09,
+          size: 30 + Math.random() ** 2 * 78,
+          glow: 0.014 + Math.random() ** 2 * 0.05,
           phase: Math.random() * TAU,
           halo: halos[Math.random() < 0.82 ? 0 : 1 + ((Math.random() * 3) | 0)],
         }
@@ -472,7 +516,15 @@ export default function BreathField({ text = '203', tall = false, replayKey = 0 
       const cx = w / 2
       const cy = h / 2
       const scale = span * (1 - 0.04 * breath)
-      const unit = Math.min(w, h) / 720
+
+      // Stars are sized against the stroke they sit on, not against the
+      // window. `span` is the width of the whole figure, so one stroke is
+      // roughly that over the number of characters on a line — and in portrait,
+      // where a single digit is as wide as three were, everything sitting on
+      // it has to grow by the same factor or the chains turn to dust. Sizing
+      // this off `min(width, height)` is the same expression on a laptop and
+      // half of it on a phone, which is exactly wrong.
+      const unit = (span / perLine) * (3 / 727)
 
       // The whole point: held in on the inhale, let go on the exhale. The
       // number is never quite finished assembling and you watch it try — but
@@ -493,23 +545,43 @@ export default function BreathField({ text = '203', tall = false, replayKey = 0 
         )
       }
 
-      // 2. Every star's bloom, at a fraction of its brightness.
+      // 2. Every star's bloom -- twice, offset along the stroke.
+      //
+      // Two draws a third of a radius apart down the tangent make an ellipse
+      // out of a circle without a per-star transform, and 2,600 setTransform
+      // calls a frame is not free. It is the whole reason the chains read as
+      // ribbons: a round bloom keeps its neighbours separate, a stretched one
+      // runs into them.
       for (let i = 0; i < motes.length; i += 1) {
         const m = motes[i]
         const drift = m.wander * loosen * unit * 2.4
         m.px = cx + m.x * scale + Math.sin(clock * m.rate + m.phase) * drift
         m.py = cy + m.y * scale + Math.cos(clock * m.rate * 0.87 + m.phase) * drift
 
-        const px = m.size * (5.5 + m.mag * 9) * unit
-        ctx.globalAlpha = m.glow * (0.11 + 0.12 * breath)
-        ctx.drawImage(m.halo, m.px - px / 2, m.py - px / 2, px, px)
+        const px = m.size * (3.8 + m.mag * 9) * unit
+        const lean = px * 0.3
+        ctx.globalAlpha = m.glow * (0.04 + 0.042 * breath)
+        ctx.drawImage(
+          m.halo,
+          m.px + m.tx * lean - px / 2,
+          m.py + m.ty * lean - px / 2,
+          px,
+          px,
+        )
+        ctx.drawImage(
+          m.halo,
+          m.px - m.tx * lean - px / 2,
+          m.py - m.ty * lean - px / 2,
+          px,
+          px,
+        )
       }
 
       // 3. The cores, sharp, on top.
       for (let i = 0; i < motes.length; i += 1) {
         const m = motes[i]
-        const px = m.size * (1 + 0.3 * breath) * 1.65 * unit
-        ctx.globalAlpha = Math.min(1, m.glow * (0.74 + 0.26 * breath))
+        const px = m.size * (1 + 0.3 * breath) * 1.25 * unit
+        ctx.globalAlpha = Math.min(1, m.glow * (0.64 + 0.3 * breath))
         ctx.drawImage(m.core, m.px - px / 2, m.py - px / 2, px, px)
       }
 
@@ -519,7 +591,9 @@ export default function BreathField({ text = '203', tall = false, replayKey = 0 
         // Twinkle, barely: enough that the background is never quite the same
         // twice, not enough that anything up there is blinking at you.
         ctx.globalAlpha = d.glow * (0.62 + 0.38 * Math.sin(clock * 0.45 + d.phase))
-        const px = d.size * 2.2 * unit
+        // Off the frame rather than off the figure: these are the sky behind
+        // it, and they should not change size when the number does.
+        const px = d.size * 2.2 * (Math.min(w, h) / 720)
         ctx.drawImage(d.core, d.x * w - px / 2, d.y * h - px / 2, px, px)
       }
 

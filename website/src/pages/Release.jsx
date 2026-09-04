@@ -56,10 +56,21 @@ function SplitTitle({ onReplay }) {
       setTall(rect.height / Math.max(1, rect.width) > 1.12)
     }
     read()
-    if (!('ResizeObserver' in window)) return
-    const ro = new ResizeObserver(read)
-    ro.observe(node)
-    return () => ro.disconnect()
+
+    // Both, because they fail in different places. ResizeObserver catches the
+    // box changing without the window doing anything; `resize` catches the
+    // window when the observer's callback is not being delivered, which is
+    // what happens whenever the rendering pipeline is throttled.
+    window.addEventListener('resize', read)
+    window.addEventListener('orientationchange', read)
+    const ro = 'ResizeObserver' in window ? new ResizeObserver(read) : null
+    ro?.observe(node)
+
+    return () => {
+      window.removeEventListener('resize', read)
+      window.removeEventListener('orientationchange', read)
+      ro?.disconnect()
+    }
   }, [])
 
   const replay = () => {
