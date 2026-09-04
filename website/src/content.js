@@ -8,7 +8,7 @@
 
 export const REPO = 'https://github.com/ozyern/Exhale'
 export const RELEASES = `${REPO}/releases/latest`
-export const VERSION = '1.0.102'
+export const VERSION = '1.0.203'
 
 /**
  * Palettes. `rose` is the app's DefaultThemeColor; the other two are what
@@ -171,7 +171,8 @@ export const SPECS = [
 export const ABOUT_FACTS = [
   { label: 'Version', value: VERSION },
   { label: 'Architecture', value: 'Universal' },
-  { label: 'Size', value: '40 MB' },
+  { label: 'Size', value: '37 MB' },
+  { label: 'Requires', value: 'Android 13' },
 ]
 
 /**
@@ -184,6 +185,99 @@ export const ABOUT_FACTS = [
  * `RELEASE_NOTES[0]` as current.
  */
 export const RELEASE_NOTES = [
+  {
+    version: '1.0.203',
+    date: 'September 5, 2026',
+    tag: 'Current release',
+    summary:
+      'Everything that moved since the first public release: the interface at your size, a library shaped like a library, a sleep timer you can read half asleep, and glass that bends the pixels actually behind it.',
+    groups: [
+      {
+        title: 'New',
+        items: [
+          {
+            title: 'Interface scale',
+            body: 'Exhale’s own copy of Android’s Display Size, for this app only. Ten steps, a scale model of a real screen that redraws as you drag, and an explicit Apply. Settings → Appearance → Display.',
+          },
+          {
+            title: 'App icon packs',
+            body: 'Default (a black mark on gold) and Gold (a gold mark lit on black). The pack also supplies the app-bar disc and the boot splash mark, so the choice carries past the home screen.',
+          },
+          {
+            title: 'A sleep timer you can reach',
+            body: 'It lives in the player menu now, reachable from every player design, and counts songs as well as minutes. Every option carries the clock time it lands on, and the ring drains rather than fills.',
+          },
+          {
+            title: 'Refracting in-content glass',
+            body: 'The round controls are cut from the search bar’s own material. Press one and the pane deforms toward your finger, with a specular bloom tracking the touch.',
+          },
+        ],
+      },
+      {
+        title: 'Improved',
+        items: [
+          {
+            title: 'The Library, rebuilt',
+            body: 'A large title, an inset list of destinations, pinned collections in the same list, and Recently Added as an artwork grid. Filter chips became real pages with a working back gesture.',
+          },
+          {
+            title: 'The player menu is one level deep',
+            body: 'Five round actions on top, one grouped list of places underneath. It used to be six nested containers before it reached a verb.',
+          },
+          {
+            title: 'Lyrics keep up',
+            body: 'Blur is forward-only, the word swell peaks when you hear it rather than after, and the scroll runs 220ms ahead of the highlight so a line arrives at the anchor about when it lights.',
+          },
+          {
+            title: 'Updates finish inside the app',
+            body: '“Update Now” goes to the real transfer instead of the system browser, and the prompt is a proper Software Update sheet with a decline action it never had.',
+          },
+          {
+            title: 'The page is lit rather than painted',
+            body: 'The artwork glow drifts a lap every thirty-odd seconds. Home arrives shelf by shelf, the shortcut tiles cascade, and the large title shrinks toward the compact one as it leaves.',
+          },
+        ],
+      },
+      {
+        title: 'Fixed',
+        items: [
+          {
+            title: 'The player’s seek bar was stuck',
+            body: 'LiquidSlider watched a plain parameter through snapshotFlow, which reads no snapshot state and so never re-emitted.',
+          },
+          {
+            title: '“Update Now” crashed the app',
+            body: 'The prompt was resolving navigate() against a lateinit property nothing ever assigned. It compiled, it looked right, and it threw on press.',
+          },
+          {
+            title: 'Settings bars cut the artwork off dead',
+            body: 'They were a flat fill of the page color, slicing the ambient wash along the bar’s bottom edge. Eighteen of them now take the same ground as the page.',
+          },
+          {
+            title: 'The launcher icon was wrong under a square mask',
+            body: 'Its background layer carried the source artwork’s own edge vignette — invisible under a circle, glaring under a square. The in-app mark was the unfixed copy.',
+          },
+        ],
+      },
+      {
+        title: 'Removed',
+        items: [
+          {
+            title: 'Three quarters of the launch animation',
+            body: 'Two shockwave rings, a ten-degree entrance tilt and a diagonal sheen sweep. Four things competing for attention inside one second is what a splash looks like when it is trying to impress you.',
+          },
+          {
+            title: 'The duplicate playlist list',
+            body: 'The Playlists tab already owned it, and that is the one with reordering.',
+          },
+          {
+            title: 'A second account circle',
+            body: 'It briefly sat inside Home’s large title, directly under the app bar that already had one.',
+          },
+        ],
+      },
+    ],
+  },
   {
     version: '1.0.102',
     date: 'August 26, 2026',

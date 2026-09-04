@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import Changelog from './components/Changelog.jsx'
+import { AnnounceBar, RELEASE_PATH, SiteFooter, TopBar } from './components/Chrome.jsx'
 import Dock from './components/Dock.jsx'
 import Gallery from './components/Gallery.jsx'
 import Words from './components/Words.jsx'
@@ -11,18 +12,16 @@ import {
   ABOUT_FACTS,
   FEATURES,
   LYRICS_VIDEO,
-  MAINTAINER,
   RELEASES,
   REPO,
   SHOT,
   SHOTS,
   SPECS,
   TAGLINE,
-  TELEGRAM,
   VERSION,
 } from './content.js'
 import { useHeroScroll, useOnScreen, useReveals, prefersReducedMotion } from './hooks.js'
-import { DownloadIcon, GithubIcon, Mark } from './icons.jsx'
+import { Link } from './router.jsx'
 
 const SECTIONS = [
   { id: 'overview', label: 'Overview' },
@@ -34,51 +33,13 @@ const SECTIONS = [
 
 /* ------------------------------------------------------------------ bars */
 
-function Bars({ active, onSelect, onNotes }) {
+function Bars({ active, onSelect }) {
   return (
     <>
-      {/* One centred group rather than a left/right split. This row is about
-          the project (where the code and the builds live); the segmented
-          control below it is about this page. */}
-      <div className="topbar">
-        <nav className="topbar-inner" aria-label="Project">
-          <a className="wordmark" href="#top" aria-label="Exhale, back to top">
-            <Mark />
-          </a>
-          <a href={RELEASES} target="_blank" rel="noreferrer">
-            Download
-          </a>
-          <a className="hide-sm" href={`${REPO}/releases`} target="_blank" rel="noreferrer">
-            Releases
-          </a>
-          <button type="button" className="hide-sm" onClick={onNotes}>
-            Changelog
-          </button>
-          <a className="hide-sm" href={REPO} target="_blank" rel="noreferrer">
-            Source
-          </a>
-          <a className="hide-sm" href={`${REPO}/issues`} target="_blank" rel="noreferrer">
-            Issues
-          </a>
-          <a
-            className="hide-sm"
-            href={`${REPO}/blob/master/CONTRIBUTING.md`}
-            target="_blank"
-            rel="noreferrer"
-          >
-            Contributing
-          </a>
-          <a href={`${REPO}/blob/master/LICENSE`} target="_blank" rel="noreferrer">
-            GPL-3.0
-          </a>
-          <a className="topicon" href={REPO} target="_blank" rel="noreferrer" aria-label="Source on GitHub">
-            <GithubIcon />
-          </a>
-          <a className="topicon" href={RELEASES} target="_blank" rel="noreferrer" aria-label="Download the APK">
-            <DownloadIcon />
-          </a>
-        </nav>
-      </div>
+      {/* Three tiers, narrowing as they go: the release strip is news, the
+          topbar is the project, and the segmented control is this page. */}
+      <AnnounceBar />
+      <TopBar />
 
       <div className="segbar">
         <Segments items={SECTIONS} active={active} onSelect={onSelect} />
@@ -332,11 +293,9 @@ export default function App() {
     }, 1400)
   }
 
-  const year = useMemo(() => new Date().getFullYear(), [])
-
   return (
     <div id="top">
-      <Bars active={section} onSelect={goToSection} onNotes={openNotes} />
+      <Bars active={section} onSelect={goToSection} />
 
       <main>
         <Ribbon playing={ambient} onToggle={() => setAmbient((p) => !p)} />
@@ -424,6 +383,13 @@ export default function App() {
                 </button>
               </div>
 
+              {/* Two documents, and the difference is length. The sheet above is
+                  four groups and a sentence each, for someone deciding. This is
+                  the long read, for someone who has already decided. */}
+              <Link className="textlink getit-read" to={RELEASE_PATH}>
+                Read the full {VERSION} release notes <i>&rsaquo;</i>
+              </Link>
+
               <dl className="facts reveal" style={{ '--d': '300ms' }}>
                 {ABOUT_FACTS.map((fact) => (
                   <div key={fact.label}>
@@ -449,154 +415,7 @@ export default function App() {
 
       </main>
 
-      <footer className="footer">
-        <div className="shell">
-          <div className="footer-mark">
-            <img src="/logo.png" alt="" width="30" height="30" />
-            Exhale
-          </div>
-
-          <div className="footer-grid">
-            <div>
-              <h4>Exhale</h4>
-              <ul>
-                <li>
-                  <a href="#material">Material</a>
-                </li>
-                <li>
-                  <a href="#lyrics">Lyrics</a>
-                </li>
-                <li>
-                  <a href="#color">Color</a>
-                </li>
-                <li>
-                  <a href="#download">Download</a>
-                </li>
-                <li>
-                  <button type="button" onClick={openNotes}>
-                    What&rsquo;s new
-                  </button>
-                </li>
-              </ul>
-            </div>
-            <div>
-              <h4>Source</h4>
-              <ul>
-                <li>
-                  <a href={REPO} target="_blank" rel="noreferrer">
-                    Repository
-                  </a>
-                </li>
-                <li>
-                  <a href={`${REPO}/releases`} target="_blank" rel="noreferrer">
-                    Releases
-                  </a>
-                </li>
-                <li>
-                  <a href={`${REPO}/issues`} target="_blank" rel="noreferrer">
-                    Report a bug
-                  </a>
-                </li>
-                <li>
-                  <a
-                    href={`${REPO}/blob/master/CONTRIBUTING.md`}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    Contributing
-                  </a>
-                </li>
-              </ul>
-            </div>
-            <div>
-              <h4>Built on</h4>
-              <ul>
-                <li>
-                  <a
-                    href="https://github.com/Arturo254/OpenTune"
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    OpenTune
-                  </a>
-                </li>
-                <li>
-                  <a href="https://lrclib.net" target="_blank" rel="noreferrer">
-                    LRCLIB
-                  </a>
-                </li>
-                <li>
-                  <a
-                    href="https://github.com/Kyant0/AndroidLiquidGlass"
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    AndroidLiquidGlass
-                  </a>
-                </li>
-                <li>
-                  <a
-                    href="https://github.com/chrisbanes/haze"
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    Haze
-                  </a>
-                </li>
-              </ul>
-            </div>
-            <div>
-              <h4>Maintainer</h4>
-              <ul>
-                <li>
-                  {MAINTAINER.name} — {MAINTAINER.role}
-                </li>
-                <li>
-                  <a href={REPO.replace('/Exhale', '')} target="_blank" rel="noreferrer">
-                    GitHub {MAINTAINER.handle}
-                  </a>
-                </li>
-                <li>
-                  <a href={TELEGRAM} target="_blank" rel="noreferrer">
-                    Telegram {MAINTAINER.handle}
-                  </a>
-                </li>
-              </ul>
-            </div>
-            <div>
-              <h4>Legal</h4>
-              <ul>
-                <li>
-                  <a href={`${REPO}/blob/master/LICENSE`} target="_blank" rel="noreferrer">
-                    GPL-3.0
-                  </a>
-                </li>
-                <li>
-                  <a
-                    href={`${REPO}/blob/master/CODE_OF_CONDUCT.md`}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    Code of conduct
-                  </a>
-                </li>
-              </ul>
-            </div>
-          </div>
-
-          <div className="footer-legal">
-            <p>
-              © {year} ozyern. Exhale is free software under the GNU GPL v3, built
-              on the work of OpenTune.
-            </p>
-            <p>
-              Not affiliated with, endorsed by, or connected to Apple, Google or
-              YouTube. Album titles, artists and lyrics shown on this page are
-              placeholders written for the demo.
-            </p>
-          </div>
-        </div>
-      </footer>
+      <SiteFooter onNotes={openNotes} />
 
       <Changelog open={notes} onClose={closeNotes} />
     </div>

@@ -2870,3 +2870,999 @@ video.phone-shot {
     opacity: 1;
   }
 }
+
+/* The home page reserves room for its segmented control on every anchor jump.
+   The release page does not have one, so that offset would drop every jump
+   eighty-six pixels past the heading it aimed at; the release page's own
+   `scroll-margin-top` is the whole story there. */
+html:has(.release) {
+  scroll-padding-top: 0;
+}
+
+/* ========================================================== announcement */
+
+/* The strip above everything. A release is news exactly once, and news goes
+   at the top — one line, full width, and a link rather than a banner you have
+   to dismiss, because nothing here interrupts anything. */
+.announce {
+  position: relative;
+  z-index: 70;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 40px;
+  padding: 9px 22px;
+  font-size: 13px;
+  letter-spacing: -0.005em;
+  color: rgba(245, 245, 247, 0.82);
+  background: linear-gradient(
+    100deg,
+    color-mix(in oklab, var(--iris) 22%, #000) 0%,
+    color-mix(in oklab, var(--rose) 20%, #000) 52%,
+    color-mix(in oklab, var(--ember) 16%, #000) 100%
+  );
+  border-bottom: 1px solid var(--hairline);
+  transition: color 0.3s var(--ease);
+}
+
+.announce:hover {
+  color: var(--ink);
+}
+
+.announce-tag {
+  flex: none;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: #000;
+  background: var(--ink);
+}
+
+.announce-text {
+  /* One line on a laptop, two on a phone, never three. */
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.announce-go {
+  flex: none;
+  font-size: 16px;
+  transition: transform 0.35s var(--settle);
+}
+
+.announce:hover .announce-go {
+  transform: translateX(3px);
+}
+
+/* =============================================================== release */
+
+/* A document, not a product page.
+   The rest of the site is one claim per screen at poster size. This is the
+   other genre: article measure, a rail you can jump from, and prose that is
+   allowed to run several paragraphs. It keeps the black, the greys and the
+   three retinting properties, and nothing else. */
+
+.release {
+  --measure: min(760px, 100% - 44px);
+  --rl-gap: clamp(22px, 3.4vw, 34px);
+}
+
+/* Reading progress. One scaled bar; nothing here re-renders React. */
+.rl-progress {
+  position: fixed;
+  inset: 0 0 auto 0;
+  z-index: 95;
+  height: 2px;
+  pointer-events: none;
+}
+
+.rl-progress span {
+  display: block;
+  height: 100%;
+  transform: scaleX(var(--read, 0));
+  transform-origin: left center;
+  background: linear-gradient(90deg, var(--iris), var(--rose) 55%, var(--ember));
+}
+
+/* ------------------------------------------------------------ head */
+
+.rl-head {
+  padding-top: clamp(34px, 5vw, 68px);
+}
+
+.rl-measure {
+  width: var(--measure);
+  margin-inline: auto;
+}
+
+.rl-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: clamp(26px, 4vw, 44px);
+  font-size: 14px;
+  color: var(--grey);
+  transition: color 0.25s var(--ease);
+}
+
+.rl-back:hover {
+  color: var(--ink);
+}
+
+.rl-back-arrow {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  border: 1px solid var(--hairline);
+  transition: transform 0.35s var(--settle), border-color 0.25s var(--ease);
+}
+
+.rl-back:hover .rl-back-arrow {
+  transform: translateX(-3px);
+  border-color: rgba(255, 255, 255, 0.26);
+}
+
+/* Category, date, length. The three facts a reader wants before the headline
+   rather than after it — how current this is, and how long it will take. */
+.rl-eyebrow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 14px;
+  color: var(--grey);
+}
+
+.rl-eyebrow > span:first-child {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.rl-eyebrow > * + *::before {
+  content: '·';
+  margin-right: 10px;
+  color: var(--grey-dim);
+}
+
+.rl-read {
+  color: var(--grey-dim);
+}
+
+.rl-title {
+  margin-top: 18px;
+  font-size: clamp(40px, 7.2vw, 92px);
+  font-weight: 600;
+  line-height: 1.02;
+  letter-spacing: -0.032em;
+}
+
+.rl-dek {
+  margin-top: clamp(20px, 2.4vw, 28px);
+  font-size: clamp(18px, 1.9vw, 23px);
+  line-height: 1.44;
+  letter-spacing: -0.011em;
+  color: var(--grey);
+}
+
+.rl-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: clamp(26px, 3vw, 36px);
+}
+
+.rl-copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 50px;
+  padding: 0 22px;
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--grey);
+  font-family: inherit;
+  font-size: 15px;
+  cursor: pointer;
+  transition: color 0.25s var(--ease), border-color 0.25s var(--ease),
+    transform 0.4s var(--settle);
+}
+
+.rl-copy:hover {
+  color: var(--ink);
+  border-color: rgba(255, 255, 255, 0.26);
+}
+
+.rl-copy:active {
+  transform: scale(0.96);
+}
+
+.rl-copy[data-done='true'] {
+  color: var(--ink);
+  border-color: color-mix(in oklab, var(--rose) 60%, transparent);
+}
+
+/* ------------------------------------------------------------ hero */
+
+.rl-hero {
+  width: min(1120px, 100% - 44px);
+  margin: clamp(38px, 5vw, 66px) auto 0;
+}
+
+.rl-hero-stage {
+  position: relative;
+  overflow: hidden;
+  border-radius: clamp(20px, 2.4vw, 30px);
+  border: 1px solid var(--hairline);
+  /* Tall enough to hold three phones with their feet cut off, short enough
+     that the first heading is still reachable in one flick. */
+  aspect-ratio: 16 / 8.4;
+  min-height: 240px;
+  background: #050506;
+}
+
+.rl-hero-ground {
+  position: absolute;
+  inset: 0;
+  /* The same wash the app draws behind its own artwork: three blobs of the
+     palette, blurred past the point where you can find an edge. */
+  filter: blur(58px);
+  opacity: 0.85;
+}
+
+.rl-hero-blob {
+  position: absolute;
+  border-radius: 50%;
+}
+
+.rl-hero-blob-a {
+  left: 4%;
+  top: -34%;
+  width: 46%;
+  aspect-ratio: 1;
+  background: var(--iris);
+  opacity: 0.5;
+}
+
+.rl-hero-blob-b {
+  left: 30%;
+  top: -46%;
+  width: 52%;
+  aspect-ratio: 1;
+  background: var(--rose);
+  opacity: 0.46;
+}
+
+.rl-hero-blob-c {
+  right: 0%;
+  top: -30%;
+  width: 42%;
+  aspect-ratio: 1;
+  background: var(--ember);
+  opacity: 0.36;
+}
+
+.rl-hero-fan {
+  position: absolute;
+  inset: auto 0 0 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  /* The feet run off the bottom edge. A phone with its whole body in frame
+     reads as a picture of a phone; one leaving the frame reads as an object
+     the page is standing on. */
+  padding-top: clamp(28px, 5vw, 64px);
+}
+
+.rl-hero-slot {
+  position: relative;
+  flex: none;
+  width: clamp(126px, 17vw, 230px);
+  border-radius: clamp(14px, 1.6vw, 24px);
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 40px 90px rgba(0, 0, 0, 0.6);
+  background: #0a0a0c;
+  transform-origin: 50% 100%;
+}
+
+.rl-hero-slot img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.rl-hero-slot[data-slot='0'] {
+  transform: rotate(-7deg) scale(0.86) translateY(4%);
+  margin-right: -5%;
+  z-index: 1;
+}
+
+.rl-hero-slot[data-slot='1'] {
+  z-index: 3;
+}
+
+.rl-hero-slot[data-slot='2'] {
+  transform: rotate(7deg) scale(0.86) translateY(4%);
+  margin-left: -5%;
+  z-index: 2;
+}
+
+.rl-hero figcaption,
+.rl-figure figcaption {
+  margin-top: 14px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--grey-dim);
+}
+
+.rl-hero figcaption {
+  width: var(--measure);
+  margin-inline: auto;
+  text-align: center;
+}
+
+/* ----------------------------------------------------------- facts */
+
+/* The table a release page owes anyone who came to check one number. */
+.rl-facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px;
+  margin: clamp(38px, 5vw, 64px) 0 0;
+  border: 1px solid var(--hairline);
+  border-radius: 18px;
+  overflow: hidden;
+  background: var(--hairline);
+}
+
+.rl-facts div {
+  padding: 18px 20px;
+  background: #08080a;
+}
+
+.rl-facts dt {
+  font-size: 12px;
+  color: var(--grey-dim);
+}
+
+.rl-facts dd {
+  margin: 5px 0 0;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.012em;
+}
+
+/* ------------------------------------------------------------ body */
+
+.rl-body {
+  width: min(1120px, 100% - 44px);
+  margin: clamp(56px, 7vw, 96px) auto 0;
+  display: grid;
+  /* The rail is a fixed column so the article measure never moves as the
+     window changes — a body of text that reflows on every resize is the one
+     thing that makes a long read feel like a web page rather than a document. */
+  grid-template-columns: 210px minmax(0, 1fr);
+  gap: clamp(28px, 5vw, 76px);
+  align-items: start;
+}
+
+.rl-rail {
+  position: sticky;
+  top: 28px;
+}
+
+.rl-toc-head {
+  font-size: 12px;
+  color: var(--grey-dim);
+  margin-bottom: 14px;
+}
+
+.rl-toc ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-left: 1px solid var(--hairline);
+}
+
+.rl-toc a {
+  display: flex;
+  gap: 10px;
+  padding: 7px 0 7px 14px;
+  margin-left: -1px;
+  border-left: 1px solid transparent;
+  font-size: 13.5px;
+  line-height: 1.35;
+  color: var(--grey-dim);
+  transition: color 0.25s var(--ease), border-color 0.3s var(--ease);
+}
+
+.rl-toc a i {
+  font-style: normal;
+  font-variant-numeric: tabular-nums;
+  color: rgba(245, 245, 247, 0.22);
+  transition: color 0.25s var(--ease);
+}
+
+.rl-toc a:hover {
+  color: var(--ink);
+}
+
+.rl-toc a[data-on='true'] {
+  color: var(--ink);
+  border-left-color: var(--rose);
+}
+
+.rl-toc a[data-on='true'] i {
+  color: var(--rose);
+}
+
+.rl-flow {
+  max-width: 760px;
+}
+
+/* ---------------------------------------------------------- section */
+
+.rl-section {
+  /* Clears the fixed progress bar and leaves a heading somewhere readable
+     rather than jammed against the top of the window. */
+  scroll-margin-top: 26px;
+  padding-top: clamp(46px, 6vw, 78px);
+}
+
+.rl-section:first-child {
+  padding-top: 0;
+}
+
+.rl-num {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--grey-dim);
+  margin-bottom: 12px;
+}
+
+.rl-h2 {
+  font-size: clamp(26px, 3.1vw, 40px);
+  font-weight: 600;
+  line-height: 1.12;
+  letter-spacing: -0.024em;
+}
+
+.rl-lede {
+  margin-top: var(--rl-gap);
+  font-size: clamp(18px, 1.8vw, 21px);
+  line-height: 1.52;
+  letter-spacing: -0.011em;
+  color: rgba(245, 245, 247, 0.86);
+}
+
+.rl-p {
+  margin-top: var(--rl-gap);
+  font-size: 17px;
+  line-height: 1.62;
+  color: var(--grey);
+}
+
+.rl-p code,
+.rl-list code {
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.07);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.88em;
+  color: var(--ink);
+}
+
+/* The workhorse. A titled item is the shape almost every change in a release
+   actually has: a claim you can scan, and the reason underneath it. */
+.rl-list {
+  margin: var(--rl-gap) 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 2px;
+  border-radius: 18px;
+  overflow: hidden;
+}
+
+.rl-list li {
+  padding: 20px 22px;
+  background: var(--tile);
+  transition: background 0.3s var(--ease);
+}
+
+.rl-list li:hover {
+  background: var(--tile-lift);
+}
+
+.rl-list b {
+  display: block;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.014em;
+}
+
+.rl-list span {
+  display: block;
+  margin-top: 7px;
+  font-size: 15.5px;
+  line-height: 1.55;
+  color: var(--grey);
+}
+
+.rl-bullets {
+  margin: var(--rl-gap) 0 0;
+  padding-left: 20px;
+  color: var(--grey);
+  font-size: 16.5px;
+  line-height: 1.6;
+}
+
+.rl-bullets li + li {
+  margin-top: 8px;
+}
+
+/* The thing under the thing. Boxed, because it is a detour and the reader
+   should be able to see where it ends before deciding to take it. */
+.rl-note {
+  margin-top: var(--rl-gap);
+  padding: 20px 22px;
+  border-radius: 18px;
+  border: 1px solid var(--hairline);
+  border-left: 2px solid color-mix(in oklab, var(--iris) 70%, transparent);
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.rl-note-title {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.005em;
+  color: var(--ink);
+  margin-bottom: 8px;
+}
+
+.rl-note p:last-child {
+  font-size: 15.5px;
+  line-height: 1.58;
+  color: var(--grey);
+}
+
+/* The one sentence a section is really about, set large enough to be read on
+   its own by someone scrolling past. */
+.rl-quote {
+  margin: clamp(30px, 4vw, 44px) 0 0;
+  padding-left: clamp(18px, 2.4vw, 28px);
+  border-left: 2px solid var(--rose);
+}
+
+.rl-quote p {
+  font-size: clamp(19px, 2.1vw, 25px);
+  font-weight: 500;
+  line-height: 1.38;
+  letter-spacing: -0.018em;
+  color: var(--ink);
+}
+
+.rl-cards {
+  margin-top: var(--rl-gap);
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.rl-card {
+  padding: 18px 18px 20px;
+  border-radius: 18px;
+  background: var(--tile);
+  border: 1px solid var(--hairline);
+}
+
+.rl-card b {
+  display: block;
+  font-size: 34px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  color: var(--ink);
+}
+
+.rl-card i {
+  display: block;
+  margin-top: 6px;
+  font-style: normal;
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.rl-card span {
+  display: block;
+  margin-top: 8px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--grey-dim);
+}
+
+.rl-code {
+  margin: var(--rl-gap) 0 0;
+  padding: 20px 22px;
+  border-radius: 16px;
+  border: 1px solid var(--hairline);
+  background: #08080a;
+  overflow-x: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13.5px;
+  line-height: 1.85;
+  color: var(--grey);
+  white-space: pre;
+}
+
+/* A phone screenshot is 9:20, and the article measure is 760px. Stretched to
+   fill that it is a two-thousand-pixel column of phone; cropped to a band it is
+   a status bar and half an app bar, which is the part of a screen that says
+   nothing. So it is shown whole, at about the size a phone actually is, on a
+   ground lit by the palette — the caption points at something you can see. */
+.rl-figure {
+  margin: clamp(30px, 4vw, 46px) 0 0;
+  padding: clamp(24px, 4vw, 40px) 0;
+  border-radius: 22px;
+  border: 1px solid var(--hairline);
+  background: radial-gradient(
+      120% 90% at 50% 0%,
+      color-mix(in oklab, var(--iris) 16%, transparent) 0%,
+      transparent 62%
+    ),
+    #08080a;
+}
+
+.rl-figure-frame {
+  width: min(272px, 62%);
+  margin-inline: auto;
+  overflow: hidden;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.55);
+  background: #08080a;
+}
+
+.rl-figure-frame img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.rl-figure figcaption {
+  width: min(440px, 84%);
+  margin-inline: auto;
+  text-align: center;
+}
+
+/* -------------------------------------------------- footnotes, more */
+
+.rl-foot {
+  margin-top: clamp(20px, 3vw, 34px);
+  border-top: 1px solid var(--hairline);
+}
+
+.rl-footnotes {
+  margin: var(--rl-gap) 0 0;
+  padding-left: 20px;
+  font-size: 14.5px;
+  line-height: 1.6;
+  color: var(--grey-dim);
+}
+
+.rl-footnotes li + li {
+  margin-top: 10px;
+}
+
+.rl-more {
+  padding-top: clamp(56px, 7vw, 92px);
+}
+
+.rl-more-grid {
+  margin-top: var(--rl-gap);
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 10px;
+}
+
+.rl-more-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 20px;
+  border-radius: 20px;
+  border: 1px solid var(--hairline);
+  background: var(--tile);
+  transition: background 0.3s var(--ease), border-color 0.3s var(--ease),
+    transform 0.5s var(--settle);
+}
+
+.rl-more-card:hover {
+  background: var(--tile-lift);
+  border-color: rgba(255, 255, 255, 0.2);
+  transform: translateY(-3px);
+}
+
+.rl-more-tag {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--rose);
+}
+
+.rl-more-card b {
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.014em;
+  line-height: 1.25;
+}
+
+.rl-more-body {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--grey);
+}
+
+/* The release page ends on the footer, which was written for a page that
+   opens on light. A rule keeps them from touching. */
+.release .footer {
+  margin-top: clamp(72px, 9vw, 128px);
+  border-top: 1px solid var(--hairline);
+}
+
+/* Sends people to the long read from the download panel. */
+.getit-read {
+  display: inline-flex;
+  margin-top: 18px;
+}
+
+/* ------------------------------------------------------ release: small */
+
+@media (max-width: 940px) {
+  .rl-body {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+
+  /* The rail becomes a horizontal rule of contents above the article. It is
+     still the fastest way into section nine; it just stops being a column. */
+  .rl-rail {
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    margin-bottom: 34px;
+    padding: 12px 0;
+    background: rgba(0, 0, 0, 0.86);
+    backdrop-filter: saturate(180%) blur(20px);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+    border-bottom: 1px solid var(--hairline);
+  }
+
+  .rl-toc-head {
+    display: none;
+  }
+
+  .rl-toc ol {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    border-left: 0;
+    scrollbar-width: none;
+  }
+
+  .rl-toc ol::-webkit-scrollbar {
+    display: none;
+  }
+
+  .rl-toc a {
+    white-space: nowrap;
+    padding: 7px 13px;
+    margin-left: 0;
+    border-left: 0;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.05);
+  }
+
+  .rl-toc a i {
+    display: none;
+  }
+
+  .rl-toc a[data-on='true'] {
+    color: #000;
+    background: var(--ink);
+  }
+
+  .rl-flow {
+    max-width: none;
+  }
+
+  .rl-section {
+    scroll-margin-top: 66px;
+  }
+}
+
+@media (max-width: 700px) {
+  .release {
+    --measure: calc(100% - 36px);
+  }
+
+  .rl-hero {
+    width: calc(100% - 36px);
+  }
+
+  .rl-hero-stage {
+    aspect-ratio: 16 / 12;
+  }
+
+  .rl-facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .announce {
+    font-size: 12.5px;
+    gap: 9px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rl-progress span {
+    transition: none;
+  }
+}
+
+
+/* ==================================================== release: the object */
+
+/* The first screen is the release, and nothing else.
+   A field of light in the middle, the name split to the two outside edges so
+   the type frames the object rather than sitting on it, and one control. The
+   nav floats over it without a bar of its own, because a black strip across
+   artwork is a piece of furniture the artwork did not ask for. */
+
+.release {
+  position: relative;
+}
+
+.release .topbar {
+  position: absolute;
+  inset: 0 0 auto 0;
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.rh {
+  position: relative;
+  min-height: 100svh;
+  /* A floor, so the object does not become a stripe on a short laptop window
+     in landscape. */
+  min-height: max(560px, 100svh);
+  overflow: hidden;
+  /* Not pure black, which is the rule everywhere else on this site and the
+     wrong one here. A sky photographed at any exposure has some blue in it,
+     and stars on #000 read as dots on a page rather than as light at a
+     distance. It goes back to black by the bottom edge, where the article
+     starts. */
+  background:
+    radial-gradient(
+      118% 82% at 50% 34%,
+      #0c121f 0%,
+      #070a12 42%,
+      #030407 70%,
+      #000 100%
+    ),
+    #000;
+}
+
+.rh-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.rh-type {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 0 clamp(20px, 4.2vw, 76px);
+  margin: 0;
+  /* The object behind it is the thing on this screen; the words must never
+     eat a click meant for the replay control. */
+  pointer-events: none;
+  /* Deliberately smaller than a headline. These two words are the frame; the
+     number between them is the subject, and a word at display size either
+     side of it competes with the thing it is introducing — and, at this
+     width, physically runs into it. */
+  font-size: clamp(28px, 3.4vw, 60px);
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: -0.028em;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.rh-word {
+  flex: none;
+}
+
+/* Present for anything that reads the page rather than looks at it: the
+   number the canvas draws, in text, in the heading, in reading order. */
+.rh-said {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.rh-replay {
+  position: absolute;
+  right: clamp(18px, 2.6vw, 34px);
+  bottom: clamp(18px, 2.6vw, 34px);
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 999px;
+  border: 1px solid var(--hairline);
+  background: rgba(0, 0, 0, 0.3);
+  color: rgba(245, 245, 247, 0.55);
+  cursor: pointer;
+  transition: color 0.25s var(--ease), border-color 0.25s var(--ease),
+    transform 0.5s var(--settle);
+}
+
+.rh-replay:hover {
+  color: var(--ink);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.rh-replay:active {
+  transform: rotate(-40deg) scale(0.94);
+}
+
+/* Portrait, and anything narrow enough that the two words would meet in the
+   middle: the split becomes a stack in the lower third, still hard against
+   the left margin the rest of the page uses. */
+/* Narrow enough that the number and the two words would meet in the middle:
+   the split becomes a stack, one word above the number and one below. */
+@media (max-width: 900px), (orientation: portrait) and (max-width: 1024px) {
+  .rh-type {
+    flex-direction: column;
+    align-items: flex-start;
+    /* Above the number and below it, rather than both words in a pile at the
+       bottom: the point of the arrangement is that the number sits inside the
+       title, and turning the page ninety degrees should not lose that. */
+    justify-content: space-between;
+    padding-top: clamp(88px, 17vh, 190px);
+    padding-bottom: clamp(74px, 15vh, 170px);
+    font-size: clamp(32px, 8.5vw, 62px);
+  }
+
+  .rh-word:last-of-type {
+    color: var(--grey);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rh-replay {
+    display: none;
+  }
+}

@@ -156,6 +156,13 @@ export const ArrowRightIcon = () => (
   </Svg>
 )
 
+export const ReplayIcon = () => (
+  <Svg width="18" height="18">
+    <path {...s} d="M4.6 10.2a7.5 7.5 0 1 1 1.2 5.4" />
+    <path {...s} d="M3.4 5.6v4.6h4.6" />
+  </Svg>
+)
+
 export const MoonIcon = () => (
   <Svg width="20" height="20">
     <path {...s} d="M20 13.4A8.4 8.4 0 1 1 10.6 4a6.9 6.9 0 0 0 9.4 9.4" />

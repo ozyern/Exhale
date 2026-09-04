@@ -1,0 +1,541 @@
+import { useEffect, useRef } from 'react'
+import { prefersReducedMotion } from '../hooks.js'
+
+/**
+ * The build number, drawn as a sky.
+ *
+ * Not type with an effect on it. The digits are a mask, sampled into points,
+ * and every point is then a star with its own magnitude, color and orbit — so
+ * the number is only ever *almost* there. It tightens into itself on the
+ * inhale and loosens on the exhale, which makes it read as something being
+ * held together rather than as a word set in a font.
+ *
+ * The breath is the app's own: four seconds in, six seconds out, the numbers
+ * off the pacer hidden behind seven taps on the mark in About. Given what the
+ * app is called, the number announcing a release of it should breathe.
+ *
+ * Three things do the work, and leaving any of them out is what makes this
+ * kind of thing look cheap:
+ *
+ *   · **Magnitude.** A real sky has a handful of bright stars and hundreds you
+ *     can barely see. The size distribution here is a cube law, so most points
+ *     are a pixel and a few are the size of a fingernail. An even scatter of
+ *     mid-size dots is confetti.
+ *   · **Two passes per star.** A sharp core and, under it, a bloom several
+ *     times its width at a twentieth of its brightness. One soft blob can be
+ *     either a small bright star or a large dim one; a core with a halo is
+ *     unambiguously a bright thing seen through air.
+ *   · **Filaments, not a filled stencil.** The one that matters most. A
+ *     distance transform over the mask says how deep inside the stroke each
+ *     point is, and density, size and brightness all follow it — so every
+ *     stroke of every digit is a bright chain down its middle thinning to
+ *     nothing at its edges. Fill a letterform evenly with dots and you get
+ *     dots in the shape of a letter; run them along the spine and you get an
+ *     arm of something, which is what a sky looks like.
+ *   · **A nebula on those spines.** Large, very faint smears placed only
+ *     where the stroke is thickest, so the stars sit *in* a continuous band of
+ *     haze rather than floating in a row.
+ *
+ * Canvas, because none of that is a shape CSS has. Everything is blitted from
+ * eight pre-rendered sprites with `lighter` compositing, so a frame is a few
+ * thousand small image draws and not one gradient — and it stops entirely when
+ * it scrolls away, when the tab hides, or when the reader asked for less motion.
+ */
+
+/** How many stars the number is made of. */
+const COUNT = 1900
+
+/** Large faint smears under it, on the same points. */
+const NEBULA = 260
+
+/** Stars that are not part of the number, so the field has somewhere to be. */
+const DUST = 150
+
+const TAU = Math.PI * 2
+
+/** Four seconds in, six seconds out. The app's numbers, unchanged. */
+const INHALE = 4
+const EXHALE = 6
+const BREATH = INHALE + EXHALE
+
+/** The raster the glyph is sampled out of. Fixed, so a resize never re-arranges it. */
+const MASK_W = 1200
+const MASK_H = 460
+const MASK_STEP = 2
+
+/** Points forced to maximum magnitude, spread along the spines. */
+const HOTSPOTS = 24
+
+/**
+ * Star colors, not brand colors.
+ *
+ * This is the one object on the site that does not take its palette from the
+ * album swatches, and the reason is that it is a sky: hot stars are blue-white
+ * and cool ones are amber, and a sky tinted rose and iris instead reads as
+ * confetti rather than as distance. The amber end is the app's own `--ember`,
+ * which is close enough to a K-type star to be both at once.
+ */
+const MIX = [
+  { pick: 0.44, css: '#eef3ff' },
+  { pick: 0.7, css: '#b6cdff' },
+  { pick: 0.88, css: '#ffe3bb' },
+  { pick: 1.0, css: 'var(--ember)', fallback: '#ff8a6b' },
+]
+
+const easeInOut = (x) => (x < 0.5 ? 2 * x * x : 1 - (-2 * x + 2) ** 2 / 2)
+
+/** Box–Muller, so nothing in here is ever evenly spread. */
+function gauss() {
+  let u = 0
+  let v = 0
+  while (u === 0) u = Math.random()
+  while (v === 0) v = Math.random()
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(TAU * v)
+}
+
+/**
+ * Two sprites per color.
+ *
+ * `core` is nearly a disc: opaque to a sixth of its radius and gone by a
+ * third, so at small sizes it lands as an actual point of light rather than a
+ * smudge. `halo` never gets above twelve percent and reaches the full radius,
+ * which is the part that makes the core look bright.
+ */
+function parse(hex) {
+  const raw = hex.replace('#', '').trim()
+  const full = raw.length === 3 ? raw.split('').map((c) => c + c).join('') : raw
+  return [
+    parseInt(full.slice(0, 2), 16),
+    parseInt(full.slice(2, 4), 16),
+    parseInt(full.slice(4, 6), 16),
+  ]
+}
+
+function sprite(hex, core) {
+  const size = 64
+  const canvas = document.createElement('canvas')
+  canvas.width = size
+  canvas.height = size
+  const ctx = canvas.getContext('2d')
+  const [r, g, b] = parse(hex)
+  // Built from numbers rather than from a CSS string, because `addColorStop`
+  // takes a colour and not an expression — `color-mix()` in here is silently
+  // the wrong colour in some engines and a thrown error in others.
+  const at = (a) => `rgba(${r},${g},${b},${a})`
+  const grad = ctx.createRadialGradient(32, 32, 0, 32, 32, 32)
+
+  if (core) {
+    grad.addColorStop(0, 'rgba(255,255,255,1)')
+    grad.addColorStop(0.16, at(1))
+    grad.addColorStop(0.34, at(0.34))
+    grad.addColorStop(1, at(0))
+  } else {
+    grad.addColorStop(0, at(0.55))
+    grad.addColorStop(0.42, at(0.12))
+    grad.addColorStop(1, at(0))
+  }
+
+  ctx.fillStyle = grad
+  ctx.fillRect(0, 0, size, size)
+  return canvas
+}
+
+/** Cheap two-frequency noise. Only ever asked for a number between 0 and 1. */
+const clumpAt = (x, y) =>
+  0.5 +
+  0.25 * Math.sin(x * 21.3 + y * 13.7) +
+  0.25 * Math.sin(x * 41.1 - y * 31.9 + 1.7)
+
+/**
+ * The number, as points.
+ *
+ * Rasterised once at a fixed size and returned normalised against the ink
+ * rather than against the canvas, so `span` on screen is the width of the
+ * number itself and the arrangement is identical on a phone and on a 5K
+ * display. Sampled on a grid and then jittered, because a grid you can see is
+ * worse than no structure at all — this has to look like a sky that happens to
+ * be a number, not a halftone screen of one.
+ */
+function glyphPoints(text) {
+  const canvas = document.createElement('canvas')
+  canvas.width = MASK_W
+  canvas.height = MASK_H
+  const ctx = canvas.getContext('2d', { willReadFrequently: true })
+
+  ctx.fillStyle = '#fff'
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  // Tracked out, because three digits set solid become one cloud with two
+  // notches in it.
+  if ('letterSpacing' in ctx) ctx.letterSpacing = '26px'
+
+  // Fitted rather than guessed: the number can change length between releases
+  // and this should not need a new magic number when it does.
+  const face = '"SF Pro Display", -apple-system, Inter, "Segoe UI", sans-serif'
+  let size = 420
+  ctx.font = `500 ${size}px ${face}`
+  const width = ctx.measureText(text).width || MASK_W
+  size = Math.round(size * Math.min(1, (MASK_W * 0.86) / width))
+  ctx.font = `500 ${size}px ${face}`
+  ctx.fillText(text, MASK_W / 2, MASK_H / 2)
+
+  const data = ctx.getImageData(0, 0, MASK_W, MASK_H).data
+
+  // How deep inside the stroke every pixel is.
+  //
+  // A two-pass chamfer transform: background starts at zero, ink starts at
+  // infinity, and each pass takes the cheapest route to a background pixel
+  // from the three neighbours behind it. Weights of 3 orthogonally and 4
+  // diagonally approximate a Euclidean distance closely enough for something
+  // that is about to be scattered anyway, and it is two linear passes rather
+  // than a search per pixel.
+  const N = MASK_W * MASK_H
+  const dist = new Int32Array(N)
+  const BIG = 1 << 28
+  for (let i = 0; i < N; i += 1) dist[i] = data[i * 4 + 3] > 140 ? BIG : 0
+
+  for (let y = 1; y < MASK_H; y += 1) {
+    const row = y * MASK_W
+    for (let x = 1; x < MASK_W - 1; x += 1) {
+      const i = row + x
+      if (dist[i] === 0) continue
+      const up = i - MASK_W
+      let best = dist[i - 1] + 3
+      if (dist[up] + 3 < best) best = dist[up] + 3
+      if (dist[up - 1] + 4 < best) best = dist[up - 1] + 4
+      if (dist[up + 1] + 4 < best) best = dist[up + 1] + 4
+      if (best < dist[i]) dist[i] = best
+    }
+  }
+  for (let y = MASK_H - 2; y >= 0; y -= 1) {
+    const row = y * MASK_W
+    for (let x = MASK_W - 2; x >= 1; x -= 1) {
+      const i = row + x
+      if (dist[i] === 0) continue
+      const down = i + MASK_W
+      let best = dist[i + 1] + 3
+      if (dist[down] + 3 < best) best = dist[down] + 3
+      if (dist[down + 1] + 4 < best) best = dist[down + 1] + 4
+      if (dist[down - 1] + 4 < best) best = dist[down - 1] + 4
+      if (best < dist[i]) dist[i] = best
+    }
+  }
+
+  let deepest = 1
+  for (let i = 0; i < N; i += 1) {
+    if (dist[i] < BIG && dist[i] > deepest) deepest = dist[i]
+  }
+
+  const hits = []
+  let minX = MASK_W
+  let maxX = 0
+  let minY = MASK_H
+  let maxY = 0
+  for (let y = 0; y < MASK_H; y += MASK_STEP) {
+    for (let x = 0; x < MASK_W; x += MASK_STEP) {
+      const i = y * MASK_W + x
+      if (dist[i] === 0) continue
+
+      // 0 at the very edge of a stroke, 1 down its middle.
+      const depth = Math.min(1, dist[i] / deepest)
+      // Thinned hard toward the rim. Roughly a tenth of the edge survives,
+      // which is what keeps the outline of the number readable while the light
+      // itself lives in the middle.
+      if (Math.random() > 0.09 + 0.91 * depth ** 1.5) continue
+
+      hits.push([x + gauss() * 2.4, y + gauss() * 2.4, depth])
+      if (x < minX) minX = x
+      if (x > maxX) maxX = x
+      if (y < minY) minY = y
+      if (y > maxY) maxY = y
+    }
+  }
+
+  const bw = Math.max(1, maxX - minX)
+  const midX = (minX + maxX) / 2
+  const midY = (minY + maxY) / 2
+  // Divided by the same number in both axes, so the number is never stretched.
+  for (let i = 0; i < hits.length; i += 1) {
+    hits[i][0] = (hits[i][0] - midX) / bw
+    hits[i][1] = (hits[i][1] - midY) / bw
+  }
+
+  // Fisher–Yates, so thinning takes points from all over the number rather
+  // than lopping the bottom off it.
+  for (let i = hits.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1))
+    const swap = hits[i]
+    hits[i] = hits[j]
+    hits[j] = swap
+  }
+  return hits
+}
+
+export default function BreathField({ text = '203', replayKey = 0 }) {
+  const canvasRef = useRef(null)
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d', { alpha: true })
+    if (!ctx) return
+
+    const styles = getComputedStyle(document.documentElement)
+    const resolve = (entry) =>
+      entry.css.startsWith('var(')
+        ? styles.getPropertyValue(entry.css.slice(4, -1)).trim() || entry.fallback
+        : entry.css
+
+    const colors = MIX.map(resolve)
+    const cores = colors.map((css) => sprite(css, true))
+    const halos = colors.map((css) => sprite(css, false))
+    const roll = () => {
+      const r = Math.random()
+      const i = MIX.findIndex((entry) => r <= entry.pick)
+      return i < 0 ? 0 : i
+    }
+
+    const hits = glyphPoints(text)
+
+    const motes = hits.slice(0, COUNT).map(([x, y, depth]) => {
+      // Cube law. Most points are a pixel; one in fifty is a real star. Then
+      // weighted by depth, so the big ones sit on the spine and the rim gets
+      // pinpricks.
+      const mag = Math.random() ** 3.1 * (0.28 + depth * 1.05)
+      // Uneven along the stroke, the way star formation is. A number filled at
+      // one density is a stencil, and reads like one.
+      const clump = clumpAt(x, y) ** 1.6
+      const tint = roll()
+      return {
+        x,
+        y,
+        depth,
+        mag,
+        // Its own orbit and its own rate. Shared ones make the whole number
+        // shimmer in step, which reads as a compression artefact.
+        phase: Math.random() * TAU,
+        rate: 0.3 + Math.random() * 0.5,
+        // The rim wanders further than the spine, so the number frays at its
+        // edges on the exhale instead of coming apart down the middle.
+        wander: (0.3 + Math.random() ** 2 * 1.9) * (1.5 - depth),
+        core: cores[tint],
+        halo: halos[tint],
+        size: (0.55 + mag * 9) * (0.62 + clump * 0.95),
+        glow: (0.24 + mag * 0.95) * (0.55 + clump * 0.68) * (0.5 + depth * 0.72),
+        px: 0,
+        py: 0,
+      }
+    })
+
+    // A handful of proper stars. Every sky has a few things brighter than
+    // everything else in it, and without them a field of even magnitudes reads
+    // as texture rather than as distance.
+    const spine = motes.filter((m) => m.depth > 0.62)
+    const chosen = []
+    for (let n = 0; n < HOTSPOTS * 14 && chosen.length < HOTSPOTS; n += 1) {
+      const m = spine[Math.floor(Math.random() * spine.length)]
+      if (!m || m.hot) continue
+      // Kept apart. Two of these landing next to each other stop being two
+      // stars and become one bright smear, which is the exact thing the
+      // magnitude spread was for.
+      if (chosen.some((c) => Math.hypot(c.x - m.x, c.y - m.y) < 0.075)) continue
+      m.hot = true
+      m.mag = 0.88 + Math.random() * 0.12
+      m.size = 5 + Math.random() * 3
+      m.glow = 0.92
+      m.wander *= 0.35
+      chosen.push(m)
+    }
+
+    // The band the stars sit in. Placed only where the stroke is thickest, so
+    // the haze runs down the middle of each one as a ribbon instead of pooling
+    // in a rectangle around the whole number.
+    const deep = hits.filter((hit) => hit[2] > 0.5)
+    const nebula = Array.from({ length: NEBULA }, () => {
+      const hit = deep[Math.floor(Math.random() * deep.length)] ?? [0, 0]
+      return {
+        x: hit[0],
+        y: hit[1],
+        size: 34 + Math.random() ** 2 * 96,
+        glow: 0.028 + Math.random() ** 2 * 0.09,
+        phase: Math.random() * TAU,
+        halo: halos[Math.random() < 0.82 ? 0 : 1 + ((Math.random() * 3) | 0)],
+      }
+    })
+
+    // Scattered across the whole frame: a lit object needs somewhere to be,
+    // and a field that stops dead at the edge of the number reads as a graphic
+    // pasted onto black rather than as depth.
+    const dust = Array.from({ length: DUST }, () => {
+      const mag = Math.random() ** 3.4
+      return {
+        x: Math.random(),
+        y: Math.random(),
+        size: 0.55 + mag * 3.4,
+        glow: 0.05 + mag * 0.5,
+        phase: Math.random() * TAU,
+        core: cores[Math.random() < 0.8 ? 0 : roll()],
+      }
+    })
+
+    let w = 0
+    let h = 0
+    let span = 0
+    let dpr = 1
+
+    const measure = () => {
+      const rect = canvas.getBoundingClientRect()
+      // Capped at 1.5 rather than 2. This is a few thousand soft blits on a
+      // full-screen layer; the extra pixels buy nothing on something with no
+      // edges, and they cost a third more fill on every frame.
+      dpr = Math.min(1.5, window.devicePixelRatio || 1)
+      w = Math.max(1, Math.round(rect.width))
+      h = Math.max(1, Math.round(rect.height))
+      canvas.width = Math.round(w * dpr)
+      canvas.height = Math.round(h * dpr)
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+      // Wide enough to be the object on the screen, narrow enough to leave the
+      // words at the two edges room to be words rather than obstacles.
+      span = Math.min(w * 0.54, h * 1.72)
+    }
+
+    const draw = (clock) => {
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+      ctx.clearRect(0, 0, w, h)
+      ctx.globalCompositeOperation = 'lighter'
+
+      const cycle = clock % BREATH
+      // 0 at the bottom of an exhale, 1 at the top of an inhale.
+      const breath =
+        cycle < INHALE
+          ? easeInOut(cycle / INHALE)
+          : 1 - easeInOut((cycle - INHALE) / EXHALE)
+
+      const cx = w / 2
+      const cy = h / 2
+      const scale = span * (1 - 0.04 * breath)
+      const unit = Math.min(w, h) / 720
+
+      // The whole point: held in on the inhale, let go on the exhale. The
+      // number is never quite finished assembling and you watch it try — but
+      // never so loose that it stops being legible.
+      const loosen = 0.16 + (1 - breath) * 0.84
+
+      // 1. The nebula, first and underneath.
+      for (let i = 0; i < nebula.length; i += 1) {
+        const n = nebula[i]
+        const px = n.size * unit
+        ctx.globalAlpha = n.glow * (0.55 + 0.45 * breath)
+        ctx.drawImage(
+          n.halo,
+          cx + n.x * scale - px / 2,
+          cy + n.y * scale - px / 2,
+          px,
+          px,
+        )
+      }
+
+      // 2. Every star's bloom, at a fraction of its brightness.
+      for (let i = 0; i < motes.length; i += 1) {
+        const m = motes[i]
+        const drift = m.wander * loosen * unit * 2.4
+        m.px = cx + m.x * scale + Math.sin(clock * m.rate + m.phase) * drift
+        m.py = cy + m.y * scale + Math.cos(clock * m.rate * 0.87 + m.phase) * drift
+
+        const px = m.size * (5.5 + m.mag * 9) * unit
+        ctx.globalAlpha = m.glow * (0.11 + 0.12 * breath)
+        ctx.drawImage(m.halo, m.px - px / 2, m.py - px / 2, px, px)
+      }
+
+      // 3. The cores, sharp, on top.
+      for (let i = 0; i < motes.length; i += 1) {
+        const m = motes[i]
+        const px = m.size * (1 + 0.3 * breath) * 1.65 * unit
+        ctx.globalAlpha = Math.min(1, m.glow * (0.74 + 0.26 * breath))
+        ctx.drawImage(m.core, m.px - px / 2, m.py - px / 2, px, px)
+      }
+
+      // 4. The rest of the sky.
+      for (let i = 0; i < dust.length; i += 1) {
+        const d = dust[i]
+        // Twinkle, barely: enough that the background is never quite the same
+        // twice, not enough that anything up there is blinking at you.
+        ctx.globalAlpha = d.glow * (0.62 + 0.38 * Math.sin(clock * 0.45 + d.phase))
+        const px = d.size * 2.2 * unit
+        ctx.drawImage(d.core, d.x * w - px / 2, d.y * h - px / 2, px, px)
+      }
+
+      ctx.globalAlpha = 1
+      ctx.globalCompositeOperation = 'source-over'
+    }
+
+    let frame = 0
+    let clock = 0
+    let last = performance.now()
+    let onScreen = true
+
+    const tick = (now) => {
+      clock += Math.min(0.05, (now - last) / 1000)
+      last = now
+      draw(clock)
+      frame = onScreen ? requestAnimationFrame(tick) : 0
+    }
+
+    const start = () => {
+      if (frame || !onScreen || prefersReducedMotion()) return
+      last = performance.now()
+      frame = requestAnimationFrame(tick)
+    }
+
+    const stop = () => {
+      if (frame) cancelAnimationFrame(frame)
+      frame = 0
+    }
+
+    measure()
+
+    // Paint once, synchronously, before asking for a frame. requestAnimationFrame
+    // does not run in a background tab, so a field that only ever drew from the
+    // loop would be an empty black screen for anyone who opened this link in a
+    // tab and came back to it later.
+    draw(prefersReducedMotion() ? INHALE : 0)
+
+    // Reduced motion gets that one frame — the number at its tightest — and
+    // never a loop.
+    if (!prefersReducedMotion()) start()
+
+    const onResize = () => {
+      measure()
+      if (!frame) draw(clock)
+    }
+    window.addEventListener('resize', onResize)
+
+    // Some browsers still service rAF in a hidden tab.
+    const onVisibility = () => {
+      if (document.hidden) stop()
+      else start()
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        onScreen = entry.isIntersecting
+        if (onScreen) start()
+        else stop()
+      },
+      { rootMargin: '120px' },
+    )
+    io.observe(canvas)
+
+    return () => {
+      stop()
+      window.removeEventListener('resize', onResize)
+      document.removeEventListener('visibilitychange', onVisibility)
+      io.disconnect()
+    }
+    // `replayKey` rebuilds the field from scratch: a replay of something
+    // generative should not be the same arrangement played twice.
+  }, [text, replayKey])
+
+  return <canvas className="rh-canvas" ref={canvasRef} aria-hidden="true" />
+}
