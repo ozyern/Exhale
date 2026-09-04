@@ -75,6 +75,27 @@ const EXHALE = 6
 const BREATH = INHALE + EXHALE
 
 /**
+ * The entrance.
+ *
+ * The number does not appear; it assembles. Stars fade up scattered across the
+ * whole frame, hang there for a moment, and then draw together into the shape
+ * — so the first thing the page does is form its own title in front of you.
+ *
+ * This is the whole difference between an image that happens to move and
+ * something that reads as alive: a field that is simply *there* on load has no
+ * first moment, and every viewer's first moment is the one they judge it by.
+ *
+ * `HOLD` is the pause before anything travels. Without it the stars fade in
+ * already moving, and the scatter never registers as a state of its own.
+ */
+const FADE = 0.9
+const HOLD = 0.85
+const ASSEMBLE = 4.4
+
+/** Extra seconds spread across the field, so it settles from the middle out. */
+const SPREAD = 0.8
+
+/**
  * The raster the glyph is sampled out of, in each orientation.
  *
  * Two of them, because a three-digit number is about three units wide by one
@@ -106,6 +127,11 @@ const MIX = [
 ]
 
 const easeInOut = (x) => (x < 0.5 ? 2 * x * x : 1 - (-2 * x + 2) ** 2 / 2)
+
+/** Slow away, slow home, and no corner at either end. */
+const smoother = (x) => x * x * x * (x * (x * 6 - 15) + 10)
+
+const clamp01 = (x) => (x < 0 ? 0 : x > 1 ? 1 : x)
 
 /** Box–Muller, so nothing in here is ever evenly spread. */
 function gauss() {
@@ -394,6 +420,15 @@ export default function BreathField({ text = '203', tall = false, replayKey = 0 
           wander: (0.3 + Math.random() ** 2 * 1.9) * (1.5 - depth),
           tx,
           ty,
+          // Where this star waits before it is called in. Across the whole
+          // frame, in frame coordinates rather than figure coordinates,
+          // because the scatter belongs to the screen and the shape does not.
+          sx: Math.random(),
+          sy: Math.random(),
+          // Inner stars arrive first. A field that lands all at once is a
+          // cross-fade; one that settles from the middle out is a thing
+          // coming together.
+          delay: Math.min(1, Math.hypot(x, y) / 0.55) * SPREAD,
           core: cores[tint],
           halo: halos[tint],
           size: (0.5 + mag * 8) * (0.62 + clump * 0.95),
@@ -531,11 +566,19 @@ export default function BreathField({ text = '203', tall = false, replayKey = 0 
       // never so loose that it stops being legible.
       const loosen = 0.16 + (1 - breath) * 0.84
 
+      // How far through the entrance the whole field is. Used for the things
+      // that have no business existing while the stars are still scattered.
+      const formed = clamp01((clock - HOLD) / (ASSEMBLE + SPREAD))
+      const lit = clamp01(clock / FADE)
+
       // 1. The nebula, first and underneath.
       for (let i = 0; i < nebula.length; i += 1) {
         const n = nebula[i]
         const px = n.size * unit
-        ctx.globalAlpha = n.glow * (0.55 + 0.45 * breath)
+        // Nothing to lie along until the stars have arrived, so it arrives
+        // with them — and late, on the square, so the haze is the last thing
+        // to turn up rather than a fog the shape forms inside.
+        ctx.globalAlpha = n.glow * (0.55 + 0.45 * breath) * formed * formed
         ctx.drawImage(
           n.halo,
           cx + n.x * scale - px / 2,
@@ -555,12 +598,26 @@ export default function BreathField({ text = '203', tall = false, replayKey = 0 
       for (let i = 0; i < motes.length; i += 1) {
         const m = motes[i]
         const drift = m.wander * loosen * unit * 2.4
-        m.px = cx + m.x * scale + Math.sin(clock * m.rate + m.phase) * drift
-        m.py = cy + m.y * scale + Math.cos(clock * m.rate * 0.87 + m.phase) * drift
+        const home = smoother(clamp01((clock - HOLD - m.delay) / ASSEMBLE))
 
-        const px = m.size * (3.8 + m.mag * 9) * unit
+        const tx = cx + m.x * scale + Math.sin(clock * m.rate + m.phase) * drift
+        const ty = cy + m.y * scale + Math.cos(clock * m.rate * 0.87 + m.phase) * drift
+
+        // Straight from where it was waiting to where it belongs. No curve:
+        // two hundred curved paths crossing each other reads as a swarm, and
+        // the thing being watched is the shape arriving, not the routes.
+        m.px = m.sx * w + (tx - m.sx * w) * home
+        m.py = m.sy * h + (ty - m.sy * h) * home
+        // Small and faint out in the scatter, full size once home. A star that
+        // is already its final size while it is still travelling looks like a
+        // sprite being moved; one that grows into place looks like it is
+        // getting closer.
+        m.arrive = 0.5 + 0.5 * home
+        m.on = lit * (0.42 + 0.58 * home)
+
+        const px = m.size * (3.8 + m.mag * 9) * unit * m.arrive
         const lean = px * 0.3
-        ctx.globalAlpha = m.glow * (0.04 + 0.042 * breath)
+        ctx.globalAlpha = m.glow * (0.04 + 0.042 * breath) * m.on
         ctx.drawImage(
           m.halo,
           m.px + m.tx * lean - px / 2,
@@ -580,8 +637,8 @@ export default function BreathField({ text = '203', tall = false, replayKey = 0 
       // 3. The cores, sharp, on top.
       for (let i = 0; i < motes.length; i += 1) {
         const m = motes[i]
-        const px = m.size * (1 + 0.3 * breath) * 1.25 * unit
-        ctx.globalAlpha = Math.min(1, m.glow * (0.64 + 0.3 * breath))
+        const px = m.size * (1 + 0.3 * breath) * 1.25 * unit * m.arrive
+        ctx.globalAlpha = Math.min(1, m.glow * (0.64 + 0.3 * breath) * m.on)
         ctx.drawImage(m.core, m.px - px / 2, m.py - px / 2, px, px)
       }
 
@@ -590,7 +647,8 @@ export default function BreathField({ text = '203', tall = false, replayKey = 0 
         const d = dust[i]
         // Twinkle, barely: enough that the background is never quite the same
         // twice, not enough that anything up there is blinking at you.
-        ctx.globalAlpha = d.glow * (0.62 + 0.38 * Math.sin(clock * 0.45 + d.phase))
+        ctx.globalAlpha =
+          d.glow * (0.62 + 0.38 * Math.sin(clock * 0.45 + d.phase)) * lit
         // Off the frame rather than off the figure: these are the sky behind
         // it, and they should not change size when the number does.
         const px = d.size * 2.2 * (Math.min(w, h) / 720)
@@ -636,11 +694,16 @@ export default function BreathField({ text = '203', tall = false, replayKey = 0 
     // does not run in a background tab, so a field that only ever drew from the
     // loop would be an empty black screen for anyone who opened this link in a
     // tab and came back to it later.
-    draw(prefersReducedMotion() ? INHALE : 0)
-
-    // Reduced motion gets that one frame — the number at its tightest — and
-    // never a loop.
-    if (!prefersReducedMotion()) start()
+    //
+    // Reduced motion gets one frame, well past the end of the entrance, so it
+    // sees the number formed and never sees it fly. Everyone else starts at
+    // zero, which is a black screen for a third of a second and then a sky.
+    if (prefersReducedMotion()) {
+      draw(HOLD + ASSEMBLE + SPREAD + INHALE)
+    } else {
+      draw(0)
+      start()
+    }
 
     // On a phone, the address bar sliding away fires `resize` on nearly every
     // scroll, and each one would otherwise re-fit the figure mid-scroll. The
@@ -654,7 +717,8 @@ export default function BreathField({ text = '203', tall = false, replayKey = 0 
         // Always, not only when the loop is idle. Resizing the canvas clears
         // it, and waiting for the next animation frame to fill it back in is a
         // frame of blank on every resize — and forever, in a tab that is not
-        // getting frames at all.
+        // getting frames at all. The clock is untouched, so a resize during
+        // the entrance neither restarts it nor skips it.
         draw(clock)
       }, 140)
     }

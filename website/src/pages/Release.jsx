@@ -25,6 +25,30 @@ import BreathField from '../components/BreathField.jsx'
 /* ------------------------------------------------------------------- hero */
 
 /**
+ * A word that arrives one letter at a time, from the inside out.
+ *
+ * `from` says which end is nearest the number, and that letter goes first, so
+ * both words appear to be pushed outward by the thing between them rather than
+ * typed left to right on either side of it. It is a small thing that costs one
+ * custom property and is the difference between two labels and a title.
+ */
+function Word({ text, from = 'start' }) {
+  const letters = [...text]
+  return (
+    <span className="rh-word" aria-hidden="true">
+      {letters.map((ch, i) => (
+        <span
+          key={`${ch}-${i}`}
+          style={{ '--i': from === 'end' ? letters.length - 1 - i : i }}
+        >
+          {ch}
+        </span>
+      ))}
+    </span>
+  )
+}
+
+/**
  * The title, as an object.
  *
  * The whole first screen is the release: a field of light in the middle and
@@ -83,14 +107,17 @@ function SplitTitle({ onReplay }) {
       <BreathField text={String(RELEASE.code)} tall={tall} replayKey={key} />
 
       {/* The build number in the middle is drawn on the canvas, which is
-          aria-hidden — so the heading carries it as text. A screen reader gets
-          "Exhale 1.0.203, universal", which is the whole title; a reader with
-          eyes gets the two words at the edges and the number made of light
-          between them. */}
-      <h1 className="rh-type">
-        <span className="rh-word">Exhale</span>{' '}
-        <span className="rh-said">{RELEASE.version},</span>{' '}
-        <span className="rh-word">Universal</span>
+          aria-hidden, and the two words are split into per-letter spans — so
+          the heading carries the whole thing once, as text, for anything that
+          reads the page rather than looks at it. */}
+      {/* Keyed on the replay, so pressing it plays the words in again with
+          the field rather than leaving them sitting there already arrived.
+          The letters are split into spans and hidden from assistive tech; the
+          heading's real text is the one line in the middle. */}
+      <h1 className="rh-type" key={key}>
+        <Word text="Exhale" from="end" />{' '}
+        <span className="rh-said">Exhale {RELEASE.version}, Universal</span>{' '}
+        <Word text="Universal" />
       </h1>
 
       <button

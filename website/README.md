@@ -99,7 +99,16 @@ aspect ratio: the same answer goes to the canvas as a prop and to the
 stylesheet as `data-tall`. A media query would be a second opinion, and a short
 landscape window is exactly where the two would disagree.
 
-It breathes on the app's own numbers — four seconds in, six seconds out, off
+It does not appear; it assembles. Stars fade up scattered across the whole
+frame, hang there a moment, then draw together into the shape from the middle
+outward, while the two words arrive a letter at a time from the end nearest the
+number — so the first thing the page does is form its own title in front of
+you. About six seconds, once, and the replay control in the corner plays it
+again with a freshly generated field. A field that is simply *there* on load
+has no first moment, and every viewer's first moment is the one they judge it
+by.
+
+Then it breathes on the app's own numbers — four seconds in, six seconds out, off
 the pacer hidden behind seven taps on the mark in About — tightening on the
 inhale and loosening on the exhale, so the number is never quite finished
 assembling. It stops drawing entirely when it scrolls off screen, when the tab
