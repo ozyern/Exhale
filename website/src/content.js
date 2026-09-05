@@ -72,6 +72,21 @@ export const SHOTS = [
 
 export const SHOT = { home: 0, player: 1, lyrics: 2, artist: 3, about: 4 }
 
+/**
+ * Captures from the 1.0.203 build, kept apart from [SHOTS].
+ *
+ * The gallery on the landing page is about the app; these are about a release, and they date the
+ * moment they stop being the current one. Keeping them in their own list means a future release
+ * adds a set rather than editing the app's own screenshots out from under the home page.
+ */
+export const SHOTS_203 = [
+  { src: '/shots/203-home.jpg', alt: 'Home in 1.0.203: the large title, shortcut tiles, and the dock as a tab strip.' },
+  { src: '/shots/203-about.jpg', alt: 'The About screen in 1.0.203, carrying the artwork color through the large title.' },
+  { src: '/shots/203-menu.jpg', alt: 'The rebuilt player menu: five round actions over one grouped list.' },
+]
+
+export const SHOT203 = { home: 0, about: 1, menu: 2 }
+
 /** Screen capture, re-encoded for the web: 30fps, no audio track, ~230KB. */
 export const LYRICS_VIDEO = {
   src: '/media/lyrics.mp4',

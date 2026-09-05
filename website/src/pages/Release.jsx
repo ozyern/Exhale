@@ -2,20 +2,26 @@ import { useEffect, useRef, useState } from 'react'
 import { RELEASE_PATH, SiteFooter, TopBar } from '../components/Chrome.jsx'
 import { Link } from '../router.jsx'
 import { RELEASE } from '../release.js'
-import { RELEASES, REPO, SHOTS } from '../content.js'
+import { RELEASES, REPO, SHOTS, SHOTS_203 } from '../content.js'
 import { useReveals } from '../hooks.js'
 import { ArrowLeftIcon, LinkIcon, ReplayIcon } from '../icons.jsx'
 import BreathField from '../components/BreathField.jsx'
 
 /*
- * The release announcement, as a long read.
+ * The release announcement.
  *
- * The rest of the site is a product page: enormous type, one claim per screen,
- * an object rather than a headline. That is the right shape for someone who has
- * never heard of the app and the wrong one for someone who already has it
- * installed and wants to know what changed and why — so this page is a
- * document. Article measure, a rail you can jump from, and prose that is
- * allowed to be several paragraphs long.
+ * This was a long read — an article measure, a rail you could jump from, and
+ * twelve numbered sections of engineering account. It was well written and it
+ * was the wrong document. Someone who opens a release page wants to know what
+ * changed and what it looks like; the reasoning belongs in the commits and in
+ * CHANGELOG.md, both of which are linked from the bottom of this page and
+ * neither of which is competing with a screenshot for their attention.
+ *
+ * So it is the same shape as the rest of the site now: enormous type, one claim
+ * per screen, an object rather than a heading. Eight chapters, a headline and
+ * two sentences each, real captures from the build at the size a screenshot
+ * deserves — and everything the edit cut kept at the bottom as one plain list,
+ * because a release note that quietly loses items is worse than a long one.
  *
  * What it keeps from the rest of the site: the black, the greys, the three
  * retinting custom properties, and the rule that the weight comes from the size
@@ -172,139 +178,77 @@ function ReleaseShots({ hero }) {
   )
 }
 
-/* -------------------------------------------------------------------- toc */
+/* --------------------------------------------------------------- chapters */
 
 /**
- * The rail.
+ * One chapter.
  *
- * Eleven sections is more than anybody reads top to bottom, so the rail is the
- * page's real table of contents rather than decoration: it says how long this
- * is, and it lets someone who came for the sleep timer go straight to it.
+ * A kicker, a headline, two sentences, and — usually — one screenshot at a size
+ * you can actually read the app in. `wide` chapters have no image and take the
+ * full column instead: they are the beats between the pictures, and a page that
+ * is only pictures has no rhythm to it.
  *
- * The active item is chosen by whichever heading last crossed the top third of
- * the viewport, not by whichever section is "most visible" — a long section
- * followed by a short one otherwise hands the highlight over halfway through a
- * paragraph you are still reading.
+ * The image is the argument. Everything here that could have been a paragraph
+ * explaining a screenshot is a screenshot.
  */
-function Toc({ sections, active, onJump }) {
+function Chapter({ chapter, index }) {
+  const wide = chapter.tone === 'wide'
+
   return (
-    <nav className="rl-toc" aria-label="On this page">
-      <p className="rl-toc-head">On this page</p>
-      <ol>
-        {sections.map((section, index) => (
-          <li key={section.id}>
-            <a
-              href={`#${section.id}`}
-              data-on={active === section.id}
-              onClick={() => onJump(section.id)}
-            >
-              <i aria-hidden="true">{String(index + 1).padStart(2, '0')}</i>
-              {section.nav}
-            </a>
-          </li>
-        ))}
-      </ol>
-    </nav>
-  )
-}
+    <section className="rl-chap" id={chapter.id} data-wide={wide} data-flip={!!chapter.flip}>
+      <div className="rl-chap-say reveal">
+        <p className="rl-chap-kick">{chapter.kicker}</p>
+        <h2 className="rl-chap-h">{chapter.title}</h2>
+        <p className="rl-chap-p">{chapter.body}</p>
+      </div>
 
-/* ----------------------------------------------------------------- blocks */
-
-/** One case per block type in `release.js`, and no generic HTML escape hatch. */
-function Block({ block }) {
-  switch (block.type) {
-    case 'lede':
-      return <p className="rl-lede">{block.text}</p>
-
-    case 'p':
-      return <p className="rl-p">{block.text}</p>
-
-    case 'quote':
-      return (
-        <blockquote className="rl-quote">
-          <p>{block.text}</p>
-        </blockquote>
-      )
-
-    case 'note':
-      return (
-        <aside className="rl-note">
-          <p className="rl-note-title">{block.title}</p>
-          <p>{block.text}</p>
-        </aside>
-      )
-
-    case 'list':
-      return (
-        <ul className="rl-list">
-          {block.items.map((item) => (
-            <li key={item.title}>
-              <b>{item.title}</b>
-              <span>{item.body}</span>
-            </li>
-          ))}
-        </ul>
-      )
-
-    case 'bullets':
-      return (
-        <ul className="rl-bullets">
-          {block.items.map((item) => (
-            <li key={item}>{item}</li>
-          ))}
-        </ul>
-      )
-
-    case 'cards':
-      return (
-        <div className="rl-cards">
-          {block.items.map((item) => (
-            <div className="rl-card" key={item.label}>
-              <b>{item.value}</b>
-              <i>{item.label}</i>
-              <span>{item.body}</span>
-            </div>
-          ))}
-        </div>
-      )
-
-    case 'code':
-      return (
-        <pre className="rl-code">
-          {block.lines.map((line, i) => (
-            <span key={line}>
-              {line}
-              {i < block.lines.length - 1 ? '\n' : ''}
-            </span>
-          ))}
-        </pre>
-      )
-
-    case 'figure':
-      return (
-        <figure className="rl-figure">
-          <div className="rl-figure-frame">
+      {!wide && (
+        <figure className="rl-chap-fig reveal" style={{ '--d': '120ms' }}>
+          <div className="rl-chap-stage">
             <img
-              src={SHOTS[block.shot].src}
-              alt={SHOTS[block.shot].alt}
-              width="592"
-              height="1322"
-              loading="lazy"
+              src={SHOTS_203[chapter.shot].src}
+              alt={SHOTS_203[chapter.shot].alt}
+              width="780"
+              height="1390"
+              loading={index === 0 ? 'eager' : 'lazy'}
               decoding="async"
             />
           </div>
-          <figcaption>{block.caption}</figcaption>
+          <figcaption>{chapter.caption}</figcaption>
         </figure>
-      )
-
-    default:
-      return null
-  }
+      )}
+    </section>
+  )
 }
 
-/* ------------------------------------------------------------------ share */
+/**
+ * The receipt.
+ *
+ * Three columns of one-liners, set small and quiet, after the story is over.
+ * Nothing in it is new information — it is the same release described at the
+ * length someone scanning a diff wants rather than at the length someone
+ * deciding whether to install wants.
+ */
+function Everything({ groups }) {
+  return (
+    <section className="rl-all reveal" id="everything">
+      <h2 className="rl-all-h">Everything in {RELEASE.version}</h2>
+      <div className="rl-all-grid">
+        {groups.map((group) => (
+          <div className="rl-all-col" key={group.group}>
+            <p className="rl-all-tag">{group.group}</p>
+            <ul>
+              {group.items.map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+    </section>
+  )
+}
 
-/** Copy the canonical URL. The one action a document page owes a reader. */
 function CopyLink() {
   const [done, setDone] = useState(false)
 
@@ -336,8 +280,6 @@ function CopyLink() {
 /* ------------------------------------------------------------------- page */
 
 export default function Release() {
-  const [active, setActive] = useState(RELEASE.sections[0].id)
-  const pending = useRef(null)
   const barRef = useRef(null)
 
   useReveals()
@@ -378,46 +320,6 @@ export default function Release() {
       if (frame) cancelAnimationFrame(frame)
     }
   }, [])
-
-  // Rail spy. The band is the top third: a heading owns the rail from the
-  // moment it reaches the top of the reading area until the next one does.
-  useEffect(() => {
-    if (!('IntersectionObserver' in window)) return
-
-    const io = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (!entry.isIntersecting) return
-          // A click names its destination and everything it scrolls past is
-          // ignored until that destination arrives, or the rail stutters
-          // through nine positions on its way to the tenth.
-          if (pending.current) {
-            if (entry.target.id !== pending.current) return
-            pending.current = null
-          }
-          setActive(entry.target.id)
-        })
-      },
-      { rootMargin: '-14% 0px -72% 0px', threshold: 0 },
-    )
-
-    RELEASE.sections.forEach(({ id }) => {
-      const node = document.getElementById(id)
-      if (node) io.observe(node)
-    })
-    return () => io.disconnect()
-  }, [])
-
-  const jump = (id) => {
-    pending.current = id
-    setActive(id)
-    // The lock always expires: a destination that never arrives — an anchor
-    // already on screen, an interrupted scroll — would otherwise leave the spy
-    // deaf for the rest of the session.
-    window.setTimeout(() => {
-      pending.current = null
-    }, 1400)
-  }
 
   return (
     <div id="top" className="release">
@@ -472,36 +374,16 @@ export default function Release() {
             <ReleaseShots hero={RELEASE.hero} />
           </header>
 
-          <div className="rl-body">
-            <div className="rl-rail">
-              <Toc sections={RELEASE.sections} active={active} onJump={jump} />
-            </div>
+          <div className="rl-story">
+            {RELEASE.story.map((chapter, index) => (
+              <Chapter chapter={chapter} index={index} key={chapter.id} />
+            ))}
 
-            <div className="rl-flow">
-              {RELEASE.sections.map((section, index) => (
-                <section className="rl-section" id={section.id} key={section.id}>
-                  <p className="rl-num" aria-hidden="true">
-                    {String(index + 1).padStart(2, '0')}
-                  </p>
-                  <h2 className="rl-h2">{section.title}</h2>
-                  {section.blocks.map((block, i) => (
-                    <Block block={block} key={`${section.id}-${i}`} />
-                  ))}
-                </section>
-              ))}
+            <Everything groups={RELEASE.everything} />
 
-              <section className="rl-section rl-foot">
-                <h2 className="rl-h2">Footnotes</h2>
-                <ol className="rl-footnotes">
-                  {RELEASE.footnotes.map((note) => (
-                    <li key={note}>{note}</li>
-                  ))}
-                </ol>
-              </section>
-
-              <div className="rl-more">
-                <h2 className="rl-h2">More</h2>
-                <div className="rl-more-grid">
+            <div className="rl-tail">
+              <h2 className="rl-all-h">More</h2>
+              <div className="rl-more-grid">
                   <Link className="rl-more-card" to="/">
                     <span className="rl-more-tag">Overview</span>
                     <b>Exhale — a music player that breathes</b>
@@ -536,7 +418,6 @@ export default function Release() {
                       good pull request looks like here.
                     </span>
                   </a>
-                </div>
               </div>
             </div>
           </div>

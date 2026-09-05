@@ -3243,324 +3243,193 @@ html:has(.release) {
 
 /* ------------------------------------------------------------ body */
 
-.rl-body {
-  width: min(1120px, 100% - 44px);
-  margin: clamp(56px, 7vw, 96px) auto 0;
+/* ----------------------------------------------------------------------------
+   The story
+   ----------------------------------------------------------------------------
+   One chapter per screenful. The page is deliberately mostly air: the whole
+   argument for this layout is that a screenshot at the size you can read the
+   app in says more than the paragraph that would have described it, and a
+   paragraph that has to share a screen with three others gets skimmed.
+
+   Nothing here is a document. There is no measure, no rail and no numbering,
+   because those are the furniture of something you read top to bottom and this
+   is something you scroll through.
+   ---------------------------------------------------------------------------- */
+
+.rl-story {
+  width: var(--shell);
+  margin: 0 auto;
+  padding: clamp(56px, 9vw, 120px) 0 0;
+}
+
+.rl-chap {
   display: grid;
-  /* The rail is a fixed column so the article measure never moves as the
-     window changes — a body of text that reflows on every resize is the one
-     thing that makes a long read feel like a web page rather than a document. */
-  grid-template-columns: 210px minmax(0, 1fr);
+  grid-template-columns: 1fr min(430px, 44%);
+  align-items: center;
   gap: clamp(28px, 5vw, 76px);
-  align-items: start;
+  padding: clamp(52px, 9vw, 118px) 0;
+  border-top: 1px solid var(--hairline);
 }
 
-.rl-rail {
-  position: sticky;
-  top: 28px;
-}
-
-.rl-toc-head {
-  font-size: 12px;
-  color: var(--grey-dim);
-  margin-bottom: 14px;
-}
-
-.rl-toc ol {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  border-left: 1px solid var(--hairline);
-}
-
-.rl-toc a {
-  display: flex;
-  gap: 10px;
-  padding: 7px 0 7px 14px;
-  margin-left: -1px;
-  border-left: 1px solid transparent;
-  font-size: 13.5px;
-  line-height: 1.35;
-  color: var(--grey-dim);
-  transition: color 0.25s var(--ease), border-color 0.3s var(--ease);
-}
-
-.rl-toc a i {
-  font-style: normal;
-  font-variant-numeric: tabular-nums;
-  color: rgba(245, 245, 247, 0.22);
-  transition: color 0.25s var(--ease);
-}
-
-.rl-toc a:hover {
-  color: var(--ink);
-}
-
-.rl-toc a[data-on='true'] {
-  color: var(--ink);
-  border-left-color: var(--rose);
-}
-
-.rl-toc a[data-on='true'] i {
-  color: var(--rose);
-}
-
-.rl-flow {
-  max-width: 760px;
-}
-
-/* ---------------------------------------------------------- section */
-
-.rl-section {
-  /* Clears the fixed progress bar and leaves a heading somewhere readable
-     rather than jammed against the top of the window. */
-  scroll-margin-top: 26px;
-  padding-top: clamp(46px, 6vw, 78px);
-}
-
-.rl-section:first-child {
+.rl-chap:first-child {
+  border-top: 0;
   padding-top: 0;
 }
 
-.rl-num {
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-  color: var(--grey-dim);
-  margin-bottom: 12px;
+/* One picture leads, so the eye is not tracking down a rigid column of the same
+   two shapes. Which one is named in the data rather than derived from position:
+   the narrow chapters all sit at odd positions here, so an `nth-of-type(even)`
+   rule reads as alternation and never fires once. */
+.rl-chap[data-flip='true'] .rl-chap-say {
+  order: 2;
 }
 
-.rl-h2 {
-  font-size: clamp(26px, 3.1vw, 40px);
+.rl-chap[data-wide='true'] {
+  grid-template-columns: 1fr;
+  justify-items: center;
+  text-align: center;
+  padding: clamp(64px, 11vw, 150px) 0;
+}
+
+/* The cap belongs on the lines, not on the block. Capping the container clamps
+   the headline and the paragraph to the same measure, and the measure that
+   makes a 54px headline break well is the one that makes 17px body text break
+   every four words. */
+.rl-chap[data-wide='true'] .rl-chap-h {
+  max-width: 17ch;
+  margin-inline: auto;
+}
+
+.rl-chap[data-wide='true'] .rl-chap-p {
+  max-width: 52ch;
+}
+
+.rl-chap-kick {
+  margin: 0 0 14px;
+  font-size: 13px;
   font-weight: 600;
-  line-height: 1.12;
-  letter-spacing: -0.024em;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--rose);
 }
 
-.rl-lede {
-  margin-top: var(--rl-gap);
-  font-size: clamp(18px, 1.8vw, 21px);
-  line-height: 1.52;
-  letter-spacing: -0.011em;
-  color: rgba(245, 245, 247, 0.86);
-}
-
-.rl-p {
-  margin-top: var(--rl-gap);
-  font-size: 17px;
-  line-height: 1.62;
-  color: var(--grey);
-}
-
-.rl-p code,
-.rl-list code {
-  padding: 2px 6px;
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.07);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 0.88em;
+/* The size is the weight. `clamp` runs from something a phone can hold on one
+   line to something a laptop reads as a headline rather than as a heading. */
+.rl-chap-h {
+  margin: 0 0 18px;
+  font-size: clamp(30px, 4.4vw, 54px);
+  line-height: 1.06;
+  letter-spacing: -0.035em;
+  font-weight: 600;
   color: var(--ink);
+  text-wrap: balance;
 }
 
-/* The workhorse. A titled item is the shape almost every change in a release
-   actually has: a claim you can scan, and the reason underneath it. */
-.rl-list {
-  margin: var(--rl-gap) 0 0;
-  padding: 0;
-  list-style: none;
-  display: grid;
-  gap: 2px;
-  border-radius: 18px;
+.rl-chap-p {
+  margin: 0;
+  font-size: clamp(16px, 1.35vw, 19px);
+  line-height: 1.55;
+  color: var(--grey);
+  max-width: 46ch;
+}
+
+.rl-chap[data-wide='true'] .rl-chap-p {
+  margin-inline: auto;
+}
+
+/* ---- the picture ---- */
+
+.rl-chap-fig {
+  margin: 0;
+}
+
+/* Lit, not floated. The phone sits in a pool of its own colour on a slightly
+   raised plate, which is what stops a dark screenshot on a dark page from
+   reading as a hole in the layout. */
+.rl-chap-stage {
+  position: relative;
+  border-radius: 30px;
+  padding: clamp(18px, 3vw, 34px);
+  background:
+    radial-gradient(120% 90% at 50% 0%, rgba(237, 85, 100, 0.16) 0%, transparent 62%),
+    linear-gradient(180deg, var(--tile-lift) 0%, var(--tile) 100%);
+  border: 1px solid var(--hairline);
   overflow: hidden;
 }
 
-.rl-list li {
-  padding: 20px 22px;
-  background: var(--tile);
-  transition: background 0.3s var(--ease);
-}
-
-.rl-list li:hover {
-  background: var(--tile-lift);
-}
-
-.rl-list b {
+.rl-chap-stage img {
   display: block;
-  font-size: 16px;
+  width: 100%;
+  height: auto;
+  border-radius: 18px;
+  box-shadow:
+    0 32px 70px rgba(0, 0, 0, 0.6),
+    0 2px 0 rgba(255, 255, 255, 0.06) inset;
+}
+
+.rl-chap-fig figcaption {
+  margin: 16px 2px 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--grey-dim);
+}
+
+/* ----------------------------------------------------------------------------
+   The receipt
+   ----------------------------------------------------------------------------
+   Deliberately plain and deliberately last. The chapters above are the release;
+   this is the same release at the length someone scanning a diff wants, and it
+   is set small enough that nobody reading the story feels obliged to stop here.
+   ---------------------------------------------------------------------------- */
+
+.rl-all {
+  padding: clamp(56px, 9vw, 110px) 0 clamp(20px, 4vw, 44px);
+  border-top: 1px solid var(--hairline);
+}
+
+.rl-all-h {
+  margin: 0 0 clamp(28px, 4vw, 48px);
+  font-size: clamp(22px, 2.4vw, 30px);
+  letter-spacing: -0.02em;
   font-weight: 600;
-  letter-spacing: -0.014em;
+  color: var(--ink);
 }
 
-.rl-list span {
-  display: block;
-  margin-top: 7px;
-  font-size: 15.5px;
+.rl-all-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: clamp(26px, 4vw, 52px);
+}
+
+.rl-all-tag {
+  margin: 0 0 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--hairline);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--grey-dim);
+}
+
+.rl-all-col ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rl-all-col li {
+  font-size: 14px;
   line-height: 1.55;
   color: var(--grey);
 }
 
-.rl-bullets {
-  margin: var(--rl-gap) 0 0;
-  padding-left: 20px;
-  color: var(--grey);
-  font-size: 16.5px;
-  line-height: 1.6;
+.rl-all-col li + li {
+  margin-top: 12px;
 }
 
-.rl-bullets li + li {
-  margin-top: 8px;
-}
-
-/* The thing under the thing. Boxed, because it is a detour and the reader
-   should be able to see where it ends before deciding to take it. */
-.rl-note {
-  margin-top: var(--rl-gap);
-  padding: 20px 22px;
-  border-radius: 18px;
-  border: 1px solid var(--hairline);
-  border-left: 2px solid color-mix(in oklab, var(--iris) 70%, transparent);
-  background: rgba(255, 255, 255, 0.025);
-}
-
-.rl-note-title {
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0.005em;
-  color: var(--ink);
-  margin-bottom: 8px;
-}
-
-.rl-note p:last-child {
-  font-size: 15.5px;
-  line-height: 1.58;
-  color: var(--grey);
-}
-
-/* The one sentence a section is really about, set large enough to be read on
-   its own by someone scrolling past. */
-.rl-quote {
-  margin: clamp(30px, 4vw, 44px) 0 0;
-  padding-left: clamp(18px, 2.4vw, 28px);
-  border-left: 2px solid var(--rose);
-}
-
-.rl-quote p {
-  font-size: clamp(19px, 2.1vw, 25px);
-  font-weight: 500;
-  line-height: 1.38;
-  letter-spacing: -0.018em;
-  color: var(--ink);
-}
-
-.rl-cards {
-  margin-top: var(--rl-gap);
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 10px;
-}
-
-.rl-card {
-  padding: 18px 18px 20px;
-  border-radius: 18px;
-  background: var(--tile);
-  border: 1px solid var(--hairline);
-}
-
-.rl-card b {
-  display: block;
-  font-size: 34px;
-  font-weight: 600;
-  letter-spacing: -0.03em;
-  line-height: 1;
-  color: var(--ink);
-}
-
-.rl-card i {
-  display: block;
-  margin-top: 6px;
-  font-style: normal;
-  font-size: 13px;
-  color: var(--ink);
-}
-
-.rl-card span {
-  display: block;
-  margin-top: 8px;
-  font-size: 13px;
-  line-height: 1.45;
-  color: var(--grey-dim);
-}
-
-.rl-code {
-  margin: var(--rl-gap) 0 0;
-  padding: 20px 22px;
-  border-radius: 16px;
-  border: 1px solid var(--hairline);
-  background: #08080a;
-  overflow-x: auto;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 13.5px;
-  line-height: 1.85;
-  color: var(--grey);
-  white-space: pre;
-}
-
-/* A phone screenshot is 9:20, and the article measure is 760px. Stretched to
-   fill that it is a two-thousand-pixel column of phone; cropped to a band it is
-   a status bar and half an app bar, which is the part of a screen that says
-   nothing. So it is shown whole, at about the size a phone actually is, on a
-   ground lit by the palette — the caption points at something you can see. */
-.rl-figure {
-  margin: clamp(30px, 4vw, 46px) 0 0;
-  padding: clamp(24px, 4vw, 40px) 0;
-  border-radius: 22px;
-  border: 1px solid var(--hairline);
-  background: radial-gradient(
-      120% 90% at 50% 0%,
-      color-mix(in oklab, var(--iris) 16%, transparent) 0%,
-      transparent 62%
-    ),
-    #08080a;
-}
-
-.rl-figure-frame {
-  width: min(272px, 62%);
-  margin-inline: auto;
-  overflow: hidden;
-  border-radius: 20px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.55);
-  background: #08080a;
-}
-
-.rl-figure-frame img {
-  display: block;
-  width: 100%;
-  height: auto;
-}
-
-.rl-figure figcaption {
-  width: min(440px, 84%);
-  margin-inline: auto;
-  text-align: center;
-}
-
-/* -------------------------------------------------- footnotes, more */
-
-.rl-foot {
-  margin-top: clamp(20px, 3vw, 34px);
-  border-top: 1px solid var(--hairline);
-}
-
-.rl-footnotes {
-  margin: var(--rl-gap) 0 0;
-  padding-left: 20px;
-  font-size: 14.5px;
-  line-height: 1.6;
-  color: var(--grey-dim);
-}
-
-.rl-footnotes li + li {
-  margin-top: 10px;
+.rl-tail {
+  padding-top: clamp(48px, 7vw, 88px);
 }
 
 .rl-more {
@@ -3629,65 +3498,37 @@ html:has(.release) {
 /* ------------------------------------------------------ release: small */
 
 @media (max-width: 940px) {
-  .rl-body {
+  /* One column, picture under the words. Below this width the two-up chapter is
+     a 300px image beside a 300px paragraph, which flatters neither. */
+  .rl-chap,
+  .rl-chap[data-flip='true'] {
     grid-template-columns: minmax(0, 1fr);
-    gap: 0;
+    gap: 30px;
+    text-align: center;
+    justify-items: center;
   }
 
-  /* The rail becomes a horizontal rule of contents above the article. It is
-     still the fastest way into section nine; it just stops being a column. */
-  .rl-rail {
-    position: sticky;
-    top: 0;
-    z-index: 40;
-    margin-bottom: 34px;
-    padding: 12px 0;
-    background: rgba(0, 0, 0, 0.86);
-    backdrop-filter: saturate(180%) blur(20px);
-    -webkit-backdrop-filter: saturate(180%) blur(20px);
-    border-bottom: 1px solid var(--hairline);
+  .rl-chap[data-flip='true'] .rl-chap-say {
+    order: 0;
   }
 
-  .rl-toc-head {
-    display: none;
+  .rl-chap-h {
+    max-width: 18ch;
+    margin-inline: auto;
   }
 
-  .rl-toc ol {
-    display: flex;
-    gap: 6px;
-    overflow-x: auto;
-    border-left: 0;
-    scrollbar-width: none;
+  .rl-chap-p,
+  .rl-chap[data-wide='true'] .rl-chap-p {
+    margin-inline: auto;
+    max-width: 50ch;
   }
 
-  .rl-toc ol::-webkit-scrollbar {
-    display: none;
+  .rl-chap-fig {
+    width: min(360px, 100%);
   }
 
-  .rl-toc a {
-    white-space: nowrap;
-    padding: 7px 13px;
-    margin-left: 0;
-    border-left: 0;
-    border-radius: 999px;
-    background: rgba(255, 255, 255, 0.05);
-  }
-
-  .rl-toc a i {
-    display: none;
-  }
-
-  .rl-toc a[data-on='true'] {
-    color: #000;
-    background: var(--ink);
-  }
-
-  .rl-flow {
-    max-width: none;
-  }
-
-  .rl-section {
-    scroll-margin-top: 66px;
+  .rl-chap-fig figcaption {
+    text-align: center;
   }
 }
 
