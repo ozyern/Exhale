@@ -39,6 +39,14 @@ import { prefersReducedMotion } from '../hooks.js'
  *     the stroke is thickest, so the stars sit *in* a continuous band of haze
  *     rather than floating in a row.
  *
+ * And once it has arrived it has to stay worth looking at, which is a separate
+ * problem from arriving well. A shape that only breathes is a loop you can
+ * see the length of within one cycle. So: every star scintillates on its own
+ * clock; a few dozen of them flare, briefly and rarely, so there is always
+ * something about to happen somewhere; and the sky behind turns, very slowly,
+ * against a number that does not. Nothing there is fast enough to catch the
+ * eye on purpose, and together they mean no two seconds of it are the same.
+ *
  * Canvas, because none of that is a shape CSS has. Everything is blitted from
  * eight pre-rendered sprites with `lighter` compositing, so a frame is a few
  * thousand small image draws and not one gradient — and it stops entirely when
@@ -94,6 +102,23 @@ const ASSEMBLE = 4.4
 
 /** Extra seconds spread across the field, so it settles from the middle out. */
 const SPREAD = 0.8
+
+/**
+ * Flares.
+ *
+ * A few dozen stars, each brightening hard and fading slowly on its own long
+ * period. Rare on purpose: one every few seconds somewhere in the frame is
+ * enough that there is always something about to happen, and often enough to
+ * be a pattern. The rise is a fifth of a second and the fall is a second and a
+ * half, because that asymmetry is what makes it read as something igniting
+ * rather than as a pulse.
+ */
+const FLARERS = 34
+const FLARE_RISE = 0.2
+const FLARE_FALL = 1.5
+
+/** How fast the sky behind the number turns. A full circuit takes ~17 minutes. */
+const SKY_SPIN = 0.006
 
 /**
  * The raster the glyph is sampled out of, in each orientation.
@@ -429,6 +454,14 @@ export default function BreathField({ text = '203', tall = false, replayKey = 0 
           // cross-fade; one that settles from the middle out is a thing
           // coming together.
           delay: Math.min(1, Math.hypot(x, y) / 0.55) * SPREAD,
+          // Scintillation. Its own rate and its own depth, and most of them
+          // shallow: air is what makes a star twinkle, and air is not evenly
+          // bad. A field where everything shimmers by the same amount is a
+          // screen effect, not a sky.
+          tw: 0.5 + Math.random() * 2.1,
+          twd: 0.05 + Math.random() ** 2.4 * 0.42,
+          flareEvery: 0,
+          flareAt: 0,
           core: cores[tint],
           halo: halos[tint],
           size: (0.5 + mag * 8) * (0.62 + clump * 0.95),
@@ -475,6 +508,16 @@ export default function BreathField({ text = '203', tall = false, replayKey = 0 
         m.wander *= 0.25
       }
 
+      // The ones that flare, taken from across the whole figure rather than
+      // from the spine, so it is not always the same bright places that get
+      // brighter. Long periods, offset at random, so they never queue up.
+      for (let n = 0; n < FLARERS; n += 1) {
+        const m = motes[Math.floor(Math.random() * motes.length)]
+        if (!m || m.flareEvery) continue
+        m.flareEvery = 46 + Math.random() * 120
+        m.flareAt = Math.random() * m.flareEvery
+      }
+
       // The band the stars sit in. Placed only where the stroke is thickest,
       // so the haze runs down the middle of each one as a ribbon instead of
       // pooling in a rectangle around the whole number.
@@ -491,11 +534,19 @@ export default function BreathField({ text = '203', tall = false, replayKey = 0 
         }
       })
 
-      dust = Array.from({ length: stacked ? DUST_PORTRAIT : DUST_LANDSCAPE }, () => {
+      // Polar, not cartesian, because the sky turns.
+      //
+      // `r` is a fraction of the frame's half-diagonal and comes out of a
+      // square root so the stars are spread evenly over the disc rather than
+      // piled at the middle. Points beyond the frame's corners simply are not
+      // drawn, which is cheaper than working out where the rectangle ends and
+      // is what keeps the corners populated as it rotates.
+      const sky = Math.round((stacked ? DUST_PORTRAIT : DUST_LANDSCAPE) * 1.35)
+      dust = Array.from({ length: sky }, () => {
         const mag = Math.random() ** 3.4
         return {
-          x: Math.random(),
-          y: Math.random(),
+          r: Math.sqrt(Math.random()),
+          a: Math.random() * TAU,
           size: 0.55 + mag * 3.4,
           glow: 0.05 + mag * 0.5,
           phase: Math.random() * TAU,
@@ -613,7 +664,30 @@ export default function BreathField({ text = '203', tall = false, replayKey = 0 
         // sprite being moved; one that grows into place looks like it is
         // getting closer.
         m.arrive = 0.5 + 0.5 * home
-        m.on = lit * (0.42 + 0.58 * home)
+
+        // Scintillation, sharpened. `sin * |sin|` keeps the same period but
+        // spends more of it near the middle and less at the extremes, so a
+        // star sits at its own brightness and occasionally jumps rather than
+        // sliding smoothly up and down like something being dimmed.
+        const tw = Math.sin(clock * m.tw + m.phase)
+        let shine = 1 + m.twd * tw * Math.abs(tw) * home
+
+        // And, rarely, a flare. Fast up, slow down.
+        if (m.flareEvery) {
+          const ft = (clock + m.flareAt) % m.flareEvery
+          let e = 0
+          if (ft < FLARE_RISE) e = ft / FLARE_RISE
+          else if (ft < FLARE_RISE + FLARE_FALL) {
+            e = 1 - (ft - FLARE_RISE) / FLARE_FALL
+          }
+          if (e > 0) {
+            e = e * e * (3 - 2 * e) * home
+            shine += e * 1.9
+            m.arrive *= 1 + e * 1.15
+          }
+        }
+
+        m.on = lit * (0.42 + 0.58 * home) * shine
 
         const px = m.size * (3.8 + m.mag * 9) * unit * m.arrive
         const lean = px * 0.3
@@ -642,17 +716,30 @@ export default function BreathField({ text = '203', tall = false, replayKey = 0 
         ctx.drawImage(m.core, m.px - px / 2, m.py - px / 2, px, px)
       }
 
-      // 4. The rest of the sky.
+      // 4. The rest of the sky, turning.
+      //
+      // A full circuit takes about seventeen minutes, which is far below the
+      // rate anyone tracks — nobody will ever see this move. What they get
+      // instead is that the background is not where it was when they looked
+      // away, and that the number is the one thing in the frame holding still.
+      const skyR = Math.hypot(w, h) / 2
+      const spin = clock * SKY_SPIN
+      const dustUnit = Math.min(w, h) / 720
       for (let i = 0; i < dust.length; i += 1) {
         const d = dust[i]
+        const a = d.a + spin
+        const x = cx + Math.cos(a) * d.r * skyR
+        const y = cy + Math.sin(a) * d.r * skyR
+        if (x < -20 || x > w + 20 || y < -20 || y > h + 20) continue
+
         // Twinkle, barely: enough that the background is never quite the same
         // twice, not enough that anything up there is blinking at you.
         ctx.globalAlpha =
           d.glow * (0.62 + 0.38 * Math.sin(clock * 0.45 + d.phase)) * lit
         // Off the frame rather than off the figure: these are the sky behind
         // it, and they should not change size when the number does.
-        const px = d.size * 2.2 * (Math.min(w, h) / 720)
-        ctx.drawImage(d.core, d.x * w - px / 2, d.y * h - px / 2, px, px)
+        const px = d.size * 2.2 * dustUnit
+        ctx.drawImage(d.core, x - px / 2, y - px / 2, px, px)
       }
 
       ctx.globalAlpha = 1

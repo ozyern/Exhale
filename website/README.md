@@ -111,8 +111,24 @@ by.
 Then it breathes on the app's own numbers — four seconds in, six seconds out, off
 the pacer hidden behind seven taps on the mark in About — tightening on the
 inhale and loosening on the exhale, so the number is never quite finished
-assembling. It stops drawing entirely when it scrolls off screen, when the tab
-hides, or when the reader asked for less motion.
+assembling.
+
+Arriving well and staying worth looking at are two different problems, and the
+second one is the one the reader spends their time in. A shape that only
+breathes is a loop you can see the length of inside one cycle, so three things
+run underneath it. Every star scintillates on its own clock and at its own
+depth, sharpened so it sits at its brightness and occasionally jumps rather
+than sliding up and down like something being dimmed. Three dozen of them
+flare — a fifth of a second up, a second and a half down, on periods of a
+minute or two offset at random, which works out at one somewhere in the frame
+every few seconds. And the sky behind turns, one circuit every seventeen
+minutes: nobody will ever catch it moving, they will only find that it is not
+where it was, against a number that has not shifted at all. None of it is fast
+enough to notice on purpose. Together it means no two seconds are the same one
+twice.
+
+It stops drawing entirely when it scrolls off screen, when the tab hides, or
+when the reader asked for less motion.
 
 ## Releasing
 
