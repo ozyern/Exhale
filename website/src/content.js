@@ -201,7 +201,7 @@ export const RELEASE_NOTES = [
           },
           {
             title: 'A welcome, once',
-            body: 'The first launch after an update opens on the build number assembling itself out of a scattered star field — the same figure the announcement page is headed by — which holds, comes apart, and leaves the colour it explodes into behind. Shown once per update, never on a fresh install, and a tap skips to the part worth seeing.',
+            body: 'The first launch after an update opens on the build number assembling itself out of a scattered star field — the same figure the announcement page is headed by — which holds, comes apart, and leaves the colour it explodes into behind. Then the word is written, in a script drawn as one unbroken stroke rather than set in a face the phone may not have. Shown once per update, never on a fresh install, and a tap skips to the part worth seeing.',
           },
           {
             title: 'App icon packs',

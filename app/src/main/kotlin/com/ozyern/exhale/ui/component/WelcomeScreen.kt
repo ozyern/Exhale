@@ -22,10 +22,12 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -40,25 +42,29 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathMeasure
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.em
-import androidx.compose.ui.unit.sp
-import androidx.compose.ui.util.lerp
 import com.ozyern.exhale.R
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -105,8 +111,11 @@ private const val WBURST = WFORMED + 0.95f
 /** How long the debris takes to leave. */
 private const val WBURST_LEN = 1.55f
 
-/** When the word starts arriving. Inside the burst, so the two overlap rather than queue. */
+/** When the word starts being written. Inside the burst, so the two overlap rather than queue. */
 private const val WWELCOME = WBURST + 0.42f
+
+/** How long the hand takes to get through it. */
+private const val WWRITE = 1.35f
 
 /* ------------------------------------------------------------------------------------------- */
 /* The field                                                                                    */
@@ -520,6 +529,13 @@ fun WelcomeScreen(
         Array(tints.size) { i -> arrayOf(starSprite(tints[i], true), starSprite(tints[i], false)) }
     }
 
+    // The word, and the tape measure that runs along it. Both built once: `getSegment` needs an
+    // arc-length parameterisation of the whole path, and rebuilding that every frame is the
+    // expensive way to draw the same curve.
+    val wordPath = remember { welcomePath() }
+    val wordMeasure = remember(wordPath) { PathMeasure().apply { setPath(wordPath, false) } }
+    val wordScratch = remember { Path() }
+
     // One clock for the whole screen, in seconds. Written from the frame callback and read only
     // inside draw lambdas, so a frame of this costs a layer invalidation and neither a
     // recomposition nor a relayout.
@@ -535,7 +551,9 @@ fun WelcomeScreen(
             // than teleporting past it.
             clock.floatValue += ((now - last) / 1_000_000_000f).coerceIn(0f, 0.05f)
             last = now
-            if (!arrived && clock.floatValue >= WWELCOME) arrived = true
+            // The button waits for the hand to finish. Offering someone a way out of a sentence
+            // that is still being written is the fastest way to make sure nobody reads it.
+            if (!arrived && clock.floatValue >= WWELCOME + WWRITE * 0.8f) arrived = true
         }
     }
 
@@ -571,34 +589,54 @@ fun WelcomeScreen(
             modifier = Modifier
                 .align(Alignment.Center)
                 .fillMaxWidth()
-                .padding(horizontal = 32.dp)
-                .graphicsLayer {
-                    alpha = wordIn
-                    // Comes to rest rather than appearing. The same few percent the feed's shelves
-                    // use on Home, for the same reason: felt, never seen.
-                    val grow = lerp(0.94f, 1f, wsmoother(wordIn))
-                    scaleX = grow
-                    scaleY = grow
-                },
+                .padding(horizontal = 30.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Text(
-                text = stringResource(R.string.welcome_title),
-                style = MaterialTheme.typography.displayLarge.copy(letterSpacing = (-0.02).em),
-                fontSize = 58.sp,
-                fontWeight = FontWeight.Light,
-                color = Color.White,
-                textAlign = TextAlign.Center,
-            )
+            val spoken = stringResource(R.string.welcome_title)
+            Canvas(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    // The ratio of the *control-point* box, not of the ink: `Path.getBounds`
+                    // returns the former on Android — the `exact` flag has been ignored for as
+                    // long as the method has existed — and the fit inside `drawWelcomeWord` is
+                    // measured against the same thing. Handing it the ink's 3.67 instead makes
+                    // the fit height-bound and the word quietly small.
+                    .aspectRatio(3.23f)
+                    .semantics { contentDescription = spoken },
+            ) {
+                // Read straight off the clock rather than from an animation of its own: the pen
+                // has to be somewhere specific at every instant, and a spring would put it there
+                // approximately.
+                drawWelcomeWord(
+                    path = wordPath,
+                    measure = wordMeasure,
+                    scratch = wordScratch,
+                    progress = wclamp01((clock.floatValue - WWELCOME) / WWRITE),
+                    accent = accent,
+                )
+            }
+
             Text(
                 text = stringResource(R.string.welcome_version, version),
                 style = MaterialTheme.typography.bodyLarge,
-                color = Color.White.copy(alpha = 0.66f),
+                color = Color.White.copy(alpha = 0.70f),
                 textAlign = TextAlign.Center,
-                modifier = Modifier.padding(top = 10.dp),
+                modifier = Modifier
+                    .padding(top = 6.dp)
+                    .graphicsLayer {
+                        alpha = wordIn
+                        translationY = (1f - wordIn) * 12.dp.toPx()
+                    },
             )
         }
 
+        // The app's own glass, not a white rectangle at 17%.
+        //
+        // `liquidGlassSurface` is the recipe the shortcut tiles and the Sound Chem deck are made
+        // of — a vertical fill, a diagonal sheen and a rim that fades down the same axis — and it
+        // is self-contained, so unlike the dock's chrome glass it does not need a backdrop layer
+        // to sample. Over the aurora, which is all gradient and no detail, there is nothing a real
+        // blur would find that this does not already give.
         Text(
             text = stringResource(R.string.welcome_get_started),
             style = MaterialTheme.typography.titleMedium,
@@ -609,22 +647,183 @@ fun WelcomeScreen(
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
                 .navigationBarsPadding()
-                .padding(horizontal = 24.dp)
-                .padding(bottom = 28.dp)
+                .padding(horizontal = 22.dp)
+                .padding(bottom = 26.dp)
                 .graphicsLayer {
                     alpha = buttonIn
                     translationY = (1f - buttonIn) * 34.dp.toPx()
                 }
-                .clip(RoundedCornerShape(percent = 50))
-                .background(Color.White.copy(alpha = 0.17f))
+                .liquidGlassSurface(RoundedCornerShape(percent = 50))
                 .clickable(enabled = arrived) {
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                     onDismiss()
                 }
-                .padding(vertical = 17.dp),
+                .padding(vertical = 18.dp),
         )
     }
 }
+
+/* ------------------------------------------------------------------------------------------- */
+/* The word                                                                                     */
+/* ------------------------------------------------------------------------------------------- */
+
+/**
+ * "welcome", as one unbroken cursive stroke.
+ *
+ * Drawn rather than set, and the reason is that there is no cursive to set it in. The app bundles
+ * four faces and none of them is a script; `FontFamily.Cursive` resolves to whatever the ROM calls
+ * "cursive", which is Dancing Script on AOSP and quietly nothing at all on a good number of OEM
+ * builds — so half the people who see this screen would get the word in the same sans as the
+ * version line under it, on the one screen where that is the entire point.
+ *
+ * A path has no such failure mode, and it buys the better moment as well: a stroke can be *drawn
+ * on*, so the word is written in front of you instead of fading up. See [drawWelcomeWord].
+ *
+ * ### The coordinate system
+ *
+ * x runs right, y runs **down**, the baseline is y = 0, the x-height is y = -1 and the ascender is
+ * y = -2. Every letter is authored to enter and leave on the connector line at y = -0.35, which is
+ * what lets the whole word be one path with no special cases at the joins: a letter's exit *is*
+ * the next letter's entry.
+ *
+ * Each row is `endX, endY, c1x, c1y, c2x, c2y` — one cubic, relative to the letter's own origin.
+ * The shapes were authored against a renderer that draws exactly these curves, because cursive is
+ * one of the things you cannot check by reading the numbers.
+ */
+private val WELCOME_ADVANCE = mapOf(
+    'w' to 1.50f, 'e' to 0.74f, 'l' to 0.68f, 'c' to 0.66f, 'o' to 0.70f, 'm' to 1.52f,
+)
+
+private val WELCOME_STROKES = mapOf(
+    // Pointed at the top *and* the bottom. That is the whole difference between a w and an m, and
+    // getting it wrong is why the first pass of this read as "mvelcome".
+    'w' to floatArrayOf(
+        0.26f, -1.00f, 0.06f, -0.66f, 0.23f, -0.84f,
+        0.46f, -0.02f, 0.29f, -0.84f, 0.44f, -0.32f,
+        0.72f, -1.00f, 0.48f, -0.32f, 0.69f, -0.84f,
+        0.92f, -0.02f, 0.75f, -0.84f, 0.90f, -0.32f,
+        1.18f, -1.00f, 0.94f, -0.32f, 1.15f, -0.84f,
+        1.50f, -0.35f, 1.23f, -0.84f, 1.43f, -0.60f,
+    ),
+    // The eyelet has to actually close: the upstroke runs to the top right, the return crosses it
+    // coming back down the left, and the gap enclosed between the two is the letter.
+    'e' to floatArrayOf(
+        0.42f, -0.86f, 0.14f, -0.50f, 0.30f, -0.80f,
+        0.10f, -0.60f, 0.46f, -1.02f, 0.16f, -0.98f,
+        0.36f, -0.04f, 0.02f, -0.28f, 0.14f, -0.02f,
+        0.74f, -0.35f, 0.56f, -0.06f, 0.68f, -0.16f,
+    ),
+    // A real ascender loop: up leaning right, over the top, back down the *left* of the upstroke
+    // so the two cross, then down the stem to the baseline.
+    'l' to floatArrayOf(
+        0.30f, -1.82f, 0.10f, -0.76f, 0.22f, -1.44f,
+        0.13f, -1.26f, 0.46f, -2.22f, 0.01f, -2.04f,
+        0.31f, -0.05f, 0.21f, -0.86f, 0.18f, -0.28f,
+        0.68f, -0.35f, 0.44f, 0.07f, 0.60f, -0.09f,
+    ),
+    'c' to floatArrayOf(
+        0.44f, -0.84f, 0.15f, -0.56f, 0.32f, -0.90f,
+        0.11f, -0.70f, 0.50f, -1.06f, 0.19f, -1.06f,
+        0.40f, -0.05f, 0.01f, -0.40f, 0.15f, -0.03f,
+        0.66f, -0.35f, 0.56f, -0.07f, 0.62f, -0.19f,
+    ),
+    // A closed oval, left by the top. The third curve returns to exactly where the first ended,
+    // which is what shuts it; anything short of that reads as an a.
+    'o' to floatArrayOf(
+        0.34f, -0.90f, 0.10f, -0.60f, 0.18f, -0.90f,
+        0.32f, -0.05f, 0.53f, -0.90f, 0.53f, -0.20f,
+        0.34f, -0.90f, 0.08f, -0.01f, 0.03f, -0.86f,
+        0.70f, -0.35f, 0.49f, -0.93f, 0.64f, -0.64f,
+    ),
+    // Round on top, pointed underneath — the mirror of the w.
+    'm' to floatArrayOf(
+        0.22f, -0.95f, 0.06f, -0.60f, 0.13f, -0.95f,
+        0.43f, -0.04f, 0.33f, -0.95f, 0.40f, -0.44f,
+        0.63f, -0.95f, 0.47f, -0.50f, 0.54f, -0.95f,
+        0.84f, -0.04f, 0.74f, -0.95f, 0.81f, -0.44f,
+        1.04f, -0.95f, 0.88f, -0.50f, 0.95f, -0.95f,
+        1.25f, -0.04f, 1.15f, -0.95f, 1.22f, -0.44f,
+        1.52f, -0.35f, 1.33f, 0.03f, 1.46f, -0.16f,
+    ),
+)
+
+/** The whole word, in the units above. Built once. */
+private fun welcomePath(word: String = "welcome"): Path {
+    val path = Path()
+    // The lead-in swash, up off the baseline and onto the connector line.
+    path.moveTo(-0.34f, -0.02f)
+    path.cubicTo(-0.22f, 0.10f, -0.12f, -0.10f, 0f, -0.35f)
+
+    var x = 0f
+    for (ch in word) {
+        val strokes = WELCOME_STROKES[ch] ?: continue
+        var i = 0
+        while (i < strokes.size) {
+            path.cubicTo(
+                x + strokes[i + 2], strokes[i + 3],
+                x + strokes[i + 4], strokes[i + 5],
+                x + strokes[i], strokes[i + 1],
+            )
+            i += 6
+        }
+        x += WELCOME_ADVANCE[ch] ?: 0f
+    }
+
+    // And out: a shallow rising swash to finish on, so the word ends rather than stops.
+    path.cubicTo(x + 0.24f, -0.30f, x + 0.44f, -0.52f, x + 0.62f, -0.52f)
+    return path
+}
+
+/**
+ * The word being written.
+ *
+ * `progress` is how much of the stroke has been laid down, by arc length — so the pen moves at a
+ * roughly constant speed through the letters rather than racing the short curves and labouring
+ * over the long ones, which is what an interpolation per segment would have done.
+ *
+ * Four passes: three wide and faint for the glow, one sharp on top. It is the cheapest bloom there
+ * is, it costs four stroked paths, and it is what keeps the word from looking like a wire bent
+ * into a shape.
+ */
+private fun DrawScope.drawWelcomeWord(
+    path: Path,
+    measure: PathMeasure,
+    scratch: Path,
+    progress: Float,
+    accent: Color,
+) {
+    if (progress <= 0.001f) return
+
+    val bounds = path.getBounds()
+    if (bounds.width <= 0f || bounds.height <= 0f) return
+
+    scratch.reset()
+    if (progress >= 0.999f) {
+        scratch.addPath(path)
+    } else {
+        measure.getSegment(0f, measure.length * progress, scratch, true)
+    }
+
+    // Fitted to the box the caller gave us, uniformly, so the hand does not get stretched.
+    val scale = min(size.width / bounds.width, size.height / bounds.height)
+    val ox = size.width / 2f - (bounds.left + bounds.width / 2f) * scale
+    val oy = size.height / 2f - (bounds.top + bounds.height / 2f) * scale
+
+    withTransform({
+        translate(ox, oy)
+        scale(scale, scale, Offset.Zero)
+    }) {
+        // Stroke widths are in the same unit space as the path, so they scale with it and the word
+        // has the same weight on every screen.
+        drawPath(scratch, accent.copy(alpha = 0.13f), style = wstroke(0.46f))
+        drawPath(scratch, accent.copy(alpha = 0.18f), style = wstroke(0.30f))
+        drawPath(scratch, Color(0xFFBFD4FF).copy(alpha = 0.34f), style = wstroke(0.185f))
+        drawPath(scratch, Color.White, style = wstroke(0.088f))
+    }
+}
+
+private fun wstroke(width: Float) =
+    Stroke(width = width, cap = StrokeCap.Round, join = StrokeJoin.Round)
 
 /* ------------------------------------------------------------------------------------------- */
 /* Drawing                                                                                      */
