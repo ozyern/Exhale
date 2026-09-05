@@ -356,7 +356,7 @@ export const RELEASE = {
       blocks: [
         {
           type: 'p',
-          text: 'Default (a black mark on gold) and Gold (a gold mark lit on black), selected by enabling one of two activity-aliases — the incoming one first, because a moment with no enabled launcher component is a moment some launchers use to forget the app exists. The pack also supplies the app-bar disc and the boot splash mark, so the choice carries past the home screen. Both read from PackageManager rather than the preference, which is what makes them correct on the first frame and what makes them survive a reinstall.',
+          text: 'Gold (a gold mark lit on black, and the one the app ships wearing) and Classic (the black mark on gold), selected by enabling one of two activity-aliases — the incoming one first, because a moment with no enabled launcher component is a moment some launchers use to forget the app exists. The pack also supplies the app-bar disc and the boot splash mark, so the choice carries past the home screen. Both read from PackageManager rather than the preference, which is what makes them correct on the first frame and what makes them survive a reinstall.',
         },
         {
           type: 'p',

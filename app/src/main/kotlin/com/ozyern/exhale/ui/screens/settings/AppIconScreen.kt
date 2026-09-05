@@ -88,7 +88,7 @@ fun AppIconScreen(navController: NavController) {
     // a selection the launcher is not honouring is worse than no page.
     val (storedPack, onStoredPackChange) = rememberPreference(
         AppIconPackKey,
-        defaultValue = AppIconPack.DEFAULT.name,
+        defaultValue = AppIconPack.DEFAULT_PACK.name,
     )
     var activePack by remember { mutableStateOf(AppIconPack.current(context)) }
     LaunchedEffect(storedPack) { activePack = AppIconPack.current(context) }

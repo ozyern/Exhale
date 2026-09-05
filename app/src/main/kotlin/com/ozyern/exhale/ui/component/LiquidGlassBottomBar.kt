@@ -9,6 +9,8 @@
 package com.ozyern.exhale.ui.component
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.animateColor
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
@@ -22,8 +24,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -59,6 +59,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -69,7 +70,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
@@ -110,6 +110,8 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import androidx.compose.animation.core.EaseOut
+import androidx.compose.animation.core.FiniteAnimationSpec
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.rememberCoroutineScope
@@ -162,7 +164,12 @@ fun LiquidGlassBottomBar(
     // Tabs shown in the nav pill (Search stays its own circle, never a tab).
     val tabs = remember(items) { items.filter { it.route != Screens.Search.route } }
     val searchScreen = remember(items) { items.find { it.route == Screens.Search.route } }
-    val activeTab = tabs.find { isSelected(it) } ?: tabs.firstOrNull()
+    // Which tab we are actually on, or null. `?: tabs.first()` here was a quiet lie: on a route
+    // where no tab is selected it named Home, and the collapsed bar then drew Home's pill as
+    // selected and reported a tap on it as a *re-tap* — which the host answers by scrolling the
+    // page to the top rather than by navigating. A button that does nothing, on the one control
+    // that is supposed to always get you out.
+    val activeTab = tabs.find { isSelected(it) }
     val homeTab = tabs.find { it.route == Screens.Home.route } ?: tabs.firstOrNull()
 
     // Subtle premium haptic tick on every nav interaction. LocalHapticFeedback is the app-wide
@@ -176,18 +183,6 @@ fun LiquidGlassBottomBar(
     val onMiniPlayerClickHaptic: () -> Unit = {
         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
         onMiniPlayerClick()
-    }
-
-    // The morph's physics, hoisted so the two states cannot drift apart: whatever leaves has to
-    // leave the way the thing replacing it arrives, or the bar looks like it changes its mind
-    // halfway through. `morphFast` is only for opacity — a piece that is still fading while it has
-    // already finished travelling looks like it is stuck to the glass.
-    val morphSpring = remember {
-        spring<Float>(dampingRatio = AquamorphicDampingRatio, stiffness = AquamorphicStiffness)
-    }
-    val morphFast = remember { spring<Float>(dampingRatio = 1f, stiffness = 900f) }
-    val morphOffset = remember {
-        spring<IntOffset>(dampingRatio = AquamorphicDampingRatio, stiffness = AquamorphicStiffness)
     }
 
     Row(
@@ -212,10 +207,11 @@ fun LiquidGlassBottomBar(
                 //
                 // With `None` here, a child that does not animate is simply opaque for the whole
                 // transition, so that circle is now a shared element for free. The pieces that
-                // really do change carry their own motion instead, and they can each move the way
-                // their own geometry implies: the tab strip folds down into its left edge, which
-                // is where the home circle is about to be, and the home circle and the pill arrive
-                // from the outside of the bar.
+                // really do change carry their own motion instead, and all of them tell the same
+                // story: the strip folds along its length into the 64dp the home circle occupies,
+                // the circle grows in place at that spot, and the pill slides out from behind it
+                // into the room the strip gave up. Nothing arrives from off-screen, because
+                // nothing was ever off-screen. See MorphFadeOut for how the glass hands over.
                 //
                 // `SizeTransform` still snaps — animating the container's width would remeasure
                 // the frosted backdrops every frame, which is what the morph used to cost — and
@@ -228,6 +224,9 @@ fun LiquidGlassBottomBar(
         ) { isCollapsed ->
             if (!isCollapsed) {
                 // ---- STATE A: wide tab pill + trailing search circle ----
+                val stripInk by morphInk("stripInk")
+                val stripFold by morphShape("stripFold")
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -241,16 +240,22 @@ fun LiquidGlassBottomBar(
                         modifier = Modifier
                             .weight(1f, fill = false)
                             .widthIn(max = LiquidTabBarMaxWidth)
-                            // Grows out of, and collapses back into, its left edge — which is
-                            // exactly where the home circle sits in the collapsed state, so the
-                            // strip reads as folding down into that circle rather than as a
-                            // second widget fading over the top of it.
-                            .animateEnterExit(
-                                enter = fadeIn(morphSpring) +
-                                    scaleIn(morphSpring, 0.90f, TransformOrigin(0f, 0.5f)),
-                                exit = fadeOut(morphFast) +
-                                    scaleOut(morphSpring, 0.90f, TransformOrigin(0f, 0.5f)),
-                            ),
+                            // Folds along its length into the footprint the home circle is about
+                            // to occupy, and unfolds back out of it.
+                            //
+                            // The fold is on X alone, and the target is measured rather than
+                            // guessed: whatever the strip is this frame, it collapses to exactly
+                            // 64dp of it. A uniform `scaleOut` squashed the height too, which
+                            // turns a bar folding away into a lozenge shrinking to a point — a
+                            // different object leaving rather than this one.
+                            .graphicsLayer {
+                                alpha = stripInk
+                                transformOrigin = TransformOrigin(0f, 0.5f)
+                                val folded =
+                                    (DockCircleSize.toPx() / size.width.coerceAtLeast(1f))
+                                        .fastCoerceIn(0.05f, 1f)
+                                scaleX = folded + (1f - folded) * stripFold
+                            },
                     )
                     if (searchScreen != null) {
                         val searchActive = isSelected(searchScreen)
@@ -268,6 +273,11 @@ fun LiquidGlassBottomBar(
                 }
             } else {
                 // ---- STATE B: home circle | center pill | search circle ----
+                val circleInk by morphInk("homeInk")
+                val circleShape by morphShape("homeShape")
+                val pillInk by morphInk("pillInk")
+                val pillShape by morphShape("pillShape")
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -276,16 +286,17 @@ fun LiquidGlassBottomBar(
                     if (homeTab != null) {
                         FrostedCircle(
                             onClick = { onItemClickHaptic(homeTab, isSelected(homeTab)) },
-                            // In from the outside edge and up from nothing, because that is where
-                            // it comes from: it is the piece the tab strip just folded into.
-                            modifier = Modifier.animateEnterExit(
-                                enter = fadeIn(morphFast) +
-                                    slideInHorizontally(morphOffset) { -it } +
-                                    scaleIn(morphSpring, 0.55f),
-                                exit = fadeOut(morphFast) +
-                                    slideOutHorizontally(morphOffset) { -it } +
-                                    scaleOut(morphSpring, 0.55f),
-                            ),
+                            // In place, because that is where it comes from: it is the end the
+                            // tab strip folds into, and the strip's left edge is already exactly
+                            // here. It used to slide in from off the left edge *and* scale up
+                            // from 0.55 — two accounts of where it came from, neither of them the
+                            // one the strip was telling.
+                            modifier = Modifier.graphicsLayer {
+                                alpha = circleInk
+                                val grow = 0.74f + 0.26f * circleShape
+                                scaleX = grow
+                                scaleY = grow
+                            },
                         ) {
                             NavGlyph(
                                 iconRes = if (isSelected(homeTab)) homeTab.iconIdActive else homeTab.iconIdInactive,
@@ -299,13 +310,19 @@ fun LiquidGlassBottomBar(
                     FrostedPill(
                         modifier = Modifier
                             .weight(1f)
-                            // Swells rather than slides. It is the widest thing in the collapsed
-                            // bar and the only one that has no edge to come from, so it takes the
-                            // space it is given from the middle out.
-                            .animateEnterExit(
-                                enter = fadeIn(morphSpring) + scaleIn(morphSpring, 0.86f),
-                                exit = fadeOut(morphFast) + scaleOut(morphSpring, 0.86f),
-                            ),
+                            // Out from behind the home circle, and back in behind it.
+                            //
+                            // It used to swell from its own middle, which is the one story that
+                            // is not true in either direction: collapsing, the pill has to take
+                            // the territory the strip is folding out of, and that vacancy opens
+                            // left to right. Anchoring it to its left edge makes both directions
+                            // the same reversible motion — the pill lives behind the circle.
+                            .graphicsLayer {
+                                alpha = pillInk
+                                transformOrigin = TransformOrigin(0f, 0.5f)
+                                scaleX = 0.14f + 0.86f * pillShape
+                                scaleY = 0.88f + 0.12f * pillShape
+                            },
                     ) {
                         if (hasNowPlaying) {
                             MiniPlayerPill(pureBlack = pureBlack, onExpand = onMiniPlayerClickHaptic)
@@ -343,6 +360,63 @@ fun LiquidGlassBottomBar(
         }
     }
 }
+
+/* ----------------------------------------------------------------------- */
+/* The A <-> B morph                                                        */
+/* ----------------------------------------------------------------------- */
+
+/**
+ * The size of every round piece of dock chrome, and therefore what the tab strip folds down to.
+ */
+private val DockCircleSize = 64.dp
+
+/**
+ * Opacity, and why both halves are the same linear ramp.
+ *
+ * The two states are composed on top of each other for the length of the morph and each of them
+ * is a sheet of frosted glass, so what the eye judges is how much glass is over any given pixel at
+ * any given moment. Two matched linear ramps sum to exactly one at every instant — the outgoing
+ * state gives up precisely what the incoming one takes — so the bar holds one plate's worth of
+ * material all the way through and never flashes a shade lighter or darker.
+ *
+ * That is what the previous springs got wrong. An eased pair does not sum to one: it dips in the
+ * middle, and on a translucent surface a dip in coverage is a flash of the page underneath. The
+ * shape change is carried entirely by [MorphShapeSpring]; opacity's whole job here is to not be
+ * noticed.
+ */
+private val MorphFadeOut: FiniteAnimationSpec<Float> =
+    tween(durationMillis = 190, easing = LinearEasing)
+private val MorphFadeIn: FiniteAnimationSpec<Float> =
+    tween(durationMillis = 190, easing = LinearEasing)
+
+/**
+ * Geometry.
+ *
+ * Underdamped, so pieces arrive with a little overshoot and settle. The bar is meant to read as a
+ * blob of liquid finding a new shape, and liquid that stops dead was never moving.
+ */
+private val MorphShapeSpring: FiniteAnimationSpec<Float> =
+    spring(dampingRatio = AquamorphicDampingRatio, stiffness = AquamorphicStiffness)
+
+/** 1 while this state is the one on screen, 0 while it is off-stage. */
+@Composable
+private fun AnimatedVisibilityScope.morphProgress(
+    label: String,
+    enter: FiniteAnimationSpec<Float>,
+    exit: FiniteAnimationSpec<Float>,
+): State<Float> =
+    transition.animateFloat(
+        transitionSpec = { if (targetState == EnterExitState.Visible) enter else exit },
+        label = label,
+    ) { if (it == EnterExitState.Visible) 1f else 0f }
+
+@Composable
+private fun AnimatedVisibilityScope.morphInk(label: String): State<Float> =
+    morphProgress(label, MorphFadeIn, MorphFadeOut)
+
+@Composable
+private fun AnimatedVisibilityScope.morphShape(label: String): State<Float> =
+    morphProgress(label, MorphShapeSpring, MorphShapeSpring)
 
 /* ----------------------------------------------------------------------- */
 /* Frosted glass containers (share the app-wide 56dp / transparent / 0.20 tint look) */
@@ -565,7 +639,18 @@ private fun LiquidTabBar(
     val isDark = isSystemInDarkTheme()
 
     val lastIndex = (tabs.size - 1).coerceAtLeast(0)
-    val selectedIndex = tabs.indexOfFirst { isSelected(it) }.coerceIn(0, lastIndex)
+
+    // Two different questions, and folding them into one number was a bug.
+    //
+    // `selectedIndex` is -1 when no tab is selected, which is the truth and is what decides
+    // whether a tap is a navigation or a re-tap. `capsuleIndex` is where the glass capsule has to
+    // rest, and it has to be a real index because the capsule is always somewhere.
+    //
+    // Clamping the first into the second meant "nothing is selected" read as "Home is selected",
+    // so a tap on Home reported itself as a re-tap and the host answered it by scrolling to the
+    // top instead of navigating.
+    val selectedIndex = tabs.indexOfFirst { isSelected(it) }
+    val capsuleIndex = selectedIndex.coerceIn(0, lastIndex)
 
     // Labels go when there is no longer room to read them.
     //
@@ -599,7 +684,7 @@ private fun LiquidTabBar(
     // ---- Live gesture state. All plain float state: written from the pointer callback, read
     // ---- only from draw lambdas, so a drag frame costs a layer invalidation and nothing else.
     val dragging = remember { mutableStateOf(false) }
-    val dragValue = remember { mutableFloatStateOf(selectedIndex.toFloat()) }
+    val dragValue = remember { mutableFloatStateOf(capsuleIndex.toFloat()) }
     val dragVelocity = remember { mutableFloatStateOf(0f) }
     val overscrollPx = remember { mutableFloatStateOf(0f) }
 
@@ -629,7 +714,7 @@ private fun LiquidTabBar(
     val dampedDragAnimation = remember(scope, tabs.size, isLtr) {
         DampedDragAnimation(
             animationScope = scope,
-            initialValue = selectedIndex.toFloat(),
+            initialValue = capsuleIndex.toFloat(),
             valueRange = 0f..lastIndex.toFloat(),
             visibilityThreshold = 0.001f,
             initialScale = 1f,
@@ -738,8 +823,8 @@ private fun LiquidTabBar(
 
     // Route changes that did not come from this bar — a deep link, the back stack, the search
     // circle — still have to move the capsule, and must do it without the pressed swell.
-    LaunchedEffect(dampedDragAnimation, selectedIndex) {
-        if (!dragging.value) dampedDragAnimation.settleToValue(selectedIndex.toFloat())
+    LaunchedEffect(dampedDragAnimation, capsuleIndex) {
+        if (!dragging.value) dampedDragAnimation.settleToValue(capsuleIndex.toFloat())
     }
 
     val glassBackdrop = rememberLayerBackdrop()

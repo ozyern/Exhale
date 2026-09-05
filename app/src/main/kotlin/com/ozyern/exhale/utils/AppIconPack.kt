@@ -61,18 +61,13 @@ enum class AppIconPack(
     /** The mark the boot splash opens on. */
     @DrawableRes val splashLogoRes: Int,
 ) {
-    /** The default mark: the black "E))" on a gold tile. */
-    DEFAULT(
-        aliasSuffix = ".MainActivityDefault",
-        labelRes = R.string.app_icon_default,
-        descriptionRes = R.string.app_icon_default_desc,
-        backgroundRes = R.mipmap.ic_launcher_background,
-        foregroundRes = R.mipmap.ic_launcher_foreground,
-        logoRes = R.drawable.logo,
-        splashLogoRes = R.drawable.splash_logo,
-    ),
-
-    /** The dark mark: the gold "E))" lit against near-black (assets/icon_dark.png). */
+    /**
+     * The mark the app ships with: the gold "E))" lit against near-black
+     * (assets/icon_dark.png).
+     *
+     * First in the list because [DEFAULT_PACK] points here, and the picker lists these in
+     * declaration order — the shipped mark should be the one at the top of the page.
+     */
     GOLD(
         aliasSuffix = ".MainActivityGold",
         labelRes = R.string.app_icon_gold,
@@ -81,13 +76,40 @@ enum class AppIconPack(
         foregroundRes = R.mipmap.ic_launcher_gold_foreground,
         logoRes = R.drawable.logo_gold,
         splashLogoRes = R.drawable.splash_logo_gold,
+    ),
+
+    /**
+     * The older mark: the black "E))" on a gold tile.
+     *
+     * Its alias is still called `.MainActivityDefault` and its strings are still keyed
+     * `app_icon_classic` off the same drawables, because an alias name is a public component
+     * identity: renaming it would orphan every home-screen shortcut anyone pinned to it. What
+     * changed is which one the app opens as, not which one this is.
+     */
+    CLASSIC(
+        aliasSuffix = ".MainActivityDefault",
+        labelRes = R.string.app_icon_classic,
+        descriptionRes = R.string.app_icon_classic_desc,
+        backgroundRes = R.mipmap.ic_launcher_background,
+        foregroundRes = R.mipmap.ic_launcher_foreground,
+        logoRes = R.drawable.logo,
+        splashLogoRes = R.drawable.splash_logo,
     );
 
     fun componentOf(context: Context): ComponentName =
         ComponentName(context.packageName, context.packageName + aliasSuffix)
 
     companion object {
-        val DEFAULT_PACK = DEFAULT
+        /**
+         * The pack a fresh install wears, and the one "no explicit choice" resolves to.
+         *
+         * This has to agree with the manifest, which is the other half of the same statement:
+         * `.MainActivityGold` is the alias declared `enabled="true"` and `.MainActivityDefault`
+         * the one declared `enabled="false"`. [current] reads `COMPONENT_ENABLED_STATE_DEFAULT`
+         * as "whatever the manifest said", so if these two ever disagree the picker will show a
+         * selection the launcher is not honouring.
+         */
+        val DEFAULT_PACK = GOLD
 
         fun fromName(name: String?): AppIconPack =
             entries.firstOrNull { it.name == name } ?: DEFAULT_PACK
@@ -166,6 +188,6 @@ enum class AppIconPack(
 @Composable
 fun rememberAppIconPack(): AppIconPack {
     val context = LocalContext.current
-    val (storedPack) = rememberPreference(AppIconPackKey, defaultValue = AppIconPack.DEFAULT.name)
+    val (storedPack) = rememberPreference(AppIconPackKey, defaultValue = AppIconPack.DEFAULT_PACK.name)
     return remember(context, storedPack) { AppIconPack.current(context) }
 }

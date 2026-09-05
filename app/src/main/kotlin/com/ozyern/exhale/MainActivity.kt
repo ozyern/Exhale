@@ -110,6 +110,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -1886,6 +1887,34 @@ class MainActivity : ComponentActivity() {
                                         // widened `shouldShowNavigationBar` would let State B engage
                                         // on a results page and take the player away with it — the
                                         // exact disappearance described above, on a new route.
+                                        // The threshold is a band, not a line.
+                                        //
+                                        // One value at 0.5 means the bar changes shape wherever
+                                        // the finger happens to stop, and a scroll that rests
+                                        // near the middle -- which is most of them, because that
+                                        // is where the app bar finishes collapsing -- had the
+                                        // dock morphing back and forth under the thumb. Two
+                                        // thresholds a quarter apart cost one boolean and make
+                                        // the morph something that happens once per intention.
+                                        //
+                                        // Latched from a snapshot flow rather than derived, so
+                                        // the crossings are the only thing that writes state:
+                                        // `collapsedFraction` changes every scroll frame and
+                                        // reading it in composition is what recomposed this whole
+                                        // Box sixty times a second.
+                                        var collapsedLatch by remember { mutableStateOf(false) }
+                                        LaunchedEffect(searchBarScrollBehavior) {
+                                            snapshotFlow {
+                                                searchBarScrollBehavior.state.collapsedFraction
+                                            }.collect { fraction ->
+                                                if (!collapsedLatch && fraction > 0.62f) {
+                                                    collapsedLatch = true
+                                                } else if (collapsedLatch && fraction < 0.38f) {
+                                                    collapsedLatch = false
+                                                }
+                                            }
+                                        }
+
                                         val bottomBarCollapsed by remember(
                                             isSettingsScreen,
                                             isSearchScreen,
@@ -1901,7 +1930,7 @@ class MainActivity : ComponentActivity() {
                                                         !isSearchScreen &&
                                                         !isSearchResultsRoute &&
                                                         !active &&
-                                                        searchBarScrollBehavior.state.collapsedFraction > 0.5f
+                                                        collapsedLatch
                                             }
                                         }
 

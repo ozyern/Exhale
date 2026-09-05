@@ -55,6 +55,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.scale
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.LargeTopAppBar
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.TopAppBarScrollBehavior
@@ -836,6 +837,47 @@ fun SettingsTopAppBar(
             actions = actions,
             scrollBehavior = scrollBehavior,
             colors = TopAppBarDefaults.topAppBarColors(
+                containerColor = Color.Transparent,
+                scrolledContainerColor = Color.Transparent,
+            ),
+        )
+    }
+}
+
+/**
+ * The large-title bar a settings page opens with.
+ *
+ * The same statement as [SettingsTopAppBar], one size up: opaque, so the rows sliding under it are
+ * hidden, but opaque *as the page* rather than as a flat plate laid over it.
+ *
+ * This existing is the difference between the root Settings screen and every other page that has
+ * a large title. The root screen was fixed by hand and the rest kept
+ * `containerColor = screenBackgroundColor()`, which is a solid near-black — so on About, and on
+ * every page like it, the biggest single element on the screen was a dead rectangle sitting on top
+ * of a page that otherwise takes its colour from whatever is playing. There is no per-page reason
+ * for that; there was only no shared piece to reach for.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SettingsLargeTopAppBar(
+    title: @Composable () -> Unit,
+    modifier: Modifier = Modifier,
+    navigationIcon: @Composable () -> Unit = {},
+    actions: @Composable RowScope.() -> Unit = {},
+    scrollBehavior: TopAppBarScrollBehavior? = null,
+) {
+    Box(modifier) {
+        SettingsBarGround(modifier = Modifier.matchParentSize())
+
+        LargeTopAppBar(
+            title = title,
+            navigationIcon = navigationIcon,
+            actions = actions,
+            scrollBehavior = scrollBehavior,
+            // Transparent in both states, because the ground behind it is doing the work now.
+            // Still no tonal-elevation shift on scroll, which is the single most "Android" tell a
+            // settings screen has.
+            colors = TopAppBarDefaults.largeTopAppBarColors(
                 containerColor = Color.Transparent,
                 scrolledContainerColor = Color.Transparent,
             ),

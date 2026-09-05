@@ -9,8 +9,9 @@ package com.ozyern.exhale.ui.screens
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -41,8 +42,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -53,6 +57,7 @@ import com.ozyern.exhale.constants.AquamorphicDampingRatio
 import com.ozyern.exhale.constants.AquamorphicStiffness
 import com.ozyern.exhale.db.entities.Artist
 import com.ozyern.exhale.db.entities.LocalItem
+import com.ozyern.exhale.ui.component.PlayingIndicatorBox
 import com.ozyern.exhale.ui.component.liquidGlassSurface
 
 /**
@@ -68,12 +73,23 @@ import com.ozyern.exhale.ui.component.liquidGlassSurface
  *
  * @param items already trimmed by the caller. Six is the number that fits above the fold on a
  *   phone; more and the shelves get pushed off screen, which defeats the point.
+ * @param activeId the id of whatever is currently loaded in the player, if any. These tiles are
+ *   the first thing on the page you land on *while something is playing*, and they were the only
+ *   list of songs in the app that would not tell you which one it was.
+ * @param isPlaying whether that thing is actually running, which decides between the moving bars
+ *   and a play glyph.
+ * @param onItemLongClick the same menu every other row in the app opens on a long press. Six of
+ *   the most-tapped targets on the page had no way to reach it.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun HomeShortcutsGrid(
     items: List<LocalItem>,
     onItemClick: (LocalItem) -> Unit,
     modifier: Modifier = Modifier,
+    activeId: String? = null,
+    isPlaying: Boolean = false,
+    onItemLongClick: (LocalItem) -> Unit = {},
     /**
      * Per-tile arrival, by position in the grid. Supplied by Home so the six tiles can cascade
      * instead of landing as one block; the grid itself has no opinion about it.
@@ -100,6 +116,9 @@ fun HomeShortcutsGrid(
                     ShortcutTile(
                         item = item,
                         onClick = { onItemClick(item) },
+                        onLongClick = { onItemLongClick(item) },
+                        isActive = activeId != null && item.id == activeId,
+                        isPlaying = isPlaying,
                         modifier = Modifier
                             .weight(1f)
                             .then(tileIntro(rowIndex * 2 + column)),
@@ -119,14 +138,19 @@ private val ShortcutGap = 8.dp
 private val ShortcutHeight = 60.dp
 private val ShortcutCorner = 8.dp
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ShortcutTile(
     item: LocalItem,
     onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    isActive: Boolean,
+    isPlaying: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
+    val haptic = LocalHapticFeedback.current
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.96f else 1f,
         animationSpec = spring(
@@ -155,10 +179,14 @@ private fun ShortcutTile(
             // to be `liquidGlassSurface`; using the real one means it also gets the diagonal
             // sheen, and cannot drift away from the rest of the app's glass.
             .liquidGlassSurface(RoundedCornerShape(ShortcutCorner))
-            .clickable(
+            .combinedClickable(
                 interactionSource = interactionSource,
                 indication = null,
                 onClick = onClick,
+                onLongClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onLongClick()
+                },
             ),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -187,6 +215,25 @@ private fun ShortcutTile(
                     modifier = Modifier.padding(16.dp),
                 )
             }
+
+            // Over the art, not beside it: the tile is 60dp tall and every horizontal pixel of
+            // the rest of it is spoken for by a two-line title. The scrim is what makes white
+            // bars legible on a cover that happens to be pale, and it only exists while the
+            // indicator does.
+            if (isActive) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .aspectRatio(1f)
+                        .clip(if (isArtist) CircleShape else RoundedCornerShape(0.dp))
+                        .background(Color.Black.copy(alpha = 0.45f)),
+                )
+            }
+            PlayingIndicatorBox(
+                isActive = isActive,
+                playWhenReady = isPlaying,
+                modifier = Modifier.fillMaxHeight().aspectRatio(1f),
+            )
         }
 
         Spacer(Modifier.width(10.dp))

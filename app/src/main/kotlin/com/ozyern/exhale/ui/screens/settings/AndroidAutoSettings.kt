@@ -113,21 +113,28 @@ fun AndroidAutoSettings(
         containerColor = Color.Transparent,
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
-            LargeFlexibleTopAppBar(
-                title = { Text(stringResource(R.string.android_auto)) },
-                navigationIcon = {
-                    com.ozyern.exhale.ui.component.LiquidBackButton(
-                        onClick = navController::navigateUp,
-                        onLongClick = navController::backToMain,
-    icon = R.drawable.arrow_back,
-)
-                },
-                colors = TopAppBarDefaults.largeTopAppBarColors(
-                    containerColor = Color.Transparent,
-                    scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer,
-                ),
-                scrollBehavior = scrollBehavior,
-            )
+            // Opaque as the page, not as a plate over it. See SettingsBarGround: the bar has
+            // to hide the rows sliding under it, and spelling that as a flat fill is what stopped
+            // the album-art wash dead at the bar's bottom edge on every page but the root one.
+            Box {
+                SettingsBarGround(modifier = Modifier.matchParentSize())
+
+                LargeFlexibleTopAppBar(
+                    title = { Text(stringResource(R.string.android_auto)) },
+                    navigationIcon = {
+                        com.ozyern.exhale.ui.component.LiquidBackButton(
+                            onClick = navController::navigateUp,
+                            onLongClick = navController::backToMain,
+                            icon = R.drawable.arrow_back,
+                        )
+                    },
+                    colors = TopAppBarDefaults.largeTopAppBarColors(
+                        containerColor = Color.Transparent,
+                        scrolledContainerColor = Color.Transparent,
+                    ),
+                    scrollBehavior = scrollBehavior,
+                )
+            }
         },
     ) { paddingValues ->
         Column(

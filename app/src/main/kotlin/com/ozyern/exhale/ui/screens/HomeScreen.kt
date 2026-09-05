@@ -16,6 +16,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -45,8 +46,10 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.background
@@ -87,6 +90,7 @@ import com.ozyern.exhale.ui.component.LocalBottomSheetPageState
 import com.ozyern.exhale.ui.component.LocalMenuState
 import com.ozyern.exhale.ui.component.rememberArtworkAmbientColors
 import com.ozyern.exhale.ui.component.NavigationTitle
+import com.ozyern.exhale.ui.menu.SongMenu
 import com.ozyern.exhale.utils.rememberPreference
 import com.ozyern.exhale.viewmodels.HomeViewModel
 import java.time.LocalDate
@@ -163,6 +167,23 @@ fun HomeScreen(
     LaunchedEffect(showHomeCategoryChips, selectedChip) {
         if (!showHomeCategoryChips && selectedChip != null) {
             viewModel.toggleChip(selectedChip)
+        }
+    }
+
+    // The same menu the rest of the app opens on a long press, for the six tiles that had none.
+    // Only songs get one: an album, artist or playlist tile has a menu on the page it opens, and
+    // a second sheet on the way there would be a different affordance for the same object.
+    val onShortcutLongClick: (LocalItem) -> Unit = { item ->
+        if (item is Song) {
+            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+            menuState.show {
+                SongMenu(
+                    originalSong = item,
+                    navController = navController,
+                    metadata = allItemsMetadata[item.id],
+                    onDismiss = menuState::dismiss,
+                )
+            }
         }
     }
 
@@ -310,12 +331,41 @@ fun HomeScreen(
                     }
                 }
 
+                // Loading finished and nothing came back.
+                //
+                // Until now that was a black page with the word "Home" on it and no explanation,
+                // which is what the app looks like on a plane, on a dead connection, or on a
+                // first launch that failed — the three moments it most needs to say something.
+                // A page with nothing on it reads as a broken app; the same page saying why, and
+                // offering the one thing that works with no network, reads as an app that knows
+                // where it is.
+                if (feedIsEmpty && !isLoading) {
+                    item(key = "home_empty", contentType = "empty") {
+                        HomeEmptyState(
+                            onRetry = viewModel::refresh,
+                            onOpenLibrary = {
+                                navController.navigate(Screens.Library.route) {
+                                    popUpTo(navController.graph.startDestinationId) {
+                                        saveState = true
+                                    }
+                                    launchSingleTop = true
+                                    restoreState = true
+                                }
+                            },
+                            modifier = Modifier.animateItem(),
+                        )
+                    }
+                }
+
                 keepListening?.takeIf { it.isNotEmpty() }?.let { items ->
                     item(key = "home_shortcuts", contentType = "shortcuts") {
                         HomeShortcutsGrid(
                             items = items.take(6),
                             onItemClick = onShortcutClick,
                             modifier = Modifier.animateItem(),
+                            activeId = mediaMetadata?.id,
+                            isPlaying = isPlaying,
+                            onItemLongClick = onShortcutLongClick,
                             // The one shelf that arrives tile by tile rather than as a block.
                             //
                             // It can, because it is the only shelf whose parts are laid out at
@@ -526,6 +576,111 @@ private fun HomeLargeTitle(
             color = MaterialTheme.colorScheme.onSurface,
         )
     }
+}
+
+/**
+ * What Home says when the feed came back with nothing.
+ *
+ * Deliberately not a spinner and not an error dialog. There is no way to tell from here whether
+ * this is a dead connection, a signed-out account or a service that is having a bad morning, and
+ * guessing wrong is worse than not saying — so it states the one thing that is certainly true,
+ * and then offers the two things that are worth doing about it either way.
+ *
+ * The library button is the one that matters. Downloaded music plays with no network at all, and
+ * a music player that goes blank the moment the internet does is failing at the thing it is for.
+ */
+@Composable
+private fun HomeEmptyState(
+    onRetry: () -> Unit,
+    onOpenLibrary: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .windowInsetsPadding(WindowInsets.systemBars.only(WindowInsetsSides.Horizontal))
+            .padding(horizontal = 32.dp)
+            .padding(top = 72.dp, bottom = 48.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(64.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.offline),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(28.dp),
+            )
+        }
+
+        Spacer(Modifier.size(18.dp))
+
+        Text(
+            text = stringResource(R.string.home_offline_title),
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface,
+            textAlign = TextAlign.Center,
+        )
+
+        Spacer(Modifier.size(6.dp))
+
+        Text(
+            text = stringResource(R.string.home_offline_body),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
+
+        Spacer(Modifier.size(22.dp))
+
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            HomeEmptyAction(
+                label = stringResource(R.string.retry),
+                onClick = onRetry,
+                emphasised = false,
+            )
+            HomeEmptyAction(
+                label = stringResource(R.string.filter_library),
+                onClick = onOpenLibrary,
+                emphasised = true,
+            )
+        }
+    }
+}
+
+@Composable
+private fun HomeEmptyAction(
+    label: String,
+    onClick: () -> Unit,
+    emphasised: Boolean,
+) {
+    Text(
+        text = label,
+        style = MaterialTheme.typography.labelLarge,
+        fontWeight = FontWeight.SemiBold,
+        color = if (emphasised) {
+            MaterialTheme.colorScheme.onPrimary
+        } else {
+            MaterialTheme.colorScheme.onSurface
+        },
+        modifier = Modifier
+            .clip(CircleShape)
+            .background(
+                if (emphasised) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.09f)
+                }
+            )
+            .clickable(onClick = onClick)
+            .padding(horizontal = 20.dp, vertical = 11.dp),
+    )
 }
 
 /* ------------------------------------------------------------------------------------------- */

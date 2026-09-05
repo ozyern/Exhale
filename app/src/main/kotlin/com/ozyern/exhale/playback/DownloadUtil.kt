@@ -13,7 +13,9 @@ import android.media.MediaCodecList
 import android.net.ConnectivityManager
 import androidx.core.content.getSystemService
 import androidx.core.net.toUri
+import androidx.media3.common.C
 import androidx.media3.database.DatabaseProvider
+import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.ResolvingDataSource
 import androidx.media3.datasource.cache.Cache
 import androidx.media3.datasource.cache.CacheDataSource
@@ -41,9 +43,12 @@ import com.ozyern.exhale.utils.get
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
+import okhttp3.ConnectionPool
+import okhttp3.Dispatcher
 import okhttp3.OkHttpClient
 import java.time.LocalDateTime
-import java.util.concurrent.Executor
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -70,6 +75,24 @@ constructor(
             .proxy(YouTube.streamProxy)
             .followRedirects(true)
             .followSslRedirects(true)
+            // Every download in the queue goes to the same host, and OkHttp's default ceiling
+            // there is five concurrent calls. That is not a limit anyone chose for this — it is
+            // the library's default for a browser-shaped workload — and it sat right on top of
+            // however many downloads the manager was willing to run.
+            .dispatcher(
+                Dispatcher().apply {
+                    maxRequests = 24
+                    maxRequestsPerHost = 12
+                },
+            )
+            // OkHttp keeps five idle connections by default. Five parallel downloads plus the
+            // player-response calls that resolve them is already more than that, so the sixth
+            // song in a queue paid for a fresh TLS handshake to googlevideo that the fifth had
+            // just thrown away.
+            .connectionPool(ConnectionPool(16, 5, TimeUnit.MINUTES))
+            .connectTimeout(20, TimeUnit.SECONDS)
+            .readTimeout(30, TimeUnit.SECONDS)
+            .writeTimeout(30, TimeUnit.SECONDS)
             .addInterceptor { chain ->
                 val request = chain.request()
                 val host = request.url.host
@@ -97,11 +120,22 @@ constructor(
 
     val downloads = MutableStateFlow<Map<String, Download>>(emptyMap())
 
+    /**
+     * What a download reads through.
+     *
+     * The player cache is in the chain so that a song you have already streamed downloads out of
+     * local storage instead of off the network — but **read-only**, which is the
+     * `setCacheWriteDataSinkFactory(null)`. It used to write as well, so every downloaded byte was
+     * committed to disk twice, once into the download cache by the download manager and once into
+     * the player cache on the way past. That is double the write time on a phone's storage for a
+     * copy nothing reads, and it evicted genuinely useful playback cache to hold it.
+     */
     private val dataSourceFactory =
         ResolvingDataSource.Factory(
             CacheDataSource
                 .Factory()
                 .setCache(playerCache)
+                .setCacheWriteDataSinkFactory(null)
                 .setUpstreamDataSourceFactory(
                     OkHttpDataSource.Factory(
                         mediaOkHttpClient,
@@ -110,18 +144,14 @@ constructor(
         ) { dataSpec ->
             val mediaId = dataSpec.key ?: error("No media id")
             val length = if (dataSpec.length >= 0) dataSpec.length else 1
-            if (playerCache.cacheSpace > 500 * 1024 * 1024L) {
-                kotlinx.coroutines.GlobalScope.launch(Dispatchers.IO) {
-                    playerCache.keys.shuffled().take(10).forEach { key ->
-                        playerCache.getCachedSpans(key).sumOf { it.length }
-                    }
-                }
-            }
             if (playerCache.isCached(mediaId, dataSpec.position, length)) {
-                return@Factory dataSpec
+                // Bounded even here: `length` is 1 when the caller did not say how much it wants,
+                // so "cached" can mean one byte of it. Whatever is not on disk still has to be
+                // fetched, and it should be fetched as a range like everything else.
+                return@Factory bounded(dataSpec, mediaId)
             }
             songUrlCache[mediaId]?.takeIf { it.second > System.currentTimeMillis() }?.let {
-                return@Factory dataSpec.withUri(it.first.toUri())
+                return@Factory bounded(dataSpec.withUri(it.first.toUri()), mediaId)
             }
             val playbackData = runBlocking(Dispatchers.IO) {
                 val networkMeteredPref = context.dataStore.get(NetworkMeteredKey, false)
@@ -173,11 +203,58 @@ constructor(
             val streamUrl = playbackData.streamUrl
 
             songUrlCache[mediaId] = streamUrl to (System.currentTimeMillis() + (playbackData.streamExpiresInSeconds * 1000L))
-            dataSpec.withUri(streamUrl.toUri())
+            bounded(dataSpec.withUri(streamUrl.toUri()), mediaId, format.contentLength)
         }
+
+    /**
+     * Ask for a byte range rather than for "the file".
+     *
+     * This is the single biggest thing standing between a download and the connection it is on.
+     * `OkHttpDataSource` only sends a `Range` header when the DataSpec says where it ends, and a
+     * download's spec does not — the download manager opens the whole resource and reads until
+     * EOF. googlevideo serves an open-ended GET at roughly the rate the audio plays back; the same
+     * bytes asked for as an explicit range come down as fast as the link allows. It is why
+     * *playback* has never felt slow while downloading a handful of songs took minutes: the
+     * playback path has always bounded its requests (see MusicService.CHUNK_LENGTH) and this one
+     * never did.
+     *
+     * The bound has to be the real end of the file and nothing shorter. `CacheDataSource` records
+     * whatever length the upstream reports as the resource's content length, so a spec that stops
+     * early is not a slow download — it is a truncated one that reports itself finished. The
+     * length comes from the player response that produced the URL, or from the format row written
+     * the last time it did, so the two always describe the same stream.
+     */
+    private fun bounded(
+        dataSpec: DataSpec,
+        mediaId: String,
+        knownLength: Long? = null,
+    ): DataSpec {
+        if (dataSpec.length != C.LENGTH_UNSET.toLong()) return dataSpec
+
+        val total = knownLength
+            ?: runCatching {
+                runBlocking(Dispatchers.IO) { database.format(mediaId).first()?.contentLength }
+            }.getOrNull()
+            ?: return dataSpec
+
+        val remaining = total - dataSpec.position
+        if (remaining <= 0L) return dataSpec
+        return dataSpec.buildUpon().setLength(remaining).build()
+    }
 
     val downloadNotificationHelper =
         DownloadNotificationHelper(context, ExoDownloadService.CHANNEL_ID)
+
+    /**
+     * Threads for the download manager to work on.
+     *
+     * `Runnable::run` — what this used to pass — is legal, and means each download's cache writer
+     * runs on the download task's own thread. What it does not do is give the manager anywhere to
+     * put the work that is not a download: the content-length probe each new task opens with, and
+     * the removals when something is deleted, all queue up behind whatever is currently
+     * transferring. A small pool is what media3's own guidance asks for and costs six idle threads.
+     */
+    private val downloadExecutor = Executors.newFixedThreadPool(6)
 
     val downloadManager: DownloadManager =
         DownloadManager(
@@ -185,9 +262,19 @@ constructor(
             databaseProvider,
             downloadCache,
             dataSourceFactory,
-            Executor(Runnable::run)
+            downloadExecutor,
         ).apply {
-            maxParallelDownloads = 3
+            // Five at a time rather than three.
+            //
+            // Even with ranged requests a single stream is the slowest part of this, so queue
+            // throughput is mostly a question of how many are in flight — downloading an album is
+            // the case that matters and it is entirely parallel. Five is where the returns flatten
+            // on a phone: past that the connections start competing for the same link and the
+            // notification becomes a wall of half-finished rows.
+            maxParallelDownloads = 5
+            // A dropped connection mid-song should be retried, not surfaced as a failed download
+            // the user has to notice and re-queue.
+            minRetryCount = 5
             addListener(
                 object : DownloadManager.Listener {
                     override fun onDownloadChanged(

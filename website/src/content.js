@@ -201,7 +201,7 @@ export const RELEASE_NOTES = [
           },
           {
             title: 'App icon packs',
-            body: 'Default (a black mark on gold) and Gold (a gold mark lit on black). The pack also supplies the app-bar disc and the boot splash mark, so the choice carries past the home screen.',
+            body: 'Gold (a gold mark lit on black, and what the app now ships wearing) and Classic (the black mark on gold). The pack also supplies the app-bar disc and the boot splash mark, so the choice carries past the home screen.',
           },
           {
             title: 'A sleep timer you can reach',
@@ -233,6 +233,14 @@ export const RELEASE_NOTES = [
             body: '“Update Now” goes to the real transfer instead of the system browser, and the prompt is a proper Software Update sheet with a decline action it never had.',
           },
           {
+            title: 'The dock changes shape like one object',
+            body: 'The tab strip folds along its length into exactly the 64dp the home circle occupies, the circle grows in place there, and the pill slides out from behind it. Nothing arrives from off-screen any more, the two states hand the glass over without the bar flashing, and the collapse has a threshold band so it stops flipping under your thumb.',
+          },
+          {
+            title: 'Home says what it is doing',
+            body: 'The shortcut tiles show which of them is playing, and take the same long-press menu as every other row in the app. A feed that comes back empty is now a page that says so and offers your library, rather than the word “Home” on a black sheet.',
+          },
+          {
             title: 'The page is lit rather than painted',
             body: 'The artwork glow drifts a lap every thirty-odd seconds. Home arrives shelf by shelf, the shortcut tiles cascade, and the large title shrinks toward the compact one as it leaves.',
           },
@@ -251,11 +259,19 @@ export const RELEASE_NOTES = [
           },
           {
             title: 'Settings bars cut the artwork off dead',
-            body: 'They were a flat fill of the page color, slicing the ambient wash along the bar’s bottom edge. Eighteen of them now take the same ground as the page.',
+            body: 'They were a flat fill of the page color, slicing the ambient wash along the bar’s bottom edge. Every settings page now takes the same ground as the page it sits on — About and the two large-title pages that were still painting a black slab included, since a large title is most of what you see when you open one.',
           },
           {
             title: 'The launcher icon was wrong under a square mask',
             body: 'Its background layer carried the source artwork’s own edge vignette — invisible under a circle, glaring under a square. The in-app mark was the unfixed copy.',
+          },
+          {
+            title: 'The Library tab could strand you on a sub-page',
+            body: 'Opening Songs or Albums wrote the “default library page” setting, so the tab reopened there forever, its own button could not get you back to it, and the back gesture silently went up a level inside Library instead of home. Where you are and what you prefer are two different things now.',
+          },
+          {
+            title: 'Downloads ran at about the speed of playback',
+            body: 'Every download asked for the whole file in one open-ended request, which is the shape YouTube serves slowly on purpose — playback has always asked for ranges, and downloads never did. They now ask for a range, five run at once instead of three, and each byte is written to disk once rather than twice.',
           },
         ],
       },

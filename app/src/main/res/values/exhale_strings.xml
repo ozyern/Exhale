@@ -483,10 +483,12 @@
     <string name="library_done">Done</string>
     <string name="library_empty_title">Nothing here yet</string>
     <string name="library_empty_subtitle">Songs, albums and playlists you add will show up here.</string>
+    <string name="home_offline_title">Nothing to show yet</string>
+    <string name="home_offline_body">Your feed could not be loaded. Downloads and anything you have saved still play.</string>
     <string name="app_icon">App icon</string>
     <string name="app_icon_desc">Choose the mark Exhale wears</string>
-    <string name="app_icon_default">Default</string>
-    <string name="app_icon_default_desc">The black mark on gold</string>
+    <string name="app_icon_classic">Classic</string>
+    <string name="app_icon_classic_desc">The black mark on gold</string>
     <string name="app_icon_gold">Gold</string>
     <string name="app_icon_gold_desc">The gold mark, lit on black</string>
     <string name="app_icon_applies_to">Also changes the logo in the app bar and on the launch screen.</string>

@@ -42,11 +42,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LargeTopAppBar
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -178,7 +176,6 @@ fun AboutScreen(
         ExhaleBreathingEgg(onDismiss = { showEasterEgg = false })
     }
 
-    val pageBackground = SettingsDimensions.screenBackgroundColor()
     val pad = SettingsDimensions.ScreenHorizontalPadding
     val spacing = SettingsDimensions.SectionSpacing
 
@@ -192,7 +189,7 @@ fun AboutScreen(
         containerColor = Color.Transparent,
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
-            LargeTopAppBar(
+            SettingsLargeTopAppBar(
                 title = {
                     Text(
                         text = stringResource(R.string.about),
@@ -206,11 +203,6 @@ fun AboutScreen(
                         icon = R.drawable.arrow_back,
                     )
                 },
-                // Flat and identical in both states, like every other settings destination.
-                colors = TopAppBarDefaults.largeTopAppBarColors(
-                    containerColor = pageBackground,
-                    scrolledContainerColor = pageBackground,
-                ),
                 scrollBehavior = scrollBehavior,
             )
         },

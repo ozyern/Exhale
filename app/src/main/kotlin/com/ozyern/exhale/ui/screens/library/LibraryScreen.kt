@@ -29,6 +29,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -37,7 +38,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
+import androidx.compose.runtime.LaunchedEffect
 import androidx.navigation.NavController
+import androidx.navigation.compose.currentBackStackEntryAsState
 import com.ozyern.exhale.LocalDatabase
 import com.ozyern.exhale.LocalPlayerConnection
 import com.ozyern.exhale.R
@@ -55,7 +58,7 @@ import com.ozyern.exhale.utils.rememberEnumPreference
 import com.ozyern.exhale.utils.rememberPreference
 
 /**
- * The Library tab: one of six views, chosen by [ChipSortTypeKey].
+ * The Library tab: one of six views, opening on the one [ChipSortTypeKey] names.
  *
  * The chip row that used to sit at the top of every one of them is gone. It was doing two
  * incompatible jobs — naming where you were, and offering the five places you could go — and it
@@ -63,10 +66,43 @@ import com.ozyern.exhale.utils.rememberPreference
  * colour. [LibraryMixScreen] now lists the destinations as rows, and each destination gets a real
  * sub-page header instead: a back button and its own title, which is what every other pushed
  * screen in the app looks like.
+ *
+ * ### Where you are is not what you prefer
+ *
+ * Which sub-view is open is *screen state*. It used to be the preference itself: tapping "Songs"
+ * wrote [ChipSortTypeKey], which is the "Default library page" setting in Appearance. Three things
+ * followed from that, and all three of them read as the tab being broken.
+ *
+ * Browsing silently rewrote a setting the user had chosen. The tab stopped being able to return to
+ * its own front page — leaving and coming back reopened the sub-view, and the dock's Library button
+ * counts a tap on the tab you are already on as a re-tap, so it did nothing. And, worst of the
+ * three, the sub-view arms a [BackHandler]; once that state survived across sessions, the back
+ * gesture from what looked like the Library tab silently went "up one level inside Library"
+ * instead of back to Home, on a screen that gave no sign there was a level to go up from.
+ *
+ * So the preference is read, never written. It says where the tab *opens*; the tab remembers where
+ * you *are* for as long as it is on the back stack, and a re-tap on the dock's Library button
+ * returns to the front page the way re-tapping a tab is supposed to.
  */
 @Composable
 fun LibraryScreen(navController: NavController) {
-    var filterType by rememberEnumPreference(ChipSortTypeKey, LibraryFilter.LIBRARY)
+    // The setting, read-only: which view the tab opens on. Account settings also writes it
+    // immediately before navigating here, which is how "you have 42 songs" opens the songs list —
+    // so this is observed rather than merely sampled once.
+    val (defaultFilter) = rememberEnumPreference(ChipSortTypeKey, LibraryFilter.LIBRARY)
+    var filterType by rememberSaveable { mutableStateOf(defaultFilter) }
+
+    // Follow the setting when it *changes*, not whenever this composable happens to run again.
+    // `seenDefault` is what makes that distinction survive a rotation: without it the effect
+    // fires on every re-entry and throws away where the user was every time the screen recreates.
+    var seenDefault by rememberSaveable { mutableStateOf(defaultFilter) }
+    LaunchedEffect(defaultFilter) {
+        if (defaultFilter != seenDefault) {
+            seenDefault = defaultFilter
+            filterType = defaultFilter
+        }
+    }
+
     val (disableBlur) = rememberPreference(DisableBlurKey, false)
 
     val database = LocalDatabase.current
@@ -80,7 +116,29 @@ fun LibraryScreen(navController: NavController) {
 
     // A sub-view is a pushed page, so the system back gesture should pop it rather than leaving
     // the tab. Previously the only way back was to find and re-tap the lit chip.
-    BackHandler(enabled = filterType != LibraryFilter.LIBRARY) { backToLibrary() }
+    //
+    // Armed only when there is somewhere to go up *to*. If the user has set a sub-view as their
+    // default library page then that view is the tab as far as they are concerned, and swallowing
+    // their first back press to reveal a page they told us not to open is a level of the app they
+    // never asked for and cannot see.
+    BackHandler(enabled = filterType != LibraryFilter.LIBRARY && defaultFilter != filterType) {
+        backToLibrary()
+    }
+
+    // Re-tapping the Library tab returns to the front page, which is what re-tapping a tab means
+    // everywhere else. The dock sends this on a tap on the already-selected tab; Home reads the
+    // same signal to scroll itself back to the top.
+    val backStackEntry by navController.currentBackStackEntryAsState()
+    val reselected = backStackEntry
+        ?.savedStateHandle
+        ?.getStateFlow("scrollToTop", false)
+        ?.collectAsState()
+    LaunchedEffect(reselected?.value) {
+        if (reselected?.value == true) {
+            filterType = defaultFilter
+            backStackEntry?.savedStateHandle?.set("scrollToTop", false)
+        }
+    }
 
     val subPageTitle = when (filterType) {
         LibraryFilter.PLAYLISTS -> R.string.filter_playlists

@@ -23,11 +23,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LargeTopAppBar
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -185,18 +183,10 @@ fun SettingsScreen(
     Scaffold(
         topBar = {
             if (!showSearchBar) {
-                Box {
-                    // The bar is made of the page rather than laid on top of it.
-                    //
-                    // It has to stay opaque -- the large title has rows sliding under it as the
-                    // list scrolls -- but "opaque" was being spelled as a flat fill of the page
-                    // colour, which meant the album-art wash `SettingsPage` lays down stopped dead
-                    // at the bar's bottom edge. On any screen with something playing that is a
-                    // large title's worth of dead grey across the top of a page that is otherwise
-                    // taking its colour from the artwork. See SettingsBarGround.
-                    SettingsBarGround(modifier = Modifier.matchParentSize())
-
-                    LargeTopAppBar(
+                // Every settings page with a large title now takes the same bar, so the root
+                // screen is no longer the only one made of the page rather than laid on top of
+                // it. See SettingsLargeTopAppBar.
+                SettingsLargeTopAppBar(
                     title = {
                         Text(
                             text = stringResource(R.string.settings),
@@ -223,15 +213,7 @@ fun SettingsScreen(
                         )
                     },
                     scrollBehavior = scrollBehavior,
-                    // Transparent in both states, because the ground behind it is doing the work
-                    // now. Still no tonal-elevation shift on scroll, which is the single most
-                    // "Android" tell a settings screen has.
-                    colors = TopAppBarDefaults.largeTopAppBarColors(
-                        containerColor = Color.Transparent,
-                        scrolledContainerColor = Color.Transparent,
-                    ),
-                    )
-                }
+                )
             }
         },
         // Transparent, so the album-art wash `SettingsPage` lays down is what you see behind
