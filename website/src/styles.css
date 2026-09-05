@@ -3350,8 +3350,18 @@ html:has(.release) {
   position: relative;
   border-radius: 30px;
   padding: clamp(18px, 3vw, 34px);
+  /* The same sweep the hero stage runs — blue at one corner, iris through the
+     middle, the app's rose at the other — rather than a single rose glow. It is
+     the one place on the page where the palette is allowed to be all three at
+     once, and it is what stops three dark screenshots in a row reading as three
+     identical rectangles. */
   background:
-    radial-gradient(120% 90% at 50% 0%, rgba(237, 85, 100, 0.16) 0%, transparent 62%),
+    linear-gradient(
+      122deg,
+      rgba(46, 91, 214, 0.30) 0%,
+      rgba(123, 108, 255, 0.19) 44%,
+      rgba(237, 85, 100, 0.24) 100%
+    ),
     linear-gradient(180deg, var(--tile-lift) 0%, var(--tile) 100%);
   border: 1px solid var(--hairline);
   overflow: hidden;
@@ -3589,17 +3599,24 @@ html:has(.release) {
      in landscape. */
   min-height: max(560px, 100svh);
   overflow: hidden;
-  /* Not pure black, which is the rule everywhere else on this site and the
-     wrong one here. A sky photographed at any exposure has some blue in it,
-     and stars on #000 read as dots on a page rather than as light at a
-     distance. It goes back to black by the bottom edge, where the article
-     starts. */
+  /* Night, and only here.
+
+     A sky photographed at any exposure has some blue in it, and stars on #000
+     read as dots on a page rather than as light at a distance — so the object
+     gets a real navy to sit in, held most of the way across the frame rather
+     than given up after the first stop.
+
+     It still lands on #000 at the bottom edge. The blue is the hero's
+     atmosphere, not the page's: everything below this is a black page, and a
+     tint that leaks into it would make the article look like it was waiting for
+     a background image to load. */
   background:
     radial-gradient(
-      118% 82% at 50% 34%,
-      #0c121f 0%,
-      #070a12 42%,
-      #030407 70%,
+      124% 88% at 50% 32%,
+      #101a3a 0%,
+      #0b1229 34%,
+      #070b1a 58%,
+      #03050c 80%,
       #000 100%
     ),
     #000;
