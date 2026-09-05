@@ -483,6 +483,9 @@
     <string name="library_done">Done</string>
     <string name="library_empty_title">Nothing here yet</string>
     <string name="library_empty_subtitle">Songs, albums and playlists you add will show up here.</string>
+    <string name="welcome_title">welcome</string>
+    <string name="welcome_version">Exhale %1$s</string>
+    <string name="welcome_get_started">Get Started</string>
     <string name="home_offline_title">Nothing to show yet</string>
     <string name="home_offline_body">Your feed could not be loaded. Downloads and anything you have saved still play.</string>
     <string name="app_icon">App icon</string>

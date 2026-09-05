@@ -54,6 +54,15 @@ val SeekExtraSeconds = booleanPreferencesKey("seekExtraSeconds")
 val DisableBlurKey = booleanPreferencesKey("disableBlur")
 val BlurRadiusKey = floatPreferencesKey("blurRadius")
 val MiniPlayerLastAnchorKey = intPreferencesKey("miniPlayerLastAnchor")
+
+/**
+ * The last build this install actually opened.
+ *
+ * Only the welcome screen reads it, and only to answer one question: is this the first run after
+ * an update? Absent means the question cannot be answered from here — the key did not exist before
+ * 1.0.203 — so the gate falls back to PackageManager's install and update times for that one case.
+ */
+val LastSeenVersionCodeKey = intPreferencesKey("lastSeenVersionCode")
 val EnableHapticFeedbackKey = booleanPreferencesKey("enableHapticFeedback")
 val PlayerFullscreenKey = booleanPreferencesKey("player_fullscreen")
 

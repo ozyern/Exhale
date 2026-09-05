@@ -191,6 +191,7 @@ import com.ozyern.exhale.constants.FloatingToolbarHeight
 import com.ozyern.exhale.constants.FloatingToolbarHorizontalPadding
 import com.ozyern.exhale.constants.HasPressedStarKey
 import com.ozyern.exhale.constants.LaunchCountKey
+import com.ozyern.exhale.constants.LastSeenVersionCodeKey
 import com.ozyern.exhale.constants.LiquidGlassNavBarKey
 import com.ozyern.exhale.constants.LyricsSyncOffsetKey
 import com.ozyern.exhale.constants.MiniPlayerBottomSpacing
@@ -240,6 +241,7 @@ import com.ozyern.exhale.playback.queues.YouTubeAlbumRadio
 import com.ozyern.exhale.playback.queues.YouTubeQueue
 import com.ozyern.exhale.ui.component.AccountSettingsDialog
 import com.ozyern.exhale.ui.component.BootSplash
+import com.ozyern.exhale.ui.component.WelcomeScreen
 import com.ozyern.exhale.ui.component.bounceClick
 import com.ozyern.exhale.ui.component.liquidGlassSurface
 import com.ozyern.exhale.ui.component.BottomSheetMenu
@@ -2464,6 +2466,62 @@ class MainActivity : ComponentActivity() {
                     var bootSplashDone by rememberSaveable { mutableStateOf(false) }
                     if (!bootSplashDone) {
                         BootSplash(onFinished = { bootSplashDone = true })
+                    }
+
+                    // The first run after an update, and only that.
+                    //
+                    // "Have I seen this build?" is one comparison once the key exists. The awkward
+                    // case is the upgrade that introduces the key: someone coming from 1.0.102 has
+                    // no stored code, and neither does a fresh install, so the two are
+                    // indistinguishable from DataStore alone. PackageManager can tell them apart —
+                    // an app that has been updated has a `lastUpdateTime` later than its
+                    // `firstInstallTime` — and that is the only thing that check is used for.
+                    //
+                    // A fresh install deliberately gets nothing. It is already being walked
+                    // through Song Preferences, and welcoming someone *back* to an app they have
+                    // never opened is worse than not welcoming them.
+                    //
+                    // The code is written the moment the screen is decided on rather than when it
+                    // is dismissed, so a user who kills the app mid-animation is not shown it
+                    // again on the next launch. Seeing it once is the promise; seeing all of it is
+                    // not.
+                    //
+                    // `welcomeDecided` is what keeps a rotation from answering the question a
+                    // second time. The code has already been written by then, so the second answer
+                    // is always "no" — and the screen would vanish mid-animation for anyone who
+                    // turned their phone while watching it.
+                    var welcomeDecided by rememberSaveable { mutableStateOf(false) }
+                    var showWelcome by rememberSaveable { mutableStateOf(false) }
+                    LaunchedEffect(Unit) {
+                        if (welcomeDecided) return@LaunchedEffect
+                        welcomeDecided = true
+                        showWelcome = withContext(Dispatchers.IO) {
+                            val seen = dataStore[LastSeenVersionCodeKey]
+                            val upgraded = if (seen != null) {
+                                seen < BuildConfig.VERSION_CODE
+                            } else {
+                                runCatching {
+                                    val info = packageManager.getPackageInfo(packageName, 0)
+                                    info.lastUpdateTime > info.firstInstallTime
+                                }.getOrDefault(false)
+                            }
+                            if (seen != BuildConfig.VERSION_CODE) {
+                                dataStore.edit { prefs ->
+                                    prefs[LastSeenVersionCodeKey] = BuildConfig.VERSION_CODE
+                                }
+                            }
+                            upgraded
+                        }
+                    }
+
+                    // Above the boot splash, because it replaces it: there is no point crossfading
+                    // the mark in and then covering it with a star field a beat later.
+                    if (showWelcome) {
+                        WelcomeScreen(
+                            version = BuildConfig.VERSION_NAME,
+                            figure = BuildConfig.VERSION_CODE.toString(),
+                            onDismiss = { showWelcome = false },
+                        )
                     }
                 }
             }

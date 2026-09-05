@@ -200,6 +200,10 @@ export const RELEASE_NOTES = [
             body: 'Exhale’s own copy of Android’s Display Size, for this app only. Ten steps, a scale model of a real screen that redraws as you drag, and an explicit Apply. Settings → Appearance → Display.',
           },
           {
+            title: 'A welcome, once',
+            body: 'The first launch after an update opens on the build number assembling itself out of a scattered star field — the same figure the announcement page is headed by — which holds, comes apart, and leaves the colour it explodes into behind. Shown once per update, never on a fresh install, and a tap skips to the part worth seeing.',
+          },
+          {
             title: 'App icon packs',
             body: 'Gold (a gold mark lit on black, and what the app now ships wearing) and Classic (the black mark on gold). The pack also supplies the app-bar disc and the boot splash mark, so the choice carries past the home screen.',
           },
