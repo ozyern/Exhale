@@ -7,6 +7,160 @@ Release notes for the build you are running are also bundled into the app itself
 **Settings → Updates → Changelog**. Every later version's notes are pulled from this repository's
 [GitHub releases](https://github.com/ozyern/Exhale/releases).
 
+## [1.0.203] — 2026-09-05
+
+The interface at your size, a library shaped like a library, a sleep timer you can read half
+asleep, and glass that bends the pixels actually behind it.
+
+### Added
+
+**Interface scale** — Exhale's own copy of Android's Display Size, for this app only.
+
+- Ten steps, a scale model of a real screen that redraws as you drag, and an explicit Apply, so a
+  size you are still deciding on never becomes the size you have to read the Apply button at.
+- Settings → Appearance → Display.
+
+**App icon packs**
+
+- Gold — the gold mark lit on black, and what the app now ships wearing — and Classic, the black
+  mark on a gold tile.
+- The pack also supplies the disc in the app bar and the mark the boot splash opens on, so the
+  choice carries past the home screen instead of stopping there.
+- Selected by enabling one of two activity-aliases, incoming first: a moment with no enabled
+  launcher component is a moment some launchers use to forget the app exists. The icon still
+  visibly disappears and comes back while it changes, which is inherent to the technique and is
+  why the picker says so before it does it.
+
+**A sleep timer you can reach**
+
+- It lives in the player menu now, reachable from every player design, and counts songs as well as
+  minutes.
+- Every option carries the clock time it lands on, because "45 minutes" is a subtraction you should
+  not have to do at midnight.
+- The ring drains rather than fills. A timer that fills is measuring how long you have been awake.
+
+**Refracting in-content glass**
+
+- The round controls are cut from the search bar's own material. Press one and the pane deforms
+  toward your finger, with a specular bloom tracking the touch.
+
+**A welcome screen, once per update**
+
+- The first launch after an update opens on the build number assembling itself out of a scattered
+  star field — the same figure the announcement page is headed by — which holds, comes apart, and
+  leaves the colour it explodes into behind.
+- Then the word is written: a script authored as one unbroken cursive stroke and drawn on by arc
+  length, rather than set in a face the phone may not have. `FontFamily.Cursive` resolves to
+  Dancing Script on AOSP and to nothing at all on a good number of OEM builds.
+- Shown once per update and never on a fresh install — that one is already being walked through
+  Song Preferences, and being welcomed *back* to an app you have never opened is worse than not
+  being welcomed. A tap skips ahead to the part worth seeing.
+
+**exhale.ozyern.me has a release page** — a long-form announcement for each version, with the
+build number rendered as a field of stars that assembles itself, keeps moving once it has landed,
+and reads the same on a phone as on a laptop.
+
+### Changed
+
+**The Library, rebuilt.**
+
+A large title, an inset list of destinations, pinned collections in the same list, and Recently
+Added as an artwork grid. The filter chips became real pages with a working back gesture: a
+selected chip and an unselected chip differed by a fill colour, which is not enough to say where
+you are.
+
+**The player menu is one level deep.**
+
+Five round actions on top, one grouped list of places underneath. It used to be six nested
+containers before it reached a verb.
+
+**Lyrics keep up.**
+
+Blur is forward-only, the word swell peaks when you hear it rather than after, and the scroll runs
+220 ms ahead of the highlight so a line arrives at the anchor about when it lights.
+
+**Updates finish inside the app.**
+
+"Update Now" goes to the real transfer instead of handing you to the system browser, and the prompt
+is a proper Software Update sheet with a decline action it never had.
+
+**The page is lit rather than painted.**
+
+The artwork glow drifts a lap every thirty-odd seconds. Home arrives shelf by shelf, the shortcut
+tiles cascade, and the large title shrinks toward the compact one as it leaves.
+
+**The dock changes shape like one object.**
+
+The tab strip folds along its length into exactly the 64dp the home circle occupies, the circle
+grows in place there, and the pill slides out from behind it. Nothing arrives from off-screen any
+more, because nothing was ever off-screen. Both fades are matched linear ramps so the two sheets of
+glass sum to one plate at every instant — an eased pair dips in the middle, and on a translucent
+surface a dip in coverage is a flash of the page. The collapse threshold is a band rather than a
+line, so the bar stops morphing back and forth wherever the thumb happens to rest.
+
+**Home says what it is doing.**
+
+The shortcut tiles show which of them is playing and take the same long-press menu as every other
+row in the app. A feed that comes back empty is now a page that says so and offers your library,
+rather than the word "Home" on a black sheet — which is what the app looked like on a plane.
+
+### Fixed
+
+**Downloads ran at about the speed of playback.**
+
+`OkHttpDataSource` only sends a `Range` header when the DataSpec says where it ends, and the
+download manager's does not — so every song was one open-ended GET, which is the shape googlevideo
+serves slowly on purpose. Playback has bounded its requests all along; this path never did. It now
+asks for the exact content length from the player response, five downloads run at once instead of
+three, and each byte is written to disk once rather than twice.
+
+**The Library tab could strand you on a sub-page.**
+
+Opening Songs or Albums wrote the "default library page" setting, so browsing silently rewrote a
+choice the user had made, the tab reopened there forever, and its own dock button could not get
+back to the front page because a tap on the tab you are already on is a re-tap. Worse, the sub-view
+arms a back handler: once that state survived across sessions, the back gesture from what looked
+like the Library tab went up a level *inside* Library instead of home, on a screen that gave no
+sign there was a level to go up from.
+
+**A tap on Home could do nothing at all.**
+
+The dock's tab strip folded "no tab is selected" (-1) into "Home is selected" (0) by clamping, so
+on any route showing the dock without a selected tab, a tap on Home reported itself as a re-tap and
+the host answered by scrolling the page instead of navigating.
+
+**Settings bars cut the artwork off dead.**
+
+They were a flat fill of the page colour, slicing the ambient wash along the bar's bottom edge.
+Every settings page now takes the same ground as the page it sits on — About and the two
+large-title pages that were still painting a black slab included, since a large title is most of
+what you see when you open one.
+
+**The player's seek bar was stuck.**
+
+`LiquidSlider` watched a plain parameter through `snapshotFlow`, which reads no snapshot state and
+so never re-emitted.
+
+**"Update Now" crashed the app.**
+
+The prompt was resolving `navigate()` against a `lateinit` property nothing ever assigned. It
+compiled, it looked right, and it threw on press.
+
+**The launcher icon was wrong under a square mask.**
+
+Its background layer carried the source artwork's own edge vignette — invisible under a circle,
+glaring under a square. The in-app mark was the unfixed copy.
+
+### Removed
+
+- Three quarters of the launch animation: two shockwave rings, a ten-degree entrance tilt and a
+  diagonal sheen sweep. Four things competing for attention inside one second is what a splash
+  looks like when it is trying to impress you.
+- The duplicate playlist list. The Playlists tab already owned it, and that is the one with
+  reordering.
+- A second account circle, which briefly sat inside Home's large title directly under the app bar
+  that already had one.
+
 ## [1.0.102] — 2026-08-26
 
 First public release.
@@ -307,4 +461,5 @@ ordinary append-only feed rebinds nothing.
 - Website, PayPal and Facebook links.
 - The pie chart of cropped artist photographs from the statistics screen.
 
+[1.0.203]: https://github.com/ozyern/Exhale/releases/tag/v1.0.203
 [1.0.102]: https://github.com/ozyern/Exhale/releases/tag/v1.0.102
